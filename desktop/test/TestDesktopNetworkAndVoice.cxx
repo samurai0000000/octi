@@ -1078,6 +1078,10 @@ TEST(OctiNetworkClientTest, UploadCrashReportAndOctiCrashReporterDurableSpoolAnd
 {
     LiveServerEnv env;
     auto client = OctiNetworkClient::forHermeticTest(env.port());
+    const std::string installTok = "hermetic-install-token-0123456789abcdef";
+    client->setInstallId("install_uuid_hermetic_999");
+    client->setInstallDeleteToken(installTok);
+    STRCMP_EQUAL(installTok.c_str(), client->installDeleteToken().c_str());
 
     /* 1. Direct upload of CrashReportRequest to server */
     CrashReportRequest req;
@@ -1105,6 +1109,23 @@ TEST(OctiNetworkClientTest, UploadCrashReportAndOctiCrashReporterDurableSpoolAnd
     LONGS_EQUAL(200, resp2.httpStatus);
     CHECK_TRUE(resp2.deduplicated);
 
+    /* Fault injection: client without token or with wrong token cannot spoof crash upload or delete */
+    auto unauthClient = OctiNetworkClient::forHermeticTest(env.port());
+    CrashReportRequest spoofReq = req;
+    spoofReq.crashId = "crash_test_hermetic_spoof";
+    auto spoofResp = unauthClient->uploadCrashReport(spoofReq);
+    CHECK_FALSE(spoofResp.ok);
+    LONGS_EQUAL(403, spoofResp.httpStatus);
+
+    auto unauthDel = unauthClient->deleteInstallArchiveData("install_uuid_hermetic_999");
+    CHECK_FALSE(unauthDel.ok);
+    LONGS_EQUAL(401, unauthDel.httpStatus);
+
+    auto wrongTokDel = unauthClient->deleteInstallArchiveData(
+        "install_uuid_hermetic_999", "wrong-token-for-hermetic-999-0000");
+    CHECK_FALSE(wrongTokDel.ok);
+    LONGS_EQUAL(403, wrongTokDel.httpStatus);
+
     /* 2. OctiCrashReporter spooling and flushing */
     std::string testDir = env.dir + "/crash_reporter_test";
     std::filesystem::remove_all(testDir);
@@ -1113,37 +1134,42 @@ TEST(OctiNetworkClientTest, UploadCrashReportAndOctiCrashReporterDurableSpoolAnd
     octi::desktop::OctiCrashReporter::updateGameContext("LOCAL_BOT", 15, "test_fen");
     std::string recordedFile = octi::desktop::OctiCrashReporter::recordHandledException(
         "SimulatedThread", "std::out_of_range", "Index out of range",
-        "{\"ply\":15}", "install_uuid_hermetic_999");
+        "{\"ply\":15}", "install_uuid_hermetic_999", installTok);
     CHECK_FALSE(recordedFile.empty());
     CHECK_TRUE(std::filesystem::exists(recordedFile));
     LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
 
     std::string transcriptJson = "{\"game_id\":\"game_spool_01\",\"fen\":\"test_fen\",\"num_moves\":4}";
     std::string spooledFile = octi::desktop::OctiCrashReporter::spoolTrainingTranscript(
-        "game_spool_01", transcriptJson, "install_uuid_hermetic_999");
+        "game_spool_01", transcriptJson, "install_uuid_hermetic_999", installTok);
     CHECK_FALSE(spooledFile.empty());
     CHECK_TRUE(std::filesystem::exists(spooledFile));
     LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
 
     /* Offline retention: when server is down, spooled files remain intact */
     env.stop();
-    int flushedOfflineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999");
+    int flushedOfflineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999", installTok);
     LONGS_EQUAL(0, flushedOfflineCrash);
     LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
 
-    int flushedOfflineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999");
+    int flushedOfflineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999", installTok);
     LONGS_EQUAL(0, flushedOfflineTx);
     LONGS_EQUAL(1, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
 
     /* Online flush: when server is back up, flush uploads and deletes spooled files */
     env.startAgain();
-    int flushedOnlineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999");
+    int flushedOnlineCrash = octi::desktop::OctiCrashReporter::flushPendingCrashReports(*client, "install_uuid_hermetic_999", installTok);
     LONGS_EQUAL(1, flushedOnlineCrash);
     LONGS_EQUAL(0, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingCrashFiles().size()));
 
-    int flushedOnlineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999");
+    int flushedOnlineTx = octi::desktop::OctiCrashReporter::flushPendingTranscripts(*client, "install_uuid_hermetic_999", installTok);
     LONGS_EQUAL(1, flushedOnlineTx);
     LONGS_EQUAL(0, static_cast<long>(octi::desktop::OctiCrashReporter::listPendingTranscriptFiles().size()));
+
+    /* Authorized install delete with matching token succeeds */
+    auto authDel = client->deleteInstallArchiveData("install_uuid_hermetic_999");
+    CHECK_TRUE_TEXT(authDel.ok, authDel.errorMessage.c_str());
+    LONGS_EQUAL(200, authDel.httpStatus);
 
     std::filesystem::remove_all(testDir);
 }

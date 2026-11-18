@@ -50,9 +50,11 @@ struct VerifiedClaims {
     std::string provider;   // 'google' | 'apple' | 'microsoft' | 'facebook' | 'line'
     std::string sub;        // immutable provider subject (account key)
     std::string email;      // informational only, never an account key
+    bool emailVerified = false;
     std::string name;
     std::string picture;
     std::string issuer;
+    std::string nonce;
     int64_t exp = 0;
 };
 

@@ -16,17 +16,19 @@ User=octi
 Group=octi
 WorkingDirectory=/var/lib/octi
 EnvironmentFile=-/etc/default/octi-server
-ExecStart=/usr/sbin/octi-server --bind ${OCTI_BIND_ADDRESS} --port ${OCTI_PORT} --db ${OCTI_DB_PATH} --oidc-config ${OCTI_OIDC_CONFIG} --avatar-dir ${OCTI_AVATAR_DIR}
+ExecStart=/usr/sbin/octi-server --bind ${OCTI_BIND_ADDRESS} --port ${OCTI_PORT} --db ${OCTI_DB_PATH} --oidc-config ${OCTI_OIDC_CONFIG} --ban-config ${OCTI_BAN_CONFIG} --avatar-dir ${OCTI_AVATAR_DIR} $OCTI_EXTRA_ARGS
 KillSignal=SIGTERM
 TimeoutStopSec=15
 Restart=on-failure
 RestartSec=3
+LimitNOFILE=65536
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/octi /var/octi/avatar
-ReadOnlyPaths=/etc/octi
+ReadWritePaths=/var/lib/octi /var/octi/avatar /etc/octi
+ReadOnlyPaths=-/etc/octi/oidc.json
 
 [Install]
 WantedBy=multi-user.target

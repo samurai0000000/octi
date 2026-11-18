@@ -102,6 +102,7 @@ struct ArchivedGamesPage {
 struct UploadTranscriptRequest {
     std::string transcriptJson;
     std::string clientId;
+    std::string installDeleteToken;
 };
 
 struct UploadTranscriptResponse {
@@ -121,6 +122,7 @@ struct CrashReportRequest {
     std::string stackTrace;
     std::string contextJson = "{}";
     std::string installId;
+    std::string installDeleteToken;
 };
 
 struct CrashReportResponse {
@@ -599,6 +601,9 @@ public:
     void setInstallId(const std::string &installId);
     std::string installId() const;
 
+    void setInstallDeleteToken(const std::string &token);
+    std::string installDeleteToken() const;
+
     /* ---- 1..10: Health, Auth, Profile & Leaderboard ---- */
     ApiResult<HealthInfo> fetchHealth();
     ApiResult<std::vector<AuthProviderInfo>> fetchAuthProviders();
@@ -737,7 +742,8 @@ public:
     CrashReportResponse uploadCrashReport(
         const CrashReportRequest &req);
     ApiResult<int> deleteInstallArchiveData(
-        const std::string &installId);
+        const std::string &installId,
+        const std::string &installDeleteToken = "");
 
     /* ---- 36..38: Robot Protocol & Administration ---- */
     ApiResult<RobotConnectData> connectRobot(bool ifUnused = false);

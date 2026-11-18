@@ -1069,7 +1069,48 @@ VerifyResult OidcVerifier::verifyIdToken(const std::string &provider,
     result.claims.sub = sub;
     result.claims.issuer = iss;
     result.claims.exp = exp;
-    jsonString(payload, "email", result.claims.email);
+    jsonString(payload, "nonce", result.claims.nonce);
+
+    std::string rawEmail;
+    jsonString(payload, "email", rawEmail);
+    Json::const_iterator evIt = payload.find("email_verified");
+    bool hasExplicitFalse = false;
+    bool verifiedFlag = false;
+    if (evIt != payload.end()) {
+        if (evIt->is_boolean()) {
+            verifiedFlag = evIt->get<bool>();
+            hasExplicitFalse = !verifiedFlag;
+        } else if (evIt->is_string() && provider == "apple") {
+            const std::string &evs = evIt->get_ref<const std::string &>();
+            if (evs == "true") {
+                verifiedFlag = true;
+            } else if (evs == "false") {
+                hasExplicitFalse = true;
+            } else {
+                hasExplicitFalse = true;
+            }
+        } else {
+            hasExplicitFalse = true;
+        }
+    }
+    if (provider == "google") {
+        if (verifiedFlag && !rawEmail.empty()) {
+            result.claims.email = rawEmail;
+            result.claims.emailVerified = true;
+        } else {
+            result.claims.email.clear();
+            result.claims.emailVerified = false;
+        }
+    } else {
+        if (hasExplicitFalse) {
+            result.claims.email.clear();
+            result.claims.emailVerified = false;
+        } else {
+            result.claims.email = rawEmail;
+            result.claims.emailVerified = verifiedFlag && !rawEmail.empty();
+        }
+    }
+
     jsonString(payload, "name", result.claims.name);
     jsonString(payload, "picture", result.claims.picture);
     return result;

@@ -129,6 +129,7 @@ public final class OctiNetworkClient implements AutoCloseable {
     public static final class UploadTranscriptRequest {
         public String transcriptJson = "";
         public String clientId = "";
+        public String installDeleteToken = "";
 
         public UploadTranscriptRequest() {
         }
@@ -136,6 +137,12 @@ public final class OctiNetworkClient implements AutoCloseable {
         public UploadTranscriptRequest(String transcriptJson, String clientId) {
             this.transcriptJson = transcriptJson != null ? transcriptJson : "";
             this.clientId = clientId != null ? clientId : "";
+        }
+
+        public UploadTranscriptRequest(String transcriptJson, String clientId, String installDeleteToken) {
+            this.transcriptJson = transcriptJson != null ? transcriptJson : "";
+            this.clientId = clientId != null ? clientId : "";
+            this.installDeleteToken = installDeleteToken != null ? installDeleteToken : "";
         }
     }
 
@@ -156,6 +163,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         public String stackTrace = "";
         public String contextJson = "{}";
         public String installId = "";
+        public String installDeleteToken = "";
 
         public CrashReportRequest() {
         }
@@ -1158,6 +1166,7 @@ public final class OctiNetworkClient implements AutoCloseable {
     private volatile OctiCrashReporter _crashReporter;
     private volatile RuntimeException _injectedRuntimeException = null;
     private volatile String _installId = "";
+    private volatile String _installDeleteToken = "";
 
     public void setInstallId(String installId) {
         _installId = installId != null ? installId : "";
@@ -1165,6 +1174,22 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public String getInstallId() {
         return _installId;
+    }
+
+    public String installId() {
+        return _installId;
+    }
+
+    public void setInstallDeleteToken(String installDeleteToken) {
+        _installDeleteToken = installDeleteToken != null ? installDeleteToken : "";
+    }
+
+    public String getInstallDeleteToken() {
+        return _installDeleteToken;
+    }
+
+    public String installDeleteToken() {
+        return _installDeleteToken;
     }
 
     public void setCrashReporter(OctiCrashReporter reporter) {
@@ -2625,7 +2650,7 @@ public final class OctiNetworkClient implements AutoCloseable {
             body.put("clientId", req.clientId);
         }
 
-        RawResponse raw = doPost("/api/v1/archive/upload", body);
+        RawResponse raw = doPost("/api/v1/archive/upload", body, req.installDeleteToken);
         if (!raw.transportOk || raw.status != 200) {
             populateError(raw, res);
             return res;
@@ -2647,6 +2672,12 @@ public final class OctiNetworkClient implements AutoCloseable {
 
     public ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(String transcriptJson, String clientId) {
         return uploadTrainingTranscript(new UploadTranscriptRequest(transcriptJson, clientId));
+    }
+
+    public ApiResult<UploadTranscriptResponse> uploadTrainingTranscript(
+            String transcriptJson, String clientId, String installDeleteToken) {
+        return uploadTrainingTranscript(
+                new UploadTranscriptRequest(transcriptJson, clientId, installDeleteToken));
     }
 
     public CrashReportResponse uploadCrashReport(CrashReportRequest req) {
@@ -2688,7 +2719,7 @@ public final class OctiNetworkClient implements AutoCloseable {
             body.put("install_id", req.installId);
         }
 
-        RawResponse raw = doPost("/api/v1/telemetry/crash", body);
+        RawResponse raw = doPost("/api/v1/telemetry/crash", body, req.installDeleteToken);
         res.httpStatus = raw.status;
         if (!raw.transportOk) {
             res.ok = false;
@@ -2729,8 +2760,14 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     public ApiResult<Integer> deleteInstallArchiveData(String installId) {
+        return deleteInstallArchiveData(installId, "");
+    }
+
+    public ApiResult<Integer> deleteInstallArchiveData(String installId, String installDeleteToken) {
         ApiResult<Integer> res = new ApiResult<>(0);
-        RawResponse raw = doDelete("/api/v1/archive/install/" + urlEncode(installId != null ? installId : ""));
+        RawResponse raw = doDelete(
+                "/api/v1/archive/install/" + urlEncode(installId != null ? installId : ""),
+                installDeleteToken);
         if (!raw.transportOk || raw.status != 200) {
             populateError(raw, res);
             return res;
@@ -2948,27 +2985,41 @@ public final class OctiNetworkClient implements AutoCloseable {
     }
 
     private RawResponse doPost(String path, Map<String, Object> body) {
+        return doPost(path, body, null);
+    }
+
+    private RawResponse doPost(String path, Map<String, Object> body, String installDeleteTokenOverride) {
         String jsonBody = OctiMiniJson.stringify(body != null ? body : Collections.emptyMap());
-        return doHttpRequest("POST", path, jsonBody);
+        return doHttpRequest("POST", path, jsonBody, installDeleteTokenOverride);
     }
 
     private RawResponse doPatch(String path, Map<String, Object> body) {
         String jsonBody = OctiMiniJson.stringify(body != null ? body : Collections.emptyMap());
-        return doHttpRequest("PATCH", path, jsonBody);
+        return doHttpRequest("PATCH", path, jsonBody, null);
     }
 
     private RawResponse doDelete(String path) {
-        return doHttpRequest("DELETE", path, null);
+        return doHttpRequest("DELETE", path, null, null);
+    }
+
+    private RawResponse doDelete(String path, String installDeleteTokenOverride) {
+        return doHttpRequest("DELETE", path, null, installDeleteTokenOverride);
     }
 
     private RawResponse doHttpRequest(String method, String path, String jsonBody) {
+        return doHttpRequest(method, path, jsonBody, null);
+    }
+
+    private RawResponse doHttpRequest(
+            String method, String path, String jsonBody, String installDeleteTokenOverride) {
         if (isSimulatedUiThreadActiveForTest()) {
             assertNotMainThread();
         }
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(StandardCharsets.UTF_8) : null;
         String token = sessionToken();
 
-        RawResponse r = executeSingleEndpointRequest(_host, _port, method, path, bodyBytes, token);
+        RawResponse r = executeSingleEndpointRequest(
+                _host, _port, method, path, bodyBytes, token, installDeleteTokenOverride);
         if (r.isRuntimeException || (r.transportError != null && (
                 r.transportError.startsWith("NetworkOnMainThreadException") ||
                 r.transportError.contains("NetworkOnMainThreadException") ||
@@ -2978,7 +3029,7 @@ public final class OctiNetworkClient implements AutoCloseable {
         if (!r.transportOk && "octi.selfso.com".equals(_host) && _port == 443) {
             RawResponse fb = executeSingleEndpointRequest(
                 OctiDefs.OCTI_SERVER_FALLBACK_HOST, OctiDefs.OCTI_SERVER_FALLBACK_PORT,
-                method, path, bodyBytes, token);
+                method, path, bodyBytes, token, installDeleteTokenOverride);
             if (fb.transportOk) {
                 return fb;
             }
@@ -3038,6 +3089,13 @@ public final class OctiNetworkClient implements AutoCloseable {
     private RawResponse executeSingleEndpointRequest(
             String targetHost, int targetPort, String method, String path,
             byte[] bodyBytes, String token) {
+        return executeSingleEndpointRequest(
+                targetHost, targetPort, method, path, bodyBytes, token, null);
+    }
+
+    private RawResponse executeSingleEndpointRequest(
+            String targetHost, int targetPort, String method, String path,
+            byte[] bodyBytes, String token, String installDeleteTokenOverride) {
         RawResponse r = new RawResponse();
         for (int attempt = 1; attempt <= 5; attempt++) {
             r = new RawResponse();
@@ -3069,6 +3127,13 @@ public final class OctiNetworkClient implements AutoCloseable {
                     }
                     if (_installId != null && !_installId.isEmpty()) {
                         req.append("X-Octi-Install-Id: ").append(_installId).append("\r\n");
+                    }
+                    String effectiveInstallTok =
+                            (installDeleteTokenOverride != null && !installDeleteTokenOverride.isEmpty())
+                                    ? installDeleteTokenOverride
+                                    : _installDeleteToken;
+                    if (effectiveInstallTok != null && !effectiveInstallTok.isEmpty()) {
+                        req.append("X-Octi-Install-Token: ").append(effectiveInstallTok).append("\r\n");
                     }
                     if (bodyBytes != null) {
                         req.append("Content-Type: application/json\r\n");

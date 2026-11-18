@@ -1240,6 +1240,9 @@ public class OctiAndroidAppIntegrationTest {
         private final List<String> _receivedCrashBodies = new ArrayList<>();
         private final List<String> _receivedUploadBodies = new ArrayList<>();
         final List<String> receivedInstallIds = new ArrayList<>();
+        final List<String> receivedInstallTokens = new ArrayList<>();
+        private final Map<String, String> _registeredInstallTokens = new java.util.LinkedHashMap<>();
+        final List<String> deletedInstallIds = new ArrayList<>();
 
         MockTelemetryServer() throws Exception {
             _serverSocket = new ServerSocket();
@@ -1285,6 +1288,8 @@ public class OctiAndroidAppIntegrationTest {
                         continue;
                     }
                     int contentLength = 0;
+                    String reqInstallId = "";
+                    String reqInstallToken = "";
                     String h;
                     while ((h = r.readLine()) != null && !h.isEmpty()) {
                         int colon = h.indexOf(':');
@@ -1294,8 +1299,14 @@ public class OctiAndroidAppIntegrationTest {
                             if (name.equalsIgnoreCase("Content-Length")) {
                                 contentLength = Integer.parseInt(val);
                             } else if (name.equalsIgnoreCase("X-Octi-Install-Id")) {
+                                reqInstallId = val;
                                 synchronized (receivedInstallIds) {
                                     receivedInstallIds.add(val);
+                                }
+                            } else if (name.equalsIgnoreCase("X-Octi-Install-Token")) {
+                                reqInstallToken = val;
+                                synchronized (receivedInstallTokens) {
+                                    receivedInstallTokens.add(val);
                                 }
                             }
                         }
@@ -1314,11 +1325,38 @@ public class OctiAndroidAppIntegrationTest {
                     int status = 200;
                     String respBody;
 
-                    if (reqLine.contains("/api/v1/telemetry/crash")) {
+                    if (reqLine.startsWith("DELETE /api/v1/archive/install/")) {
+                        String pathPart = reqLine.split(" ")[1];
+                        String targetId = pathPart.substring("/api/v1/archive/install/".length());
+                        if (reqInstallToken.isEmpty()) {
+                            status = 401;
+                            respBody = "{\"error\":\"UNAUTHORIZED\",\"message\":\"missing X-Octi-Install-Token\"}";
+                        } else {
+                            String expected;
+                            synchronized (_registeredInstallTokens) {
+                                expected = _registeredInstallTokens.get(targetId);
+                            }
+                            if (expected == null || !expected.equals(reqInstallToken)) {
+                                status = 403;
+                                respBody = "{\"error\":\"FORBIDDEN\",\"message\":\"not authorized\"}";
+                            } else {
+                                synchronized (deletedInstallIds) {
+                                    deletedInstallIds.add(targetId);
+                                }
+                                status = 200;
+                                respBody = "{\"ok\":true,\"deleted\":1}";
+                            }
+                        }
+                    } else if (reqLine.contains("/api/v1/telemetry/crash")) {
                         if (!_crashEndpointOnline) {
                             status = 503;
                             respBody = "{\"error\":\"service_unavailable\"}";
                         } else {
+                            if (!reqInstallId.isEmpty() && !reqInstallToken.isEmpty()) {
+                                synchronized (_registeredInstallTokens) {
+                                    _registeredInstallTokens.putIfAbsent(reqInstallId, reqInstallToken);
+                                }
+                            }
                             synchronized (_receivedCrashBodies) {
                                 _receivedCrashBodies.add(body);
                             }
@@ -1330,6 +1368,11 @@ public class OctiAndroidAppIntegrationTest {
                             status = 503;
                             respBody = "{\"error\":\"service_unavailable\"}";
                         } else {
+                            if (!reqInstallId.isEmpty() && !reqInstallToken.isEmpty()) {
+                                synchronized (_registeredInstallTokens) {
+                                    _registeredInstallTokens.putIfAbsent(reqInstallId, reqInstallToken);
+                                }
+                            }
                             synchronized (_receivedUploadBodies) {
                                 _receivedUploadBodies.add(body);
                             }
@@ -1344,6 +1387,8 @@ public class OctiAndroidAppIntegrationTest {
                     byte[] payload = respBody.getBytes(StandardCharsets.UTF_8);
                     String statusText = (status == 201) ? "Created"
                             : (status == 200) ? "OK"
+                            : (status == 401) ? "Unauthorized"
+                            : (status == 403) ? "Forbidden"
                             : (status == 503) ? "Service Unavailable" : "Not Found";
                     String headers = "HTTP/1.1 " + status + " " + statusText + "\r\n"
                             + "Content-Type: application/json\r\n"
@@ -1513,6 +1558,49 @@ public class OctiAndroidAppIntegrationTest {
                 assertEquals(0, OctiCrashReporter.listPendingTranscriptFiles(_tempDir).size());
                 assertEquals(1, server.receivedUploadBodies().size());
                 assertTrue(server.receivedUploadBodies().get(0).contains("transcript"));
+
+                // Verify legacy config missing install_delete_token auto-populated a fresh token on load
+                String initialTok = configStore.preferences().installDeleteToken;
+                assertNotNull(initialTok);
+                assertFalse(initialTok.isEmpty());
+                assertEquals(initialTok, client.getInstallDeleteToken());
+                assertFalse(server.receivedInstallTokens.isEmpty());
+                assertEquals(initialTok, server.receivedInstallTokens.get(0));
+
+                // Fault injection: deleting install data without token or with wrong token fails (401 / 403)
+                OctiNetworkClient unauthClient = OctiNetworkClient.forHermeticTest(server.port());
+                OctiNetworkClient.ApiResult<Integer> unauthDel =
+                        unauthClient.deleteInstallArchiveData("inst-durable-test-888");
+                assertFalse(unauthDel.ok);
+                assertEquals(401, unauthDel.httpStatus);
+
+                OctiNetworkClient.ApiResult<Integer> wrongTokDel =
+                        unauthClient.deleteInstallArchiveData("inst-durable-test-888", "wrong-token-0123456789abcdef");
+                assertFalse(wrongTokDel.ok);
+                assertEquals(403, wrongTokDel.httpStatus);
+                assertTrue(server.deletedInstallIds.isEmpty());
+
+                // Nominal: resetInstallIdAndRequestDeletion() captures oldToken before rotating
+                // and authorizes server deletion of the old installId
+                vm.resetInstallIdAndRequestDeletion();
+                String rotatedId = configStore.preferences().installId;
+                String rotatedTok = configStore.preferences().installDeleteToken;
+                assertNotEquals("inst-durable-test-888", rotatedId);
+                assertNotEquals(initialTok, rotatedTok);
+                assertEquals(rotatedTok, client.getInstallDeleteToken());
+
+                long deadline = System.currentTimeMillis() + 3000L;
+                while (System.currentTimeMillis() < deadline) {
+                    synchronized (server.deletedInstallIds) {
+                        if (!server.deletedInstallIds.isEmpty()) {
+                            break;
+                        }
+                    }
+                    Thread.sleep(25L);
+                }
+                synchronized (server.deletedInstallIds) {
+                    assertTrue(server.deletedInstallIds.contains("inst-durable-test-888"));
+                }
             }
 
             // Verify bounded 32-file cap on pending_uploads spooling

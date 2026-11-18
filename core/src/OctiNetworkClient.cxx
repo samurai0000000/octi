@@ -745,6 +745,7 @@ struct OctiNetworkClient::Impl {
         int port = 0;
         std::string sessionToken;
         std::string installId;
+        std::string installDeleteToken;
         std::string clientType{"desktop"};
         bool explicitClientType = false;
         std::string robotLeaseId;
@@ -786,6 +787,18 @@ struct OctiNetworkClient::Impl {
             installId = id;
         }
 
+        std::string currentInstallDeleteToken() const
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return installDeleteToken;
+        }
+
+        void setInstallDeleteToken(const std::string &tok)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            installDeleteToken = tok;
+        }
+
         std::string currentClientType() const
         {
             std::lock_guard<std::mutex> lock(mutex);
@@ -815,6 +828,10 @@ struct OctiNetworkClient::Impl {
             std::string inst = currentInstallId();
             if (!inst.empty()) {
                 h.emplace("X-Octi-Install-Id", inst);
+            }
+            std::string instTok = currentInstallDeleteToken();
+            if (!instTok.empty() && h.find("X-Octi-Install-Token") == h.end()) {
+                h.emplace("X-Octi-Install-Token", instTok);
             }
             std::string lease = currentRobotLeaseId();
             if (!lease.empty()) {
@@ -913,6 +930,7 @@ struct OctiNetworkClient::Impl {
     std::string sessionToken;
     PlayerProfileInfo cachedProfile;
     std::string installId;
+    std::string installDeleteToken;
     std::string clientType;
     bool explicitClientType = false;
     std::string robotLeaseId;
@@ -959,6 +977,7 @@ struct OctiNetworkClient::Impl {
         auth->port = port;
         auth->sessionToken = sessionToken;
         auth->installId = installId;
+        auth->installDeleteToken = installDeleteToken;
         auth->clientType = clientType;
         auth->explicitClientType = explicitClientType;
         auth->robotLeaseId = robotLeaseId;
@@ -980,6 +999,19 @@ struct OctiNetworkClient::Impl {
     {
         std::lock_guard<std::mutex> lock(tokenMutex);
         installId = id;
+        syncAuthStateLocked();
+    }
+
+    std::string currentInstallDeleteToken() const
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        return installDeleteToken;
+    }
+
+    void setInstallDeleteToken(const std::string &tok)
+    {
+        std::lock_guard<std::mutex> lock(tokenMutex);
+        installDeleteToken = tok;
         syncAuthStateLocked();
     }
 
@@ -1459,9 +1491,11 @@ struct OctiNetworkClient::Impl {
         return executeWithRetry("GET", path, authHeaders(extra));
     }
 
-    RawResponse doPost(const std::string &path, const Json &body) const
+    RawResponse doPost(const std::string &path,
+                       const Json &body,
+                       const httplib::Headers &extra = httplib::Headers()) const
     {
-        return executeWithRetry("POST", path, authHeaders(), body.dump(), "application/json");
+        return executeWithRetry("POST", path, authHeaders(extra), body.dump(), "application/json");
     }
 
     RawResponse doPatch(const std::string &path, const Json &body) const
@@ -1469,9 +1503,10 @@ struct OctiNetworkClient::Impl {
         return executeWithRetry("PATCH", path, authHeaders(), body.dump(), "application/json");
     }
 
-    RawResponse doDelete(const std::string &path) const
+    RawResponse doDelete(const std::string &path,
+                         const httplib::Headers &extra = httplib::Headers()) const
     {
-        return executeWithRetry("DELETE", path, authHeaders());
+        return executeWithRetry("DELETE", path, authHeaders(extra));
     }
 
     template <typename T>
@@ -2084,6 +2119,16 @@ void OctiNetworkClient::setInstallId(const std::string &installId)
 std::string OctiNetworkClient::installId() const
 {
     return _impl->currentInstallId();
+}
+
+void OctiNetworkClient::setInstallDeleteToken(const std::string &token)
+{
+    _impl->setInstallDeleteToken(token);
+}
+
+std::string OctiNetworkClient::installDeleteToken() const
+{
+    return _impl->currentInstallDeleteToken();
 }
 
 /* ---- 1..10: Health, Auth, Profile & Leaderboard ---- */
@@ -3181,7 +3226,12 @@ ApiResult<UploadTranscriptResponse> OctiNetworkClient::uploadTrainingTranscript(
         body["clientId"] = req.clientId;
     }
 
-    Impl::RawResponse raw = _impl->doPost("/api/v1/archive/upload", body);
+    httplib::Headers extra;
+    if (!req.installDeleteToken.empty()) {
+        extra.emplace("X-Octi-Install-Token", req.installDeleteToken);
+    }
+
+    Impl::RawResponse raw = _impl->doPost("/api/v1/archive/upload", body, extra);
     if (!raw.transportOk || raw.status != 200) {
         Impl::populateError(raw, res);
         return res;
@@ -3236,7 +3286,12 @@ CrashReportResponse OctiNetworkClient::uploadCrashReport(
         body["install_id"] = req.installId;
     }
 
-    Impl::RawResponse raw = _impl->doPost("/api/v1/telemetry/crash", body);
+    httplib::Headers extra;
+    if (!req.installDeleteToken.empty()) {
+        extra.emplace("X-Octi-Install-Token", req.installDeleteToken);
+    }
+
+    Impl::RawResponse raw = _impl->doPost("/api/v1/telemetry/crash", body, extra);
     res.httpStatus = raw.status;
 
     if (raw.transportOk && (raw.status == 200 || raw.status == 201)) {
@@ -3259,11 +3314,16 @@ CrashReportResponse OctiNetworkClient::uploadCrashReport(
 }
 
 ApiResult<int> OctiNetworkClient::deleteInstallArchiveData(
-    const std::string &installId)
+    const std::string &installId,
+    const std::string &installDeleteToken)
 {
     ApiResult<int> res;
+    httplib::Headers extra;
+    if (!installDeleteToken.empty()) {
+        extra.emplace("X-Octi-Install-Token", installDeleteToken);
+    }
     Impl::RawResponse raw =
-        _impl->doDelete("/api/v1/archive/install/" + urlEncode(installId));
+        _impl->doDelete("/api/v1/archive/install/" + urlEncode(installId), extra);
     if (!raw.transportOk || raw.status != 200) {
         Impl::populateError(raw, res);
         return res;

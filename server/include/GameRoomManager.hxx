@@ -11,6 +11,7 @@
 #include "MatchmakingQueue.hxx"
 #include "OctiDefs.hxx"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -471,8 +472,12 @@ public:
     static constexpr int64_t kMaxLiveRoomOfflineSec = 24LL * 3600;
     static constexpr int64_t kMaxLobbyChatAgeMs = 6LL * 3600 * 1000;
     static constexpr int64_t kClientPresenceTtlMs = 60000;
+    static constexpr size_t kMaxAnonymousObservers = 4096;
+    static constexpr int64_t kAnonymousObserverTtlMs = 30LL * 60 * 1000;
+    static constexpr int64_t kLobbyMetaPresenceDebounceMs = 5000;
 
     static const char *presenceStatusName(PresenceStatus s) { return toString(s); }
+    static std::string escapeLogLine(const std::string &s);
 
     explicit GameRoomManager(AccountStore &store);
     ~GameRoomManager();
@@ -492,6 +497,13 @@ public:
     void setWallClock(std::function<int64_t()> epochSec);
     void setLimits(const RoomLimits &limits);
     void setMatchmakingConfig(const MatchmakingConfig &config);
+    void setAnonymizeObserverHandles(bool enabled);
+    void setEventWakeCallback(std::function<void()> cb);
+
+    int64_t currentClockMs() const;
+    int64_t latestLobbySeq() const;
+    uint64_t lobbySnapshotRevision() const;
+    uint64_t lobbyMetaSaveCount() const;
 
     /* ---- lobby presence & chat ---- */
     RoomResult enterLobby(int64_t playerId);
@@ -583,6 +595,8 @@ public:
     void refreshCachedPlayerStats();
 
     int64_t ensureAnonymousObserver(const std::string &ipAddress);
+    int64_t findAnonymousObserver(const std::string &ipAddress) const;
+    size_t anonymousObserverCount() const;
 
 private:
     struct Room;
@@ -675,7 +689,14 @@ private:
     bool checkpointToStoreLocked();
     bool restoreFromStoreLocked();
     void saveRoomLocked(const Room &r);
-    void saveLobbyMetaLocked();
+    void saveLobbyMetaLocked(bool presenceOnly = false);
+    void notifyEventWakeLocked();
+
+    static std::string sanitizeObserverIp(const std::string &ipAddress);
+    static bool isLoopbackObserverIp(const std::string &sanitized);
+    std::string buildAnonymousHandleLocked(const std::string &sanitized) const;
+    void evictAnonymousObserverLocked(int64_t anonId, int64_t now);
+    void pruneAnonymousObserversLocked(int64_t now, size_t maxKeep);
 
     mutable std::mutex _mutex;
     AccountStore &_store;
@@ -693,13 +714,22 @@ private:
     std::map<int64_t, std::string> _matchAssignments;
     std::map<int64_t, std::deque<int64_t>> _lobbyChatTimes;
     std::map<std::string, int64_t> _anonIpToId;
+    std::map<int64_t, std::string> _anonIdToIp;
     int64_t _nextAnonId = -1;
+    bool _anonymizeObserverHandles = true;
+    std::array<unsigned char, 32> _anonHmacKey;
 
     std::deque<LobbyEvent> _lobbyEvents;
     int64_t _lobbySeq;
     int64_t _lobbyEvictedUpToSeq;
     size_t _lobbyChatCount;
     uint64_t _roomCounter;
+    bool _lobbyMetaDirty = false;
+    int64_t _lobbyMetaDirtySinceMs = 0;
+    int64_t _lastLobbyMetaSaveMs = 0;
+    uint64_t _lobbyMetaSaves = 0;
+    uint64_t _lobbySnapshotRev = 1;
+    std::function<void()> _eventWakeCb;
 };
 
 } // namespace octi

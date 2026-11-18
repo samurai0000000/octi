@@ -31,6 +31,7 @@ struct ClientPreferences {
     std::string telemetryConsent = "unset"; // "unset" | "share" | "decline"
     int telemetryConsentVersion = 0;
     std::string installId; // random UUIDv4 generated when needed, resettable
+    std::string installDeleteToken; // random token for X-Octi-Install-Token ownership
 };
 
 /*

@@ -15,6 +15,7 @@
 #include <rapidcheck.h>
 
 #include <atomic>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <map>
@@ -24,6 +25,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 #include <CppUTest/CommandLineTestRunner.h>
@@ -3798,19 +3800,35 @@ TEST(GameRoomManagerTest, VisibleAnonymousObservers)
     RoomResult obsRes = mgr->observeRoom(room, a1);
     CHECK_TRUE(obsRes.ok());
 
+    auto isAnonHmacHandle = [](const std::string &h) {
+        if (h.size() != 18 || h.rfind("anonymous-", 0) != 0) {
+            return false;
+        }
+        for (size_t i = 10; i < h.size(); ++i) {
+            char c = h[i];
+            bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+            if (!hex) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     // Check Lobby TableSummary has observerCount and observerHandles
     std::vector<TableSummary> tables = mgr->listTables();
     CHECK_EQUAL(1, (int)tables.size());
     CHECK_EQUAL(1, tables[0].observerCount);
     CHECK_EQUAL(1, (int)tables[0].observerHandles.size());
-    STRCMP_EQUAL("anonymous-203.0.113.42", tables[0].observerHandles[0].c_str());
+    std::string expectedAnonHandle = tables[0].observerHandles[0];
+    CHECK_TRUE(isAnonHmacHandle(expectedAnonHandle));
+    CHECK_TRUE(expectedAnonHandle.find("203.0.113.42") == std::string::npos);
 
     // Check RoomView
     RoomView view;
     CHECK_TRUE(mgr->getRoomView(room, a1, view).ok());
     CHECK_EQUAL(1, (int)view.observerIds.size());
     CHECK_EQUAL(1, (int)view.observerHandles.size());
-    STRCMP_EQUAL("anonymous-203.0.113.42", view.observerHandles[0].c_str());
+    STRCMP_EQUAL(expectedAnonHandle.c_str(), view.observerHandles[0].c_str());
 
     // Room events show OBSERVER_JOINED
     RoomPoll poll1;
@@ -3820,7 +3838,7 @@ TEST(GameRoomManagerTest, VisibleAnonymousObservers)
         if (poll1.events[i].type == RoomEventType::OBSERVER_JOINED) {
             foundJoined = true;
             CHECK_EQUAL(a1, poll1.events[i].playerId);
-            STRCMP_EQUAL("anonymous-203.0.113.42", poll1.events[i].handle.c_str());
+            STRCMP_EQUAL(expectedAnonHandle.c_str(), poll1.events[i].handle.c_str());
             break;
         }
     }
@@ -3835,7 +3853,7 @@ TEST(GameRoomManagerTest, VisibleAnonymousObservers)
         if (poll2.events[i].type == RoomEventType::OBSERVER_LEFT) {
             foundLeft = true;
             CHECK_EQUAL(a1, poll2.events[i].playerId);
-            STRCMP_EQUAL("anonymous-203.0.113.42", poll2.events[i].handle.c_str());
+            STRCMP_EQUAL(expectedAnonHandle.c_str(), poll2.events[i].handle.c_str());
             break;
         }
     }
@@ -4706,6 +4724,107 @@ TEST(GameRoomManagerTest, DualPoolRoutingFairnessGuardsAndUnratedVariantClamping
         wall += 86401;
         GameRecord grAfterWindow = playOfkDuel(actBot0A, actBot3, false);
         CHECK_EQUAL(2, grAfterWindow.eloPool);
+    }
+}
+
+TEST(GameRoomManagerTest, Envelope4AnonymousEvictionWalDebounceAndLogEscaping)
+{
+    /* 1. Passive findAnonymousObserver does not allocate observer entries */
+    CHECK_EQUAL(0u, mgr->anonymousObserverCount());
+    CHECK_EQUAL(0, mgr->findAnonymousObserver("198.51.100.10"));
+    CHECK_EQUAL(0u, mgr->anonymousObserverCount());
+
+    /* 2. 30-minute TTL eviction on tick() */
+    int64_t anonFirst = mgr->ensureAnonymousObserver("198.51.100.10");
+    CHECK_TRUE(anonFirst < 0);
+    CHECK_EQUAL(anonFirst, mgr->findAnonymousObserver("198.51.100.10"));
+    CHECK_EQUAL(1u, mgr->anonymousObserverCount());
+
+    now += GameRoomManager::kAnonymousObserverTtlMs - 1;
+    mgr->tick();
+    CHECK_EQUAL(1u, mgr->anonymousObserverCount());
+
+    now += 2;
+    mgr->tick();
+    CHECK_EQUAL(0u, mgr->anonymousObserverCount());
+    CHECK_EQUAL(0, mgr->findAnonymousObserver("198.51.100.10"));
+
+    /* 3. 4096 capacity bound evicts oldest idle observer */
+    int64_t oldestId = 0;
+    for (size_t i = 0; i < GameRoomManager::kMaxAnonymousObservers + 10; ++i) {
+        now += 1;
+        std::string ip = "198.18." + std::to_string((i / 250) & 0xFF) + "." +
+                         std::to_string((i % 250) + 1);
+        int64_t aid = mgr->ensureAnonymousObserver(ip);
+        if (i == 0) {
+            oldestId = aid;
+        }
+    }
+    CHECK_EQUAL(GameRoomManager::kMaxAnonymousObservers,
+                mgr->anonymousObserverCount());
+    CHECK_EQUAL(0, mgr->findAnonymousObserver("198.18.0.1"));
+    (void)oldestId;
+
+    /* 4. 5s presence-only saveLobbyMetaLocked debounce + tick / checkpoint flush */
+    uint64_t baseSaves = mgr->lobbyMetaSaveCount();
+    for (int i = 0; i < 6; ++i) {
+        now += 100;
+        EXPECT_OK(mgr->enterLobby(p[i % 4]));
+        EXPECT_OK(mgr->leaveLobby(p[i % 4]));
+    }
+    /* Within < 5000ms, presence-only churn triggers zero SQLite live_meta writes */
+    CHECK_EQUAL(baseSaves, mgr->lobbyMetaSaveCount());
+
+    now += GameRoomManager::kLobbyMetaPresenceDebounceMs;
+    mgr->tick();
+    CHECK_EQUAL(baseSaves + 1, mgr->lobbyMetaSaveCount());
+
+    /* Immediate flush on checkpointToStore() */
+    now += 50;
+    EXPECT_OK(mgr->enterLobby(p[0]));
+    CHECK_EQUAL(baseSaves + 1, mgr->lobbyMetaSaveCount());
+    const int64_t seqBeforeStop = mgr->latestLobbySeq();
+    CHECK_TRUE(mgr->checkpointToStore());
+    CHECK_EQUAL(baseSaves + 2, mgr->lobbyMetaSaveCount());
+
+    GameRoomManager restored(*store);
+    CHECK_EQUAL(seqBeforeStop, restored.latestLobbySeq());
+
+    /* 5. escapeLogLine neutralizes CRLF, tabs, control bytes, C1 NEL, U+2028, U+2029 */
+    const std::string rawPayload =
+        std::string("hi\r\n[FAKE] root\t\x07\x7f") +
+        "\xC2\x85" + "\xE2\x80\xA8" + "\xE2\x80\xA9" + "end";
+    const std::string escaped = GameRoomManager::escapeLogLine(rawPayload);
+    CHECK_TRUE(escaped.find('\r') == std::string::npos);
+    CHECK_TRUE(escaped.find('\n') == std::string::npos);
+    CHECK_TRUE(escaped.find('\t') == std::string::npos);
+    STRCMP_EQUAL("hi\\r\\n[FAKE] root\\t\\x07\\x7f\\u0085\\u2028\\u2029end",
+                 escaped.c_str());
+
+    /* Also verify live postLobbyChat escapes U+2028 line separator on stderr */
+    int pipeFds[2] = {-1, -1};
+    if (::pipe(pipeFds) == 0) {
+        std::fflush(stderr);
+        int savedStderr = ::dup(STDERR_FILENO);
+        if (savedStderr >= 0) {
+            ::dup2(pipeFds[1], STDERR_FILENO);
+            EXPECT_OK(mgr->postLobbyChat(
+                p[0], std::string("safe") + "\xE2\x80\xA8" + "FAKE_LINE"));
+            std::fflush(stderr);
+            ::dup2(savedStderr, STDERR_FILENO);
+            ::close(savedStderr);
+        }
+        ::close(pipeFds[1]);
+        char buf[1024];
+        ssize_t n = ::read(pipeFds[0], buf, sizeof(buf) - 1);
+        ::close(pipeFds[0]);
+        if (n > 0) {
+            buf[n] = '\0';
+            std::string errLine(buf, static_cast<size_t>(n));
+            CHECK_TRUE(errLine.find("[LOBBY_CHAT]") != std::string::npos);
+            CHECK_TRUE(errLine.find("safe\\u2028FAKE_LINE") != std::string::npos);
+            CHECK_TRUE(errLine.find("\xE2\x80\xA8") == std::string::npos);
+        }
     }
 }
 

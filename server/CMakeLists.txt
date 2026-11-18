@@ -40,6 +40,7 @@ find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(PNG REQUIRED)
+find_package(ZLIB REQUIRED)
 find_library(WEBP_LIBRARY webp REQUIRED)
 find_path(WEBP_INCLUDE_DIR webp/decode.h REQUIRED)
 if(OCTI_SERVER_BUILD_TESTS)
@@ -60,6 +61,7 @@ add_library(octi_server_lib STATIC
     src/ServerApp.cxx
     src/OidcVerifier.cxx
     src/AccountStore.cxx
+    src/BanManager.cxx
     src/EloCalculator.cxx
     src/MatchmakingQueue.cxx
     src/GameRoomManager.cxx
@@ -89,6 +91,7 @@ target_link_libraries(octi_server_lib PUBLIC
     OpenSSL::Crypto
     SQLite::SQLite3
     PNG::PNG
+    ZLIB::ZLIB
     ${WEBP_LIBRARY}
 )
 
@@ -115,6 +118,8 @@ if(UNIX AND NOT APPLE AND NOT OCTI_SERVER_SANITIZE)
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/octi-server.service"
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/octi-server.default"
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/oidc.json"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/bans.json"
+                "${CMAKE_CURRENT_SOURCE_DIR}/packaging/apache2-octi.conf.example"
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/conffiles"
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/postinst"
                 "${CMAKE_CURRENT_SOURCE_DIR}/packaging/prerm"
@@ -140,6 +145,7 @@ target_link_directories(test_server_foundation PRIVATE
 target_link_libraries(test_server_foundation PRIVATE
     octi_server_lib
     ${CPPUTEST_LIBRARIES}
+    ${RAPIDCHECK_LIBRARY}
 )
 
 add_dependencies(test_server_foundation octi_server)

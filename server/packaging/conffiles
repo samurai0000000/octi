@@ -1,2 +1,3 @@
 /etc/default/octi-server
 /etc/octi/oidc.json
+/etc/octi/bans.json

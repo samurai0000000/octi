@@ -56,6 +56,7 @@ public final class ClientConfigStore {
         public String telemetryConsent = "unset";
         public int telemetryConsentVersion = 0;
         public String installId = generateUuidV4();
+        public String installDeleteToken = generateUuidV4();
 
         public ClientPreferences() {
         }
@@ -172,6 +173,14 @@ public final class ClientConfigStore {
             this.installId = installId != null ? installId : "";
         }
 
+        public String getInstallDeleteToken() {
+            return installDeleteToken != null ? installDeleteToken : "";
+        }
+
+        public void setInstallDeleteToken(String installDeleteToken) {
+            this.installDeleteToken = installDeleteToken != null ? installDeleteToken : "";
+        }
+
         public ClientPreferences copy() {
             ClientPreferences c = new ClientPreferences();
             c.sessionToken = this.sessionToken;
@@ -188,6 +197,7 @@ public final class ClientConfigStore {
             c.telemetryConsent = this.telemetryConsent;
             c.telemetryConsentVersion = this.telemetryConsentVersion;
             c.installId = this.installId;
+            c.installDeleteToken = this.installDeleteToken;
             return c;
         }
     }
@@ -305,8 +315,10 @@ public final class ClientConfigStore {
 
     public String resetInstallId() {
         String id = generateUuidV4();
+        String token = generateUuidV4();
         if (_prefs != null) {
             _prefs.installId = id;
+            _prefs.installDeleteToken = token;
         }
         return id;
     }
@@ -442,6 +454,11 @@ public final class ClientConfigStore {
         } else {
             parsed.installId = generateUuidV4();
         }
+        if (doc.get("install_delete_token") instanceof String s && !s.isEmpty()) {
+            parsed.installDeleteToken = s;
+        } else {
+            parsed.installDeleteToken = generateUuidV4();
+        }
 
         _prefs = parsed;
         return true;
@@ -491,6 +508,10 @@ public final class ClientConfigStore {
         doc.put("telemetry_consent", _prefs.telemetryConsent != null ? _prefs.telemetryConsent : "unset");
         doc.put("telemetry_consent_version", _prefs.telemetryConsentVersion);
         doc.put("install_id", _prefs.installId != null ? _prefs.installId : "");
+        doc.put("install_delete_token",
+                (_prefs.installDeleteToken != null && !_prefs.installDeleteToken.isEmpty())
+                        ? _prefs.installDeleteToken
+                        : generateUuidV4());
 
         String serialized = OctiMiniJson.stringifyPretty(doc) + "\n";
         byte[] bytes = serialized.getBytes(StandardCharsets.UTF_8);

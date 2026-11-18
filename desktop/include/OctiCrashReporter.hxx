@@ -35,23 +35,27 @@ public:
         const std::string &exceptionType,
         const std::string &exceptionMessage,
         const std::string &contextJson = "{}",
-        const std::string &installId = "");
+        const std::string &installId = "",
+        const std::string &installDeleteToken = "");
 
     static std::string spoolTrainingTranscript(
         const std::string &gameId,
         const std::string &transcriptJson,
-        const std::string &clientId = "");
+        const std::string &clientId = "",
+        const std::string &installDeleteToken = "");
 
     static std::vector<std::string> listPendingCrashFiles();
     static std::vector<std::string> listPendingTranscriptFiles();
 
     static int flushPendingCrashReports(
         OctiNetworkClient &client,
-        const std::string &installId = "");
+        const std::string &installId = "",
+        const std::string &installDeleteToken = "");
 
     static int flushPendingTranscripts(
         OctiNetworkClient &client,
-        const std::string &overrideInstallId = "");
+        const std::string &overrideInstallId = "",
+        const std::string &installDeleteToken = "");
 
     static std::string captureStackTrace(int maxFrames = 32, int skipFrames = 1);
     static void pruneDirectory(const std::string &dirPath, std::size_t maxFiles = 32);

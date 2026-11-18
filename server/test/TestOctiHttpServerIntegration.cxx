@@ -37,6 +37,11 @@
 #include <openssl/core_names.h>
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#include <zlib.h>
 
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -51,6 +56,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -232,6 +238,7 @@ std::string makeToken(const std::string &provider, const std::string &sub,
     claims["iat"] = realNow() - 10;
     claims["exp"] = realNow() + 3600;
     claims["email"] = "user@example.com";
+    claims["email_verified"] = true;
     claims["name"] = actualName;
     claims["picture"] = "https://example.com/avatar.png";
     if (mutate) {
@@ -272,6 +279,14 @@ public:
               const httplib::Headers &extra = httplib::Headers()) const
     {
         httplib::Client cli = client();
+        return wrap(cli.Get(path, headersFor(token, extra)));
+    }
+
+    Reply getRaw(const std::string &path, const std::string &token = "",
+                 const httplib::Headers &extra = httplib::Headers()) const
+    {
+        httplib::Client cli = client();
+        cli.set_decompress(false);
         return wrap(cli.Get(path, headersFor(token, extra)));
     }
 
@@ -385,6 +400,9 @@ HttpServerConfig testConfig()
     c.sseSessionRecheckMs = 100;
     c.uploadRateLimitMax = 100;
     c.exportRateLimitMax = 100;
+    c.browseAnonIpBurst = 200.0;
+    c.lobbySnapAnonIpBurst = 100.0;
+    c.livePollAnonIpBurst = 100.0;
     for (int i = 0; i < 5; ++i) {
         static const char *names[] = {"google", "apple", "microsoft",
                                       "facebook", "line"};
@@ -2939,22 +2957,33 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadRejectsMalformedPayloadsAndEnfo
 
 TEST(OctiHttpServerIntegrationTest, ArchiveUploadDeduplicationAndInstallIdDeletion)
 {
+    const std::string installTok = "0123456789abcdef0123456789abcdef";
     std::string wonTr = makeWonTranscript("inst-delete-test", 3);
-    Reply r1 = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    Reply r1 = http().post("/api/v1/archive/upload", "",
+                           Json{{"transcript", wonTr}},
+                           {{"X-Octi-Install-Token", installTok}});
     EXPECT_STATUS(200, r1);
     std::string gameId = r1.json.value("game_id", "");
     CHECK_FALSE(gameId.empty());
 
     /* Submitting the exact same game twice returns 409 DUPLICATE_ID */
-    Reply rDup = http().post("/api/v1/archive/upload", "", Json{{"transcript", wonTr}});
+    Reply rDup = http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", wonTr}},
+                             {{"X-Octi-Install-Token", installTok}});
     EXPECT_STATUS(409, rDup);
     STRCMP_EQUAL("DUPLICATE_ID", rDup.json.value("error", "").c_str());
 
     /* Verify game exists before deletion */
     EXPECT_STATUS(200, http().get("/api/v1/archive/games/" + gameId));
 
-    /* DELETE /api/v1/archive/install/:installId removes all games uploaded under this install ID */
-    Reply rDel = http().del("/api/v1/archive/install/inst-delete-test", "");
+    /* Unauthenticated or wrong-token DELETE is rejected */
+    EXPECT_STATUS(401, http().del("/api/v1/archive/install/inst-delete-test", ""));
+    EXPECT_STATUS(403, http().del("/api/v1/archive/install/inst-delete-test", "",
+                                  {{"X-Octi-Install-Token", "fedcba9876543210fedcba9876543210"}}));
+
+    /* DELETE /api/v1/archive/install/:installId with matching X-Octi-Install-Token succeeds */
+    Reply rDel = http().del("/api/v1/archive/install/inst-delete-test", "",
+                            {{"X-Octi-Install-Token", installTok}});
     EXPECT_STATUS(200, rDel);
     CHECK_TRUE(rDel.json.value("ok", false));
     CHECK_EQUAL(1, rDel.json.value("deleted", 0));
@@ -2963,8 +2992,9 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadDeduplicationAndInstallIdDeleti
     Reply rGone = http().get("/api/v1/archive/games/" + gameId);
     EXPECT_STATUS(404, rGone);
 
-    /* Second deletion returns 0 deleted */
-    Reply rDel2 = http().del("/api/v1/archive/install/inst-delete-test", "");
+    /* Second deletion with valid token returns 0 deleted */
+    Reply rDel2 = http().del("/api/v1/archive/install/inst-delete-test", "",
+                             {{"X-Octi-Install-Token", installTok}});
     EXPECT_STATUS(200, rDel2);
     CHECK_EQUAL(0, rDel2.json.value("deleted", -1));
 
@@ -3077,8 +3107,10 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
     CHECK_EQUAL(1, rStats.json["by_winner"].value("B", 0));
     CHECK_TRUE(rStats.json.contains("ai_win_rates") && rStats.json["ai_win_rates"].is_array());
 
-    /* Test /api/v1/archive/export (NDJSON streaming) */
-    Reply rExp = http().get("/api/v1/archive/export");
+    /* Test /api/v1/archive/export (NDJSON streaming requires Bearer auth) */
+    EXPECT_ERROR(401, "UNAUTHORIZED", http().get("/api/v1/archive/export"));
+    User exporter = signIn("google", "sub-arch-exporter", "Arch Exporter");
+    Reply rExp = http().get("/api/v1/archive/export", exporter.token);
     EXPECT_STATUS(200, rExp);
     STRCMP_EQUAL("application/x-ndjson; charset=utf-8", rExp.contentType.c_str());
     CHECK_TRUE(rExp.header("Content-Disposition").find("octi-archive-export.ndjson") != std::string::npos);
@@ -3103,6 +3135,10 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
 
 TEST(OctiHttpServerIntegrationTest, CrashTelemetryNominalUploadAndRetrieval)
 {
+    env->store.setAdminGoogleIdentities({"sub-telemetry-admin"});
+    User admin = signIn("google", "sub-telemetry-admin", "Telemetry Admin");
+    User nonAdmin = signIn("google", "sub-telemetry-user", "Regular User");
+
     /* 1. Upload nominal crash report without crash_id (server computes deterministic SHA-256) */
     Json payload = {
         {"platform", "windows-x86_64"},
@@ -3123,8 +3159,14 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryNominalUploadAndRetrieval)
     std::string crashId = rUpload.json.value("crash_id", "");
     CHECK_EQUAL(64, static_cast<int>(crashId.size()));
 
-    /* 2. List crash reports and check filtering */
-    Reply rList = http().get("/api/v1/telemetry/crashes");
+    /* 1b. Unauthenticated & non-admin callers are denied (401 / 403) */
+    EXPECT_STATUS(401, http().get("/api/v1/telemetry/crashes"));
+    EXPECT_STATUS(403, http().get("/api/v1/telemetry/crashes", nonAdmin.token));
+    EXPECT_STATUS(401, http().get("/api/v1/telemetry/crashes/" + crashId));
+    EXPECT_STATUS(403, http().get("/api/v1/telemetry/crashes/" + crashId, nonAdmin.token));
+
+    /* 2. List crash reports as admin and check filtering */
+    Reply rList = http().get("/api/v1/telemetry/crashes", admin.token);
     EXPECT_STATUS(200, rList);
     CHECK_EQUAL(1, rList.json.value("total", 0));
     CHECK_TRUE(rList.json.contains("crashes") && rList.json["crashes"].is_array());
@@ -3143,43 +3185,43 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryNominalUploadAndRetrieval)
     CHECK_TRUE(rList.body.find("inst-crash-test-01") == std::string::npos);
 
     /* Filter by platform */
-    Reply rWin = http().get("/api/v1/telemetry/crashes?platform=windows-x86_64");
+    Reply rWin = http().get("/api/v1/telemetry/crashes?platform=windows-x86_64", admin.token);
     EXPECT_STATUS(200, rWin);
     CHECK_EQUAL(1, rWin.json.value("total", 0));
 
-    Reply rLin = http().get("/api/v1/telemetry/crashes?platform=linux-x86_64");
+    Reply rLin = http().get("/api/v1/telemetry/crashes?platform=linux-x86_64", admin.token);
     EXPECT_STATUS(200, rLin);
     CHECK_EQUAL(0, rLin.json.value("total", 0));
 
     /* Filter by app_version */
-    Reply rVer = http().get("/api/v1/telemetry/crashes?app_version=2.1.2");
+    Reply rVer = http().get("/api/v1/telemetry/crashes?app_version=2.1.2", admin.token);
     EXPECT_STATUS(200, rVer);
     CHECK_EQUAL(1, rVer.json.value("total", 0));
 
-    Reply rOldVer = http().get("/api/v1/telemetry/crashes?app_version=1.0.0");
+    Reply rOldVer = http().get("/api/v1/telemetry/crashes?app_version=1.0.0", admin.token);
     EXPECT_STATUS(200, rOldVer);
     CHECK_EQUAL(0, rOldVer.json.value("total", 0));
 
     /* Filter by exception_type */
-    Reply rExc = http().get("/api/v1/telemetry/crashes?exception_type=std::invalid_argument");
+    Reply rExc = http().get("/api/v1/telemetry/crashes?exception_type=std::invalid_argument", admin.token);
     EXPECT_STATUS(200, rExc);
     CHECK_EQUAL(1, rExc.json.value("total", 0));
 
-    Reply rOtherExc = http().get("/api/v1/telemetry/crashes?exception_type=std::out_of_range");
+    Reply rOtherExc = http().get("/api/v1/telemetry/crashes?exception_type=std::out_of_range", admin.token);
     EXPECT_STATUS(200, rOtherExc);
     CHECK_EQUAL(0, rOtherExc.json.value("total", 0));
 
     /* Pagination */
-    Reply rPage0 = http().get("/api/v1/telemetry/crashes?limit=1&offset=0");
+    Reply rPage0 = http().get("/api/v1/telemetry/crashes?limit=1&offset=0", admin.token);
     EXPECT_STATUS(200, rPage0);
     CHECK_EQUAL(1, static_cast<int>(rPage0.json["crashes"].size()));
 
-    Reply rPage1 = http().get("/api/v1/telemetry/crashes?limit=1&offset=1");
+    Reply rPage1 = http().get("/api/v1/telemetry/crashes?limit=1&offset=1", admin.token);
     EXPECT_STATUS(200, rPage1);
     CHECK_EQUAL(0, static_cast<int>(rPage1.json["crashes"].size()));
 
     /* 3. Get single crash report detail */
-    Reply rDetail = http().get("/api/v1/telemetry/crashes/" + crashId);
+    Reply rDetail = http().get("/api/v1/telemetry/crashes/" + crashId, admin.token);
     EXPECT_STATUS(200, rDetail);
     STRCMP_EQUAL(crashId.c_str(), rDetail.json.value("crash_id", "").c_str());
     STRCMP_EQUAL("#0 octi.exe+0x0004a2b0\n#1 octi.exe+0x000511c4",
@@ -3193,7 +3235,7 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryNominalUploadAndRetrieval)
     CHECK_TRUE(rDetail.body.find("inst-crash-test-01") == std::string::npos);
 
     /* 4. Non-existent crash returns 404 */
-    Reply rNotFound = http().get("/api/v1/telemetry/crashes/non-existent-crash-id-12345");
+    Reply rNotFound = http().get("/api/v1/telemetry/crashes/non-existent-crash-id-12345", admin.token);
     EXPECT_STATUS(404, rNotFound);
 }
 
@@ -3266,7 +3308,10 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryFaultInjectionAndInstallIdPurg
     EXPECT_STATUS(400, rGarbage);
 
     /* 6. Verify DELETE /api/v1/archive/install/:installId purges both games and crash reports */
+    env->store.setAdminGoogleIdentities({"sub-purge-admin"});
+    User admin = signIn("google", "sub-purge-admin", "Purge Admin");
     std::string installToPurge = "purge-install-id-99";
+    std::string purgeToken = "abcdef0123456789abcdef0123456789";
     std::string crashId = "crash-to-be-purged-001";
 
     Json crashPayload = {
@@ -3277,22 +3322,26 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryFaultInjectionAndInstallIdPurg
         {"exception_message", "privacy purge test"},
         {"install_id", installToPurge}
     };
-    Reply rUpload = http().post("/api/v1/telemetry/crash", "", crashPayload);
+    Reply rUpload = http().post("/api/v1/telemetry/crash", "", crashPayload,
+                                {{"X-Octi-Install-Token", purgeToken}});
     EXPECT_STATUS(201, rUpload);
 
     /* Also upload a game for the same install_id */
     std::string gameTr = makeWonTranscript(installToPurge, 3);
-    Reply rGame = http().post("/api/v1/archive/upload", "", Json{{"transcript", gameTr}});
+    Reply rGame = http().post("/api/v1/archive/upload", "",
+                              Json{{"transcript", gameTr}},
+                              {{"X-Octi-Install-Token", purgeToken}});
     EXPECT_STATUS(200, rGame);
     std::string gameId = rGame.json.value("game_id", "");
     CHECK_FALSE(gameId.empty());
 
     /* Both game and crash report exist */
     EXPECT_STATUS(200, http().get("/api/v1/archive/games/" + gameId));
-    EXPECT_STATUS(200, http().get("/api/v1/telemetry/crashes/" + crashId));
+    EXPECT_STATUS(200, http().get("/api/v1/telemetry/crashes/" + crashId, admin.token));
 
-    /* Execute privacy deletion for installId */
-    Reply rDel = http().del("/api/v1/archive/install/" + installToPurge, "");
+    /* Execute privacy deletion for installId with valid X-Octi-Install-Token */
+    Reply rDel = http().del("/api/v1/archive/install/" + installToPurge, "",
+                            {{"X-Octi-Install-Token", purgeToken}});
     EXPECT_STATUS(200, rDel);
     CHECK_TRUE(rDel.json.value("ok", false));
     /* Expect 2 records deleted: 1 game + 1 crash report */
@@ -3300,10 +3349,10 @@ TEST(OctiHttpServerIntegrationTest, CrashTelemetryFaultInjectionAndInstallIdPurg
 
     /* Both game and crash report are now purged (404) */
     EXPECT_STATUS(404, http().get("/api/v1/archive/games/" + gameId));
-    EXPECT_STATUS(404, http().get("/api/v1/telemetry/crashes/" + crashId));
+    EXPECT_STATUS(404, http().get("/api/v1/telemetry/crashes/" + crashId, admin.token));
 
     /* Crash report list no longer includes crashId */
-    Reply rListAfter = http().get("/api/v1/telemetry/crashes");
+    Reply rListAfter = http().get("/api/v1/telemetry/crashes", admin.token);
     EXPECT_STATUS(200, rListAfter);
     CHECK_TRUE(rListAfter.body.find(crashId) == std::string::npos);
 }
@@ -3553,11 +3602,14 @@ TEST(OctiHttpServerIntegrationTest, VisibleAnonymousObservation)
     };
     Reply rLobbyReal = http().get("/api/v1/lobby/state", "", xffHeaders);
     EXPECT_STATUS(200, rLobbyReal);
+    CHECK_TRUE(rLobbyReal.body.find("203.0.113.42") == std::string::npos);
     Json players = rLobbyReal.json["players"];
     CHECK_TRUE(players.is_array());
     bool foundAnon = false;
     for (size_t i = 0; i < players.size(); ++i) {
-        if (players[i].value("handle", "") == "anonymous-203.0.113.42") {
+        std::string h = players[i].value("handle", "");
+        if (h.rfind("anonymous-", 0) == 0 && h != "anonymous-127.0.0.1") {
+            CHECK_EQUAL(18, static_cast<int>(h.size()));
             foundAnon = true;
             CHECK_TRUE(players[i].contains("clients"));
             CHECK_EQUAL(1, static_cast<int>(players[i]["clients"].size()));
@@ -4416,7 +4468,7 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     STRCMP_EQUAL("archiver_alice", rGet1.json["players"][0].value("handle", "").c_str());
     STRCMP_EQUAL(a.uuid.c_str(), rGet1.json["players"][0].value("player_uuid", "").c_str());
 
-    // 2. Upload game from same device WITHOUT Authorization header -> attributed via bound install_id!
+    // 2. SEC-01: Unauthenticated upload reusing a bound install_id must NOT attribute to Alice
     std::string tr2 = makeResignedTranscript({"33+c", "37+g"}, "dev-bound-01", 4);
     Reply rUp2 = http().post("/api/v1/archive/upload", "",
                              Json{{"transcript", tr2}});
@@ -4427,8 +4479,8 @@ TEST(OctiHttpServerIntegrationTest, AuthenticatedGameArchiveAndInstallAttributio
     Reply rGet2 = http().get("/api/v1/archive/games/" + gid2);
     EXPECT_STATUS(200, rGet2);
     CHECK_TRUE(rGet2.json["players"].is_array() && !rGet2.json["players"].empty());
-    STRCMP_EQUAL("archiver_alice", rGet2.json["players"][0].value("handle", "").c_str());
-    STRCMP_EQUAL(a.uuid.c_str(), rGet2.json["players"][0].value("player_uuid", "").c_str());
+    STRCMP_EQUAL("Player", rGet2.json["players"][0].value("handle", "").c_str());
+    CHECK_TRUE(rGet2.json["players"][0].value("player_uuid", "").empty());
 
     // 3. Upload from unknown device without auth -> remains anonymous Player
     std::string tr3 = makeResignedTranscript({"33+d", "37+h"}, "dev-unknown-99", 5);
@@ -5438,8 +5490,8 @@ assert.strictEqual(resOfk.bestMove, "33a-35x", "OFK must choose winning capture 
 
 TEST(OctiHttpServerIntegrationTest, LobbyConnectedUsersMultiClientCollapseAndIdleTracking)
 {
-    int64_t fakeNow = 100000;
-    env->rooms->setClock([&fakeNow]() { return fakeNow; });
+    auto fakeNow = std::make_shared<std::atomic<int64_t>>(100000);
+    env->rooms->setClock([fakeNow]() { return fakeNow->load(); });
 
     User alice = signIn("google", "sub-presence-alice", "PresenceAlice");
     std::string tokenAlice = alice.token;
@@ -5488,7 +5540,7 @@ TEST(OctiHttpServerIntegrationTest, LobbyConnectedUsersMultiClientCollapseAndIdl
     CHECK_TRUE(aliceObj["idle_sec"].get<int64_t>() >= 0);
 
     // Advance simulated time to 115000 (+15 seconds) and do passive polls:
-    fakeNow = 115000;
+    fakeNow->store(115000);
     http().get("/api/v1/lobby/state", tokenAlice, hWeb);
     http().get("/api/v1/lobby/state", tokenAlice, hAndroid);
     Reply rPoll = http().get("/api/v1/lobby/state", tokenAlice, hDesktop);
@@ -5504,7 +5556,7 @@ TEST(OctiHttpServerIntegrationTest, LobbyConnectedUsersMultiClientCollapseAndIdl
     CHECK_EQUAL(15, alicePoll.value("idle_sec", -1));
 
     // Advance simulated time to 122000 (+22 seconds) and post an interactive lobby chat:
-    fakeNow = 122000;
+    fakeNow->store(122000);
     httplib::Headers hChatDesktop = {{"X-Octi-Client-Type", "desktop"}};
     Reply rChat = http().post("/api/v1/lobby/chat", tokenAlice,
                               Json{{"text", "Hello from desktop"}}, hChatDesktop);
@@ -9051,22 +9103,25 @@ TEST(OctiHttpServerIntegrationTest, ArchiveExact13VariantFilteringAndByVariantSt
     };
 
     std::vector<std::string> expIds;
-    Reply rExpExact4p = http().get("/api/v1/archive/export?variant=4P");
+    EXPECT_ERROR(401, "UNAUTHORIZED",
+                 http().get("/api/v1/archive/export?variant=4P"));
+    Reply rExpExact4p = http().get("/api/v1/archive/export?variant=4P", alice.token);
     EXPECT_STATUS(200, rExpExact4p);
     CHECK_EQUAL(2, countNdjsonLines(rExpExact4p.body, expIds));
     STRCMP_EQUAL("var_4p_leg1", expIds[0].c_str());
     STRCMP_EQUAL("var_4p_std3", expIds[1].c_str());
 
-    Reply rExpBroad4p = http().get("/api/v1/archive/export?mode=4P");
+    Reply rExpBroad4p = http().get("/api/v1/archive/export?mode=4P", alice.token);
     EXPECT_STATUS(200, rExpBroad4p);
     CHECK_EQUAL(4, countNdjsonLines(rExpBroad4p.body, expIds));
 
-    Reply rExpModeExact = http().get("/api/v1/archive/export?mode=2p_1b_sped");
+    Reply rExpModeExact = http().get("/api/v1/archive/export?mode=2p_1b_sped", alice.token);
     EXPECT_STATUS(200, rExpModeExact);
     CHECK_EQUAL(1, countNdjsonLines(rExpModeExact.body, expIds));
     STRCMP_EQUAL("var_2p_1b_sped", expIds[0].c_str());
 
-    EXPECT_ERROR(400, "INVALID_ARGUMENT", http().get("/api/v1/archive/export?variant=INVALID"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/archive/export?variant=INVALID", alice.token));
 
     /* 4. "variant" on archive detail, user recent_games, robot recent_games, table & room views */
     Reply rDetail = http().get("/api/v1/archive/games/var_4p_leg1");
@@ -9511,7 +9566,7 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, ui);
     CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
     CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
-    CHECK_TRUE(ui.body.find("OCTI v2.6.2") != std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.6.3") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
@@ -9687,7 +9742,7 @@ TEST(OctiHttpServerIntegrationTest, IllustratedRulebookAssetsEndpointAndTabParit
     CHECK_TRUE(rUi.body.find("revive eliminated 4P partner") == std::string::npos);
     CHECK_TRUE(rUi.body.find("33b+a-b") == std::string::npos);
 
-    /* Cross-surface R1-R6 parity with Desktop OctiRulebook.cxx, Android rulebook_mobile.html, and doc/*.md */
+    /* Cross-surface R1-R6 parity with Desktop OctiRulebook.cxx, Android rulebook_mobile.html, and doc/OCTI*.md */
     {
         const std::string desktopHtml = octi::buildDesktopRulebookHtml(false);
         const std::filesystem::path mobileHtmlPath = repoRulebookDir / "rulebook_mobile.html";
@@ -10693,6 +10748,2207 @@ TEST(OctiHttpServerIntegrationTest, LeaderboardOverallVariantIsolationPlayedOnly
 
     /* And /api/v1/robots/profile/:id MUST still return 404 for 0-game botZero! */
     EXPECT_STATUS(404, http().get("/api/v1/robots/profile/" + botZeroUuid));
+}
+
+TEST(OctiHttpServerIntegrationTest, Envelope1TrustedProxyRateLimitCrawlerSseAndBounds)
+{
+    /* 0. Production HttpServerConfig defaults match Section 2.3.1 specifications */
+    {
+        HttpServerConfig prodDefaults;
+        CHECK_EQUAL(96, prodDefaults.maxSseStreams);
+        CHECK_EQUAL(6, prodDefaults.maxSsePerIp);
+        CHECK_EQUAL(8, prodDefaults.maxSsePerPlayer);
+        LONGS_EQUAL(120000, prodDefaults.sseAnonMaxDurationMs);
+        CHECK_EQUAL(30, prodDefaults.authFailureRateLimitMax);
+        CHECK_EQUAL(10, prodDefaults.passcodeFailureRateLimitMax);
+        CHECK_EQUAL(12, prodDefaults.exportRateLimitMax);
+        CHECK_EQUAL(120, prodDefaults.mutationRateLimitMax);
+        DOUBLES_EQUAL(25.0, prodDefaults.livePollAnonIpBurst, 1e-6);
+        DOUBLES_EQUAL(15.0, prodDefaults.lobbySnapAnonIpBurst, 1e-6);
+        DOUBLES_EQUAL(15.0, prodDefaults.browseAnonIpBurst, 1e-6);
+    }
+
+    /* 1. GET /robots.txt, X-Robots-Tag default header, and index CSP object-src */
+    Reply robots = http().get("/robots.txt");
+    EXPECT_STATUS(200, robots);
+    CHECK_TRUE(robots.contentType.find("text/plain") == 0);
+    STRCMP_EQUAL("User-agent: *\nDisallow: /\n", robots.body.c_str());
+    STRCMP_EQUAL("noindex, nofollow, noarchive, noimageindex",
+                 robots.header("X-Robots-Tag").c_str());
+
+    Reply idx = http().get("/");
+    EXPECT_STATUS(200, idx);
+    STRCMP_EQUAL("noindex, nofollow, noarchive, noimageindex",
+                 idx.header("X-Robots-Tag").c_str());
+    CHECK_TRUE(idx.header("Content-Security-Policy").find("object-src 'none'") !=
+               std::string::npos);
+    CHECK_TRUE(idx.header("Content-Security-Policy").find("frame-ancestors 'none'") !=
+               std::string::npos);
+
+    {
+        HttpServerConfig allowRobotsCfg = testConfig();
+        allowRobotsCfg.disallowRobotsTxt = false;
+        startEnv(allowRobotsCfg, true, nullptr);
+        Reply allowReply = http().get("/robots.txt");
+        EXPECT_STATUS(200, allowReply);
+        STRCMP_EQUAL("User-agent: *\nAllow: /\n", allowReply.body.c_str());
+    }
+
+    /* 2. Forwarded client IP isolation, multi-hop XFF, and ::ffff: normalization */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.ssoRateLimitMax = 2;
+        cfg.ssoRateLimitWindowMs = 60000;
+        startEnv(cfg, true, nullptr);
+
+        httplib::Headers ipA = {{"X-Forwarded-For", "198.51.100.10"}};
+        httplib::Headers ipAMapped = {{"X-Forwarded-For", "1.2.3.4, ::ffff:198.51.100.10, 127.0.0.1"}};
+        httplib::Headers ipB = {{"X-Forwarded-For", "198.51.100.11"}};
+
+        EXPECT_STATUS(400, http().post("/api/v1/auth/sso", "",
+                                       Json{{"provider", "google"}, {"id_token", "bad"}}, ipA));
+        /* ::ffff:198.51.100.10 and spoofed leftmost 1.2.3.4 map to the SAME 198.51.100.10 bucket */
+        EXPECT_STATUS(400, http().post("/api/v1/auth/sso", "",
+                                       Json{{"provider", "google"}, {"id_token", "bad"}}, ipAMapped));
+        Reply limA = http().post("/api/v1/auth/sso", "",
+                                 Json{{"provider", "google"}, {"id_token", "bad"}}, ipA);
+        EXPECT_ERROR(429, "RATE_LIMITED", limA);
+        CHECK_TRUE(std::atoi(limA.header("Retry-After").c_str()) >= 1);
+
+        /* Multi-header X-Forwarded-For smuggling cannot escape 198.51.100.10 */
+        httplib::Headers multiHdr;
+        multiHdr.insert(std::make_pair("X-Forwarded-For", "203.0.113.99"));
+        multiHdr.insert(std::make_pair("X-Forwarded-For", "198.51.100.10"));
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().post("/api/v1/auth/sso", "",
+                                 Json{{"provider", "google"}, {"id_token", "bad"}}, multiHdr));
+
+        /* Independent client IP behind the same reverse proxy is NOT locked out */
+        EXPECT_STATUS(400, http().post("/api/v1/auth/sso", "",
+                                       Json{{"provider", "google"}, {"id_token", "bad"}}, ipB));
+    }
+
+    /* 3. Untrusted peer spoofing X-Forwarded-For cannot escape peer bucket */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.trustedProxies.clear();
+        cfg.ssoRateLimitMax = 2;
+        cfg.ssoRateLimitWindowMs = 60000;
+        startEnv(cfg, true, nullptr);
+
+        EXPECT_STATUS(400, http().post("/api/v1/auth/sso", "",
+                                       Json{{"provider", "google"}, {"id_token", "bad"}},
+                                       {{"X-Forwarded-For", "198.51.100.1"}}));
+        EXPECT_STATUS(400, http().post("/api/v1/auth/sso", "",
+                                       Json{{"provider", "google"}, {"id_token", "bad"}},
+                                       {{"X-Forwarded-For", "198.51.100.2"}}));
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().post("/api/v1/auth/sso", "",
+                                 Json{{"provider", "google"}, {"id_token", "bad"}},
+                                 {{"X-Forwarded-For", "198.51.100.3"}}));
+    }
+
+    /* 4. TokenBucketLimiter burst, Retry-After, refill recovery, and shared-NAT actor headroom */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.browseAnonIpBurst = 3.0;
+        cfg.browseAnonIpRefillPerSec = 4.0;
+        cfg.browseActorBurst = 4.0;
+        cfg.browseActorRefillPerSec = 4.0;
+        cfg.browseAuthedIpBurst = 10.0;
+        cfg.browseAuthedIpRefillPerSec = 10.0;
+
+        cfg.lobbySnapAnonIpBurst = 2.0;
+        cfg.lobbySnapAnonIpRefillPerSec = 4.0;
+        cfg.livePollAnonIpBurst = 2.0;
+        cfg.livePollAnonIpRefillPerSec = 4.0;
+        startEnv(cfg, true, nullptr);
+
+        User alice = signIn("google", "sub-tb-alice", "Alice Bucket");
+        User bob = signIn("apple", "sub-tb-bob", "Bob Bucket");
+
+        httplib::Headers anonIp1 = {{"X-Forwarded-For", "203.0.113.11"}};
+        httplib::Headers anonIp2 = {{"X-Forwarded-For", "203.0.113.12"}};
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_STATUS(200, http().get("/api/v1/archive/games", "", anonIp1));
+        }
+        Reply burstOver = http().get("/api/v1/archive/games", "", anonIp1);
+        EXPECT_ERROR(429, "RATE_LIMITED", burstOver);
+        CHECK_TRUE(std::atoi(burstOver.header("Retry-After").c_str()) >= 1);
+
+        /* Other anonymous IP unaffected */
+        EXPECT_STATUS(200, http().get("/api/v1/archive/games", "", anonIp2));
+
+        /* Token refill recovery after ~300ms (4.0 tokens/sec -> 1.2 tokens refilled) */
+        std::this_thread::sleep_for(std::chrono::milliseconds(320));
+        EXPECT_STATUS(200, http().get("/api/v1/archive/games", "", anonIp1));
+
+        /* LobbySnap (/tables) and LivePoll (/lobby/events) exact burst boundaries */
+        httplib::Headers snapIp = {{"X-Forwarded-For", "203.0.113.13"}};
+        EXPECT_STATUS(200, http().get("/api/v1/tables", "", snapIp));
+        EXPECT_STATUS(200, http().get("/api/v1/tables", "", snapIp));
+        EXPECT_ERROR(429, "RATE_LIMITED", http().get("/api/v1/tables", "", snapIp));
+
+        EXPECT_STATUS(200, http().get("/api/v1/lobby/events", "", snapIp));
+        EXPECT_STATUS(200, http().get("/api/v1/lobby/events", "", snapIp));
+        EXPECT_ERROR(429, "RATE_LIMITED", http().get("/api/v1/lobby/events", "", snapIp));
+
+        /* Shared-NAT authenticated headroom: Alice and Bob behind same NAT IP each get full ActorBurst (4) */
+        httplib::Headers sharedNat = {{"X-Forwarded-For", "198.51.100.55"}};
+        for (int i = 0; i < 4; ++i) {
+            EXPECT_STATUS(200, http().get("/api/v1/archive/games", alice.token, sharedNat));
+        }
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().get("/api/v1/archive/games", alice.token, sharedNat));
+        /* Bob on the exact same NAT IP still gets all 4 of his actor tokens */
+        for (int i = 0; i < 4; ++i) {
+            EXPECT_STATUS(200, http().get("/api/v1/archive/games", bob.token, sharedNat));
+        }
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().get("/api/v1/archive/games", bob.token, sharedNat));
+    }
+
+    /* 5. Disallowed anonymous crawler UAs rejected on API routes while authenticated bots succeed */
+    {
+        startEnv(testConfig(), true, nullptr);
+        User owner = signIn("google", "sub-crawler-owner", "Bot Trainer");
+        Reply rBot = http().post("/api/v1/robots", owner.token,
+                                 Json{{"robot_name", "trainer_bot_01"}});
+        EXPECT_STATUS(201, rBot);
+        std::string botToken = rBot.json.value("robot_token", "");
+
+        const char *crawlers[] = {
+            "Mozilla/5.0 (compatible; GPTBot/1.0)",
+            "ClaudeBot/1.0 (+https://anthropic.com)",
+            "Bytespider; spider-feedback@bytedance.com",
+            "Scrapy/2.11.0 (+https://scrapy.org)"
+        };
+        for (size_t i = 0; i < sizeof(crawlers) / sizeof(crawlers[0]); ++i) {
+            httplib::Headers ua = {{"User-Agent", crawlers[i]}};
+            EXPECT_ERROR(403, "FORBIDDEN_CRAWLER",
+                         http().get("/api/v1/archive/games", "", ua));
+            EXPECT_ERROR(403, "FORBIDDEN_CRAWLER",
+                         http().get("/api/v1/lobby/state", "", ua));
+            /* Health and robots.txt remain accessible */
+            EXPECT_STATUS(200, http().get("/robots.txt", "", ua));
+            EXPECT_STATUS(200, http().get("/api/v1/health", "", ua));
+        }
+
+        /* Authenticated bot and human callers succeed regardless of User-Agent */
+        httplib::Headers botCustomUa = {{"User-Agent", "OctiTrainerScript/1.0 (Scrapy/2.11)"}};
+        EXPECT_STATUS(200, http().get("/api/v1/archive/games", botToken, botCustomUa));
+        EXPECT_STATUS(200, http().get("/api/v1/archive/games", owner.token,
+                                      {{"User-Agent", "GPTBot/1.0"}}));
+    }
+
+    /* 6. Bearer 401 brute-force, passcode 403 brute-force, plies, export-conf, and mutation throttles */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.authFailureRateLimitMax = 3;
+        cfg.authFailureRateLimitWindowMs = 60000;
+        cfg.passcodeFailureRateLimitMax = 3;
+        cfg.passcodeFailureRateLimitWindowMs = 60000;
+        cfg.pliesRateLimitMax = 2;
+        cfg.pliesRateLimitWindowMs = 60000;
+        cfg.robotExportConfRateLimitMax = 2;
+        cfg.robotExportConfRateLimitWindowMs = 60000;
+        cfg.mutationRateLimitMax = 3;
+        cfg.mutationRateLimitWindowMs = 60000;
+        startEnv(cfg, true, nullptr);
+
+        User host = signIn("google", "sub-bf-host", "Host Brute");
+        User guest = signIn("apple", "sub-bf-guest", "Guest Brute");
+
+        httplib::Headers bruteIp = {{"X-Forwarded-For", "198.51.100.70"}};
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_ERROR(401, "UNAUTHORIZED",
+                         http().get("/api/v1/profile/me", "bogus_token_" + std::to_string(i), bruteIp));
+        }
+        Reply authLim = http().get("/api/v1/profile/me", "bogus_token_4", bruteIp);
+        EXPECT_ERROR(429, "RATE_LIMITED", authLim);
+        CHECK_FALSE(authLim.header("Retry-After").empty());
+        /* Valid session on the same NAT IP still works */
+        EXPECT_STATUS(200, http().get("/api/v1/profile/me", host.token, bruteIp));
+
+        /* Passcode brute-force lockout */
+        std::string room = createTable(host, Json{{"passcode", "vault99"}});
+        httplib::Headers guestIp = {{"X-Forwarded-For", "198.51.100.71"}};
+        cfg.mutationRateLimitMax = 50;
+        /* Note: guest gets 3 mutation slots; use 3 wrong passcodes then verify 429 */
+        EXPECT_ERROR(403, "FORBIDDEN_PASSCODE",
+                     http().post("/api/v1/tables/" + room + "/join", guest.token,
+                                 Json{{"passcode", "w1"}}, guestIp));
+        EXPECT_ERROR(403, "FORBIDDEN_PASSCODE",
+                     http().post("/api/v1/tables/" + room + "/join", guest.token,
+                                 Json{{"passcode", "w2"}}, guestIp));
+        EXPECT_ERROR(403, "FORBIDDEN_PASSCODE",
+                     http().post("/api/v1/tables/" + room + "/join", guest.token,
+                                 Json{{"passcode", "w3"}}, guestIp));
+
+        /* Mutation rate limit on /api/v1/auth/data-deletion (max=3) */
+        httplib::Headers mutIp = {{"X-Forwarded-For", "198.51.100.72"}};
+        for (int i = 0; i < 3; ++i) {
+            EXPECT_STATUS(200, http().post("/api/v1/auth/data-deletion", "", Json::object(), mutIp));
+        }
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().post("/api/v1/auth/data-deletion", "", Json::object(), mutIp));
+
+        /* Export-conf rate limit (max=2) */
+        httplib::Headers confIp = {{"X-Forwarded-For", "198.51.100.73"}};
+        EXPECT_STATUS(200, http().get("/api/v1/robots/export-conf", host.token, confIp));
+        EXPECT_STATUS(200, http().get("/api/v1/robots/export-conf", host.token, confIp));
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().get("/api/v1/robots/export-conf", host.token, confIp));
+
+        /* Plies rate limit (max=2) */
+        httplib::Headers pliesIp = {{"X-Forwarded-For", "198.51.100.74"}};
+        EXPECT_STATUS(404, http().get("/api/v1/archive/games/nonexistent/plies", "", pliesIp));
+        EXPECT_STATUS(404, http().get("/api/v1/archive/games/nonexistent/plies", "", pliesIp));
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().get("/api/v1/archive/games/nonexistent/plies", "", pliesIp));
+    }
+
+    /* Dedicated passcode oracle block check with generous mutation budget */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.passcodeFailureRateLimitMax = 2;
+        cfg.passcodeFailureRateLimitWindowMs = 60000;
+        startEnv(cfg, true, nullptr);
+
+        User host = signIn("google", "sub-pass-host", "Pass Host");
+        User attacker = signIn("apple", "sub-pass-atk", "Pass Attacker");
+        std::string room = createTable(host, Json{{"passcode", "correct99"}});
+        httplib::Headers atkIp = {{"X-Forwarded-For", "198.51.100.75"}};
+
+        EXPECT_ERROR(403, "FORBIDDEN_PASSCODE",
+                     http().post("/api/v1/tables/" + room + "/join", attacker.token,
+                                 Json{{"passcode", "guess1"}}, atkIp));
+        EXPECT_ERROR(403, "FORBIDDEN_PASSCODE",
+                     http().post("/api/v1/tables/" + room + "/join", attacker.token,
+                                 Json{{"passcode", "guess2"}}, atkIp));
+        /* Even sending the real passcode on the 3rd attempt is blocked with 429 */
+        EXPECT_ERROR(429, "RATE_LIMITED",
+                     http().post("/api/v1/tables/" + room + "/join", attacker.token,
+                                 Json{{"passcode", "correct99"}}, atkIp));
+    }
+
+    /* 7. SSE per-IP, per-player, and anonymous duration bounds */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.maxSseStreams = 16;
+        cfg.maxSsePerIp = 2;
+        cfg.maxSsePerPlayer = 2;
+        cfg.sseAnonMaxDurationMs = 250;
+        cfg.sseMaxDurationMs = 5000;
+        startEnv(cfg, true, nullptr);
+
+        User alice = signIn("google", "sub-sse-alice", "Alice Sse");
+        User bob = signIn("apple", "sub-sse-bob", "Bob Sse");
+
+        httplib::Headers sseIp1 = {{"X-Forwarded-For", "198.51.100.81"}};
+        httplib::Headers sseIp2 = {{"X-Forwarded-For", "198.51.100.82"}};
+        httplib::Headers sseIp3 = {{"X-Forwarded-For", "198.51.100.83"}};
+
+        /* Per-IP boundary: 2 allowed on 198.51.100.81, 3rd returns 429 TOO_MANY_STREAMS */
+        SseClient s1;
+        SseClient s2;
+        s1.start(env->server->port(), "/api/v1/lobby/events?stream=1", alice.token, sseIp1);
+        s2.start(env->server->port(), "/api/v1/lobby/events?stream=1", bob.token, sseIp1);
+        CHECK_TRUE(s1.waitFor("retry: 3000", 3000));
+        CHECK_TRUE(s2.waitFor("retry: 3000", 3000));
+
+        Reply ipOver = http().get("/api/v1/lobby/events?stream=1", bob.token, sseIp1);
+        EXPECT_ERROR(429, "TOO_MANY_STREAMS", ipOver);
+        CHECK_FALSE(ipOver.header("Retry-After").empty());
+
+        /* Per-player boundary across distinct IPs: Alice opens 2nd stream on sseIp2, 3rd on sseIp3 fails 429 */
+        SseClient sAlice2;
+        sAlice2.start(env->server->port(), "/api/v1/lobby/events?stream=1", alice.token, sseIp2);
+        CHECK_TRUE(sAlice2.waitFor("retry: 3000", 3000));
+
+        Reply playerOver = http().get("/api/v1/lobby/events?stream=1", alice.token, sseIp3);
+        EXPECT_ERROR(429, "TOO_MANY_STREAMS", playerOver);
+        /* Bob still has 1 remaining player slot and sseIp3 is free -> succeeds */
+        SseClient sBob2;
+        sBob2.start(env->server->port(), "/api/v1/lobby/events?stream=1", bob.token, sseIp3);
+        CHECK_TRUE(sBob2.waitFor("retry: 3000", 3000));
+
+        s1.stop();
+        s2.stop();
+        sAlice2.stop();
+        sBob2.stop();
+        bool allFreed = false;
+        for (int i = 0; i < 200 && !allFreed; ++i) {
+            allFreed = (env->server->activeStreams() == 0);
+            if (!allFreed) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+        }
+        CHECK_TRUE(allFreed);
+
+        /* Anonymous SSE stream reconnects at sseAnonMaxDurationMs (250ms) */
+        SseClient anonSse;
+        anonSse.start(env->server->port(), "/api/v1/lobby/events?stream=1", "", sseIp1);
+        CHECK_TRUE(anonSse.waitFor("event: reconnect", 2000));
+        CHECK_TRUE(anonSse.waitFinished(2000));
+        anonSse.stop();
+    }
+
+    /* 8. Per-route payload caps (16 KiB / 64 KiB / 128 KiB / 512 KiB) & form Content-Type checks */
+    {
+        startEnv(testConfig(), true, nullptr);
+        User alice = signIn("google", "sub-bounds-alice", "Alice Bounds");
+
+        /* 20 KiB on 16 KiB routes (/lobby/chat, /auth/data-deletion, /privacy) rejected with 413 */
+        std::string body20k = "{\"text\":\"" + repeat('x', 20480) + "\"}";
+        EXPECT_ERROR(413, "PAYLOAD_TOO_LARGE",
+                     http().raw("POST", "/api/v1/lobby/chat", alice.token,
+                                body20k, "application/json"));
+        EXPECT_ERROR(413, "PAYLOAD_TOO_LARGE",
+                     http().raw("POST", "/api/v1/auth/data-deletion", "",
+                                body20k, "application/json"));
+        EXPECT_ERROR(413, "PAYLOAD_TOO_LARGE",
+                     http().raw("POST", "/privacy", "",
+                                "signed_request=" + repeat('x', 20480),
+                                "application/x-www-form-urlencoded"));
+
+        /* Valid form-urlencoded on /api/v1/auth/data-deletion and /privacy succeeds, octet-stream rejected 415 */
+        EXPECT_STATUS(200, http().raw("POST", "/api/v1/auth/data-deletion", "",
+                                      "signed_request=abc.def",
+                                      "application/x-www-form-urlencoded"));
+        EXPECT_STATUS(200, http().raw("POST", "/privacy", "",
+                                      "signed_request=abc.def",
+                                      "application/x-www-form-urlencoded"));
+        EXPECT_ERROR(415, "UNSUPPORTED_MEDIA_TYPE",
+                     http().raw("POST", "/api/v1/auth/data-deletion", "",
+                                "binary-bytes", "application/octet-stream"));
+
+        /* 70 KiB passes 128 KiB transport cap on /archive/upload (fails schema 400) while 140 KiB fails 413 */
+        std::string body70k = "{\"transcript\":\"" + repeat('a', 70000) + "\"}";
+        EXPECT_ERROR(400, "MALFORMED_UPLOAD",
+                     http().raw("POST", "/api/v1/archive/upload", "",
+                                body70k, "application/json"));
+        std::string body140k = "{\"transcript\":\"" + repeat('a', 140000) + "\"}";
+        EXPECT_ERROR(413, "PAYLOAD_TOO_LARGE",
+                     http().raw("POST", "/api/v1/archive/upload", "",
+                                body140k, "application/json"));
+    }
+}
+
+TEST(OctiHttpServerIntegrationTest, Envelope2OauthAdminInstallAndUploadSecurityGate)
+{
+    auto urlDecodeParam = [](const std::string &in) -> std::string {
+        std::string out;
+        for (size_t i = 0; i < in.size(); ++i) {
+            if (in[i] == '%' && i + 2 < in.size()) {
+                char hex[3] = {in[i + 1], in[i + 2], '\0'};
+                char *endPtr = nullptr;
+                long v = std::strtol(hex, &endPtr, 16);
+                if (endPtr == hex + 2) {
+                    out.push_back(static_cast<char>(v));
+                    i += 2;
+                    continue;
+                }
+            } else if (in[i] == '+') {
+                out.push_back(' ');
+                continue;
+            }
+            out.push_back(in[i]);
+        }
+        return out;
+    };
+    auto extractQueryParam = [&](const std::string &url,
+                                 const std::string &name) -> std::string {
+        size_t q = url.find('?');
+        if (q == std::string::npos) {
+            return std::string();
+        }
+        std::string query = url.substr(q + 1);
+        size_t hash = query.find('#');
+        if (hash != std::string::npos) {
+            query = query.substr(0, hash);
+        }
+        std::string prefix = name + "=";
+        size_t pos = 0;
+        while (pos < query.size()) {
+            size_t amp = query.find('&', pos);
+            std::string part = (amp == std::string::npos)
+                ? query.substr(pos)
+                : query.substr(pos, amp - pos);
+            if (part.rfind(prefix, 0) == 0) {
+                return urlDecodeParam(part.substr(prefix.size()));
+            }
+            if (amp == std::string::npos) {
+                break;
+            }
+            pos = amp + 1;
+        }
+        return std::string();
+    };
+
+    /* 1. WebUI <meta name="robots"> present, ?auth_token= removed, export-conf uses octi_jwt_token */
+    Reply rRoot = http().get("/");
+    EXPECT_STATUS(200, rRoot);
+    CHECK_TRUE(rRoot.body.find("<meta name=\"robots\" content=\"noindex, nofollow, noarchive, noimageindex\">") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("searchParams.get(\"auth_token\")") == std::string::npos);
+    CHECK_TRUE(rRoot.body.find("var tok = sessionToken") == std::string::npos);
+    CHECK_TRUE(rRoot.body.find("localStorage.getItem(\"octi_jwt_token\")") != std::string::npos);
+
+    /* 2. Verified-email Google admin check + crash telemetry gate + /api/v1/robots* Cache-Control */
+    env->store.setAdminGoogleIdentities({"admin@selfso.com", "sub-explicit-admin"});
+
+    /* Unauthenticated crash reads -> 401 */
+    EXPECT_STATUS(401, http().get("/api/v1/telemetry/crashes"));
+    EXPECT_STATUS(401, http().get("/api/v1/telemetry/crashes/some-id"));
+
+    /* Google JWT with email=admin@selfso.com and email_verified=false -> NOT admin (403) */
+    std::string tokUnver = makeToken(
+        "google", "sub-evil-unver", "Evil Unverified",
+        [](Json &, Json &c) {
+            c["email"] = "admin@selfso.com";
+            c["email_verified"] = false;
+        });
+    Reply rSsoUnver = http().post("/api/v1/auth/sso", "",
+                                  Json{{"provider", "google"},
+                                       {"id_token", tokUnver},
+                                       {"client_agent", "test/1.0"}});
+    CHECK_TRUE(rSsoUnver.status == 200 || rSsoUnver.status == 201);
+    CHECK_FALSE(rSsoUnver.json["profile"].value("is_admin", true));
+    std::string sessUnver = rSsoUnver.json.value("session_token", "");
+    EXPECT_ERROR(403, "FORBIDDEN", http().get("/api/v1/telemetry/crashes", sessUnver));
+
+    /* Google JWT omitting email_verified -> NOT admin (403) */
+    std::string tokMissingEv = makeToken(
+        "google", "sub-evil-no-ev", "Evil Missing EV",
+        [](Json &, Json &c) {
+            c["email"] = "admin@selfso.com";
+            c.erase("email_verified");
+        });
+    Reply rSsoMissingEv = http().post("/api/v1/auth/sso", "",
+                                      Json{{"provider", "google"},
+                                           {"id_token", tokMissingEv},
+                                           {"client_agent", "test/1.0"}});
+    CHECK_TRUE(rSsoMissingEv.status == 200 || rSsoMissingEv.status == 201);
+    CHECK_FALSE(rSsoMissingEv.json["profile"].value("is_admin", true));
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().get("/api/v1/telemetry/crashes",
+                            rSsoMissingEv.json.value("session_token", "")));
+
+    /* Google JWT with email=admin@selfso.com and email_verified=true -> IS admin (200) */
+    std::string tokVerAdmin = makeToken(
+        "google", "sub-good-ver-admin", "Verified Admin",
+        [](Json &, Json &c) {
+            c["email"] = "admin@selfso.com";
+            c["email_verified"] = true;
+        });
+    Reply rSsoAdmin = http().post("/api/v1/auth/sso", "",
+                                  Json{{"provider", "google"},
+                                       {"id_token", tokVerAdmin},
+                                       {"client_agent", "test/1.0"}});
+    CHECK_TRUE(rSsoAdmin.status == 200 || rSsoAdmin.status == 201);
+    CHECK_TRUE(rSsoAdmin.json["profile"].value("is_admin", false));
+    std::string adminSess = rSsoAdmin.json.value("session_token", "");
+    EXPECT_STATUS(200, http().get("/api/v1/telemetry/crashes", adminSess));
+
+    /* Robot token denied on crash telemetry & /api/v1/robots* emits Cache-Control: no-store */
+    Reply rBotCreate = http().post("/api/v1/robots", sessUnver,
+                                   Json{{"robot_name", "SecGateBot"}});
+    EXPECT_STATUS(201, rBotCreate);
+    STRCMP_EQUAL("no-store", rBotCreate.header("Cache-Control").c_str());
+    std::string botToken = rBotCreate.json.value("robot_token", "");
+    EXPECT_ERROR(403, "FORBIDDEN", http().get("/api/v1/telemetry/crashes", botToken));
+
+    Reply rRobotsList = http().get("/api/v1/robots", sessUnver);
+    EXPECT_STATUS(200, rRobotsList);
+    STRCMP_EQUAL("no-store", rRobotsList.header("Cache-Control").c_str());
+    Reply rRobotsExport = http().get("/api/v1/robots/export-conf", sessUnver);
+    EXPECT_STATUS(200, rRobotsExport);
+    STRCMP_EQUAL("no-store", rRobotsExport.header("Cache-Control").c_str());
+
+    /* 3. Install-token minting, boundary checks & authorized DELETE /api/v1/archive/install/:id */
+    const std::string instId = "inst-sec-e2-token";
+    const std::string instTok32 = "a1b2c3d4e5f60718a1b2c3d4e5f60718";
+    EXPECT_STATUS(401, http().del("/api/v1/archive/install/" + instId, ""));
+    EXPECT_STATUS(401, http().del("/api/v1/archive/install/" + instId, "",
+                                  {{"X-Octi-Install-Token", ""}}));
+
+    /* Empty X-Octi-Install-Token on upload rejected 400 before replay */
+    std::string trInst = makeWonTranscript(instId, 3);
+    EXPECT_ERROR(400, "MALFORMED_UPLOAD",
+                 http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", trInst}},
+                             {{"X-Octi-Install-Token", ""}}));
+
+    /* Valid 32-char X-Octi-Install-Token mints install_tokens row */
+    EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "",
+                                   Json{{"transcript", trInst}},
+                                   {{"X-Octi-Install-Token", instTok32}}));
+
+    /* Uploading under registered installId without token or with wrong token rejected 403 */
+    std::string trInst2 = makeResignedTranscript({"33+a", "37+e"}, instId, 4);
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", trInst2}}));
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().post("/api/v1/archive/upload", "",
+                             Json{{"transcript", trInst2}},
+                             {{"X-Octi-Install-Token", "00000000000000000000000000000000"}}));
+
+    /* Delete with wrong token, non-owner user, or robot rejected 403 */
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().del("/api/v1/archive/install/" + instId, "",
+                            {{"X-Octi-Install-Token", "00000000000000000000000000000000"}}));
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().del("/api/v1/archive/install/" + instId, sessUnver));
+    EXPECT_ERROR(403, "FORBIDDEN",
+                 http().del("/api/v1/archive/install/" + instId, botToken));
+
+    /* Delete with valid 32-char token succeeds (deleted=1), re-delete returns 0, admin returns 0 */
+    Reply rInstDel1 = http().del("/api/v1/archive/install/" + instId, "",
+                                 {{"X-Octi-Install-Token", instTok32}});
+    EXPECT_STATUS(200, rInstDel1);
+    CHECK_EQUAL(1, rInstDel1.json.value("deleted", -1));
+    Reply rInstDel2 = http().del("/api/v1/archive/install/" + instId, "",
+                                 {{"X-Octi-Install-Token", instTok32}});
+    EXPECT_STATUS(200, rInstDel2);
+    CHECK_EQUAL(0, rInstDel2.json.value("deleted", -1));
+    Reply rInstDelAdmin = http().del("/api/v1/archive/install/" + instId, adminSess);
+    EXPECT_STATUS(200, rInstDelAdmin);
+    CHECK_EQUAL(0, rInstDelAdmin.json.value("deleted", -1));
+
+    /* 4. Anonymous client_upload spoofing playerId or robot_name cannot pollute profiles/stats */
+    User victim = signIn("google", "sub-spoof-victim", "Spoof Victim");
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", victim.token,
+                                    Json{{"handle", "victim_hero"}}));
+    octi::PlayerProfile victimProf;
+    CHECK_TRUE(env->store.getProfileByUuid(victim.uuid, victimProf));
+
+    Json spoofTr = Json::parse(makeResignedTranscript({"33+b", "37+f"}, "inst-anon-spoof", 3));
+    spoofTr["players"] = Json::array({
+        Json{{"seat", 1}, {"player", "A"}, {"type", "HUMAN"},
+             {"handle", "victim_hero"}, {"playerId", victimProf.playerId},
+             {"player_uuid", victim.uuid}},
+        Json{{"seat", 2}, {"player", "B"}, {"type", "AI"},
+             {"handle", "SecGateBot"}, {"aiDifficulty", 3}}
+    });
+    Reply rSpoofUp = http().post("/api/v1/archive/upload", "",
+                                 Json{{"transcript", spoofTr.dump()}});
+    EXPECT_STATUS(200, rSpoofUp);
+    CHECK_TRUE(env->store.reconcileRobotStats());
+    EXPECT_STATUS(200, http().post("/api/v1/admin/recompute-ratings", adminSess, Json::object()));
+
+    Reply rVictimGet = http().get("/api/v1/users/victim_hero");
+    EXPECT_STATUS(200, rVictimGet);
+    CHECK_EQUAL(0, static_cast<int>(rVictimGet.json["recent_games"].size()));
+
+    Reply rBotListAfter = http().get("/api/v1/robots", sessUnver);
+    EXPECT_STATUS(200, rBotListAfter);
+    CHECK_EQUAL(1, static_cast<int>(rBotListAfter.json["robots"].size()));
+    CHECK_EQUAL(0, rBotListAfter.json["robots"][0].value("games_played", -1));
+    CHECK_EQUAL(0, rBotListAfter.json["robots"][0].value("wins", -1));
+    CHECK_EQUAL(0, rBotListAfter.json["robots"][0].value("losses", -1));
+
+    /* 5. OAuth state CSPRNG/HMAC, single-use replay block, nonce, Host check, eviction & native redirect */
+    {
+        HttpServerConfig oCfg = testConfig();
+        oCfg.allowSyntheticOauthCallbackForTesting = true;
+        oCfg.publicBaseUrl = "https://octi.selfso.com";
+        oCfg.oauthStateSecret = "unit-test-oauth-secret-key-material";
+        oCfg.maxPendingOauthStates = 3;
+        startEnv(oCfg, true, nullptr);
+
+        /* Spoofed Host rejected 400 on both authorize and callback */
+        EXPECT_ERROR(400, "INVALID_HOST",
+                     http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account",
+                                "", {{"Host", "evil.example"}}));
+        EXPECT_ERROR(400, "INVALID_HOST",
+                     http().get("/api/v1/auth/callback?state=a.b",
+                                "", {{"Host", "evil.example"}}));
+
+        /* Authorize -> verify publicBaseUrl callback_url, state, and OIDC nonce */
+        Reply rAuthWeb = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        EXPECT_STATUS(302, rAuthWeb);
+        std::string locWeb = rAuthWeb.header("Location");
+        STRCMP_EQUAL("https://octi.selfso.com/api/v1/auth/callback",
+                     extractQueryParam(locWeb, "redirect_uri").c_str());
+        std::string stateWeb = extractQueryParam(locWeb, "state");
+        std::string nonceWeb = extractQueryParam(locWeb, "nonce");
+        CHECK_FALSE(stateWeb.empty());
+        CHECK_FALSE(nonceWeb.empty());
+
+        /* Forged HMAC signature rejected 400 */
+        size_t dotPos = stateWeb.find('.');
+        CHECK_TRUE(dotPos != std::string::npos);
+        std::string tamperedState = stateWeb.substr(0, dotPos) + ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        EXPECT_ERROR(400, "INVALID_OAUTH_STATE",
+                     http().get("/api/v1/auth/callback?state=" + tamperedState));
+
+        /* Wrong OIDC nonce rejected 401 TOKEN_REJECTED and consumes state single-use */
+        std::string wrongNonceJwt = makeToken(
+            "google", "sub-oauth-web-1", "OAuth Web User",
+            [](Json &, Json &c) { c["nonce"] = "wrong-nonce-value"; });
+        EXPECT_ERROR(401, "TOKEN_REJECTED",
+                     http().get("/api/v1/auth/callback?state=" + stateWeb +
+                                "&id_token=" + wrongNonceJwt));
+        /* Replaying consumed state rejected 400 INVALID_OAUTH_STATE */
+        EXPECT_ERROR(400, "INVALID_OAUTH_STATE",
+                     http().get("/api/v1/auth/callback?state=" + stateWeb +
+                                "&id_token=" + wrongNonceJwt));
+
+        /* Nominal single-use web redirect: fragment-only /#auth_token=... */
+        Reply rAuthWeb2 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        EXPECT_STATUS(302, rAuthWeb2);
+        std::string stateWeb2 = extractQueryParam(rAuthWeb2.header("Location"), "state");
+        std::string nonceWeb2 = extractQueryParam(rAuthWeb2.header("Location"), "nonce");
+        std::string goodWebJwt = makeToken(
+            "google", "sub-oauth-web-1", "OAuth Web User",
+            [&](Json &, Json &c) { c["nonce"] = nonceWeb2; });
+        Reply rCbWeb = http().get("/api/v1/auth/callback?state=" + stateWeb2 +
+                                  "&id_token=" + goodWebJwt);
+        EXPECT_STATUS(302, rCbWeb);
+        std::string webTarget = rCbWeb.header("Location");
+        CHECK_TRUE(webTarget.rfind("/#auth_token=", 0) == 0);
+        CHECK_TRUE(webTarget.find("?auth_token=") == std::string::npos);
+        CHECK_TRUE(webTarget.find("id_token=") == std::string::npos);
+        /* Replaying redeemed stateWeb2 fails 400 INVALID_OAUTH_STATE */
+        EXPECT_ERROR(400, "INVALID_OAUTH_STATE",
+                     http().get("/api/v1/auth/callback?state=" + stateWeb2 +
+                                "&id_token=" + goodWebJwt));
+
+        /* Section 0 item 2: Native loopback & octi:// redirects preserve id_token */
+        Reply rAuthLoop = http().get(
+            "/api/v1/auth/authorize?provider=google&redirect_uri=http%3A%2F%2F127.0.0.1%3A43210%2Foauth%2Fcallback");
+        EXPECT_STATUS(302, rAuthLoop);
+        std::string stateLoop = extractQueryParam(rAuthLoop.header("Location"), "state");
+        std::string nonceLoop = extractQueryParam(rAuthLoop.header("Location"), "nonce");
+        std::string loopJwt = makeToken(
+            "google", "sub-oauth-loop-1", "Loopback User",
+            [&](Json &, Json &c) { c["nonce"] = nonceLoop; });
+        Reply rCbLoop = http().get("/api/v1/auth/callback?state=" + stateLoop +
+                                   "&id_token=" + loopJwt);
+        EXPECT_STATUS(302, rCbLoop);
+        std::string loopTarget = rCbLoop.header("Location");
+        CHECK_TRUE(loopTarget.rfind("http://127.0.0.1:43210/oauth/callback?", 0) == 0);
+        STRCMP_EQUAL(loopJwt.c_str(), extractQueryParam(loopTarget, "id_token").c_str());
+        CHECK_FALSE(extractQueryParam(loopTarget, "auth_token").empty());
+
+        Reply rAuthScheme = http().get(
+            "/api/v1/auth/authorize?provider=google&redirect_uri=octi%3A%2F%2Fauth%2Fcallback");
+        EXPECT_STATUS(302, rAuthScheme);
+        std::string stateScheme = extractQueryParam(rAuthScheme.header("Location"), "state");
+        std::string nonceScheme = extractQueryParam(rAuthScheme.header("Location"), "nonce");
+        std::string schemeJwt = makeToken(
+            "google", "sub-oauth-scheme-1", "Android Scheme User",
+            [&](Json &, Json &c) { c["nonce"] = nonceScheme; });
+        Reply rCbScheme = http().get("/api/v1/auth/callback?state=" + stateScheme +
+                                     "&id_token=" + schemeJwt);
+        EXPECT_STATUS(302, rCbScheme);
+        std::string schemeTarget = rCbScheme.header("Location");
+        CHECK_TRUE(schemeTarget.rfind("octi://auth/callback?", 0) == 0);
+        STRCMP_EQUAL(schemeJwt.c_str(), extractQueryParam(schemeTarget, "id_token").c_str());
+
+        /* Boundary: pendingOauthStates capacity eviction (maxPendingOauthStates == 3) */
+        Reply rCap1 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        Reply rCap2 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        Reply rCap3 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        Reply rCap4 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        std::string sCap1 = extractQueryParam(rCap1.header("Location"), "state");
+        std::string nCap1 = extractQueryParam(rCap1.header("Location"), "nonce");
+        std::string sCap4 = extractQueryParam(rCap4.header("Location"), "state");
+        std::string nCap4 = extractQueryParam(rCap4.header("Location"), "nonce");
+        std::string jwtCap1 = makeToken("google", "sub-cap-1", "Cap1",
+                                        [&](Json &, Json &c) { c["nonce"] = nCap1; });
+        std::string jwtCap4 = makeToken("google", "sub-cap-4", "Cap4",
+                                        [&](Json &, Json &c) { c["nonce"] = nCap4; });
+        /* Oldest state sCap1 was evicted when sCap4 arrived */
+        EXPECT_ERROR(400, "INVALID_OAUTH_STATE",
+                     http().get("/api/v1/auth/callback?state=" + sCap1 +
+                                "&id_token=" + jwtCap1));
+        /* Newest state sCap4 succeeds */
+        EXPECT_STATUS(302,
+                      http().get("/api/v1/auth/callback?state=" + sCap4 +
+                                 "&id_token=" + jwtCap4));
+
+        /* Boundary: expired state (exp < now) rejected 400 INVALID_OAUTH_STATE */
+        unsigned char derivedSecret[32];
+        unsigned int mdLen = 0;
+        EVP_Digest(oCfg.oauthStateSecret.data(), oCfg.oauthStateSecret.size(),
+                   derivedSecret, &mdLen, EVP_sha256(), nullptr);
+        Json expStateJson = {
+            {"provider", "google"},
+            {"redirect_uri", "/#account"},
+            {"callback_url", "https://octi.selfso.com/api/v1/auth/callback"},
+            {"jti", "expired-jti"},
+            {"oidc_nonce", "expired-nonce"},
+            {"exp", realNow() - 10}
+        };
+        std::string expB64 = base64UrlEncode(expStateJson.dump());
+        unsigned char hmacBuf[EVP_MAX_MD_SIZE];
+        unsigned int hmacLen = 0;
+        HMAC(EVP_sha256(), derivedSecret, 32,
+             reinterpret_cast<const unsigned char *>(expB64.data()),
+             expB64.size(), hmacBuf, &hmacLen);
+        std::string expSigB64 = base64UrlEncode(hmacBuf, hmacLen);
+        EXPECT_ERROR(400, "INVALID_OAUTH_STATE",
+                     http().get("/api/v1/auth/callback?state=" + expB64 + "." + expSigB64));
+    }
+
+    /* 6. SEC-14: When providerClientSecrets configured, ?id_token= and JWT-shaped ?code= rejected 400 */
+    {
+        HttpServerConfig sCfg = testConfig();
+        sCfg.allowSyntheticOauthCallbackForTesting = true;
+        sCfg.providerClientSecrets["google"] = "configured-google-client-secret";
+        startEnv(sCfg, true, nullptr);
+
+        Reply rAuth1 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        EXPECT_STATUS(302, rAuth1);
+        std::string st1 = extractQueryParam(rAuth1.header("Location"), "state");
+        std::string n1 = extractQueryParam(rAuth1.header("Location"), "nonce");
+        std::string forgedJwt = makeToken("google", "sub-forged-cb", "Forged",
+                                          [&](Json &, Json &c) { c["nonce"] = n1; });
+        EXPECT_ERROR(400, "INVALID_OAUTH_CALLBACK",
+                     http().get("/api/v1/auth/callback?state=" + st1 +
+                                "&id_token=" + forgedJwt));
+
+        Reply rAuth2 = http().get("/api/v1/auth/authorize?provider=google&redirect_uri=/#account");
+        EXPECT_STATUS(302, rAuth2);
+        std::string st2 = extractQueryParam(rAuth2.header("Location"), "state");
+        EXPECT_ERROR(400, "INVALID_OAUTH_CALLBACK",
+                     http().get("/api/v1/auth/callback?state=" + st2 +
+                                "&code=" + forgedJwt));
+    }
+}
+
+namespace {
+
+std::string e3StdBase64Encode(const std::string &raw)
+{
+    if (raw.empty()) {
+        return std::string();
+    }
+    std::string out(4 * ((raw.size() + 2) / 3), '\0');
+    int n = EVP_EncodeBlock(
+        reinterpret_cast<unsigned char *>(&out[0]),
+        reinterpret_cast<const unsigned char *>(raw.data()),
+        static_cast<int>(raw.size()));
+    if (n <= 0) {
+        return std::string();
+    }
+    out.resize(static_cast<size_t>(n));
+    return out;
+}
+
+struct ScopedLoopbackProbeEnv {
+    explicit ScopedLoopbackProbeEnv(bool allow)
+    {
+        if (allow) {
+            setenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST", "1", 1);
+        } else {
+            unsetenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+        }
+    }
+    ~ScopedLoopbackProbeEnv()
+    {
+        unsetenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+    }
+};
+
+class LocalSelfSignedTlsFixture {
+public:
+    explicit LocalSelfSignedTlsFixture(const char *sanSpec)
+        : _listenFd(-1), _port(0), _stop(false), _ctx(nullptr), _cert(nullptr)
+    {
+        _cert = X509_new();
+        ASN1_INTEGER_set(X509_get_serialNumber(_cert), 1);
+        X509_gmtime_adj(X509_getm_notBefore(_cert), -60);
+        X509_gmtime_adj(X509_getm_notAfter(_cert), 3600);
+        X509_set_pubkey(_cert, keys().rsa.get());
+        X509_NAME *subj = X509_get_subject_name(_cert);
+        X509_NAME_add_entry_by_txt(
+            subj, "CN", MBSTRING_ASC,
+            reinterpret_cast<const unsigned char *>("localhost"), -1, -1, 0);
+        X509_set_issuer_name(_cert, subj);
+        if (sanSpec != nullptr && sanSpec[0] != '\0') {
+            X509V3_CTX v3ctx;
+            X509V3_set_ctx_nodb(&v3ctx);
+            X509V3_set_ctx(&v3ctx, _cert, _cert, nullptr, nullptr, 0);
+            X509_EXTENSION *ext = X509V3_EXT_conf_nid(
+                nullptr, &v3ctx, NID_subject_alt_name, sanSpec);
+            if (ext != nullptr) {
+                X509_add_ext(_cert, ext, -1);
+                X509_EXTENSION_free(ext);
+            }
+        }
+        X509_sign(_cert, keys().rsa.get(), EVP_sha256());
+
+        _ctx = SSL_CTX_new(TLS_server_method());
+        SSL_CTX_use_certificate(_ctx, _cert);
+        SSL_CTX_use_PrivateKey(_ctx, keys().rsa.get());
+
+        _listenFd = ::socket(AF_INET, SOCK_STREAM, 0);
+        int opt = 1;
+        ::setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        struct sockaddr_in sin;
+        std::memset(&sin, 0, sizeof(sin));
+        sin.sin_family = AF_INET;
+        sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sin.sin_port = 0;
+        if (::bind(_listenFd, reinterpret_cast<struct sockaddr *>(&sin), sizeof(sin)) == 0 &&
+            ::listen(_listenFd, 8) == 0) {
+            socklen_t len = sizeof(sin);
+            if (::getsockname(_listenFd, reinterpret_cast<struct sockaddr *>(&sin), &len) == 0) {
+                _port = ntohs(sin.sin_port);
+            }
+        }
+        _thread = std::thread([this]() { serveLoop(); });
+    }
+
+    ~LocalSelfSignedTlsFixture()
+    {
+        _stop.store(true);
+        if (_listenFd >= 0) {
+            ::shutdown(_listenFd, SHUT_RDWR);
+            ::close(_listenFd);
+            _listenFd = -1;
+        }
+        if (_thread.joinable()) {
+            _thread.join();
+        }
+        if (_ctx != nullptr) {
+            SSL_CTX_free(_ctx);
+        }
+        if (_cert != nullptr) {
+            X509_free(_cert);
+        }
+    }
+
+    int port() const { return _port; }
+
+private:
+    void serveLoop()
+    {
+        while (!_stop.load()) {
+            struct pollfd pfd;
+            pfd.fd = _listenFd;
+            pfd.events = POLLIN;
+            int prc = ::poll(&pfd, 1, 50);
+            if (prc <= 0 || _stop.load()) {
+                continue;
+            }
+            int cfd = ::accept(_listenFd, nullptr, nullptr);
+            if (cfd < 0) {
+                continue;
+            }
+            struct timeval tv;
+            tv.tv_sec = 2;
+            tv.tv_usec = 0;
+            ::setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            ::setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+            SSL *ssl = SSL_new(_ctx);
+            SSL_set_fd(ssl, cfd);
+            if (SSL_accept(ssl) == 1) {
+                char buf[1024];
+                (void)SSL_read(ssl, buf, sizeof(buf));
+                const char resp[] =
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                (void)SSL_write(ssl, resp, static_cast<int>(sizeof(resp) - 1));
+                SSL_shutdown(ssl);
+            }
+            SSL_free(ssl);
+            ::close(cfd);
+        }
+    }
+
+    int _listenFd;
+    int _port;
+    std::atomic<bool> _stop;
+    SSL_CTX *_ctx;
+    X509 *_cert;
+    std::thread _thread;
+};
+
+class LocalBarrierHttpProbeFixture {
+public:
+    LocalBarrierHttpProbeFixture()
+        : _listenFd(-1), _port(0), _stop(false), _release(false), _inFlight(0)
+    {
+        _listenFd = ::socket(AF_INET, SOCK_STREAM, 0);
+        int opt = 1;
+        ::setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        struct sockaddr_in sin;
+        std::memset(&sin, 0, sizeof(sin));
+        sin.sin_family = AF_INET;
+        sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sin.sin_port = 0;
+        if (::bind(_listenFd, reinterpret_cast<struct sockaddr *>(&sin), sizeof(sin)) == 0 &&
+            ::listen(_listenFd, 16) == 0) {
+            socklen_t len = sizeof(sin);
+            if (::getsockname(_listenFd, reinterpret_cast<struct sockaddr *>(&sin), &len) == 0) {
+                _port = ntohs(sin.sin_port);
+            }
+        }
+        _acceptThread = std::thread([this]() { acceptLoop(); });
+    }
+
+    ~LocalBarrierHttpProbeFixture()
+    {
+        releaseAll();
+        _stop.store(true);
+        if (_listenFd >= 0) {
+            ::shutdown(_listenFd, SHUT_RDWR);
+            ::close(_listenFd);
+            _listenFd = -1;
+        }
+        if (_acceptThread.joinable()) {
+            _acceptThread.join();
+        }
+        for (size_t i = 0; i < _workers.size(); ++i) {
+            if (_workers[i].joinable()) {
+                _workers[i].join();
+            }
+        }
+    }
+
+    int port() const { return _port; }
+
+    bool waitForInFlight(int target, int timeoutMs)
+    {
+        std::unique_lock<std::mutex> lock(_mu);
+        return _cv.wait_for(
+            lock, std::chrono::milliseconds(timeoutMs),
+            [&]() { return _inFlight >= target || _stop.load(); });
+    }
+
+    void releaseAll()
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            _release = true;
+        }
+        _cv.notify_all();
+    }
+
+private:
+    void acceptLoop()
+    {
+        while (!_stop.load()) {
+            struct pollfd pfd;
+            pfd.fd = _listenFd;
+            pfd.events = POLLIN;
+            int prc = ::poll(&pfd, 1, 50);
+            if (prc <= 0 || _stop.load()) {
+                continue;
+            }
+            int cfd = ::accept(_listenFd, nullptr, nullptr);
+            if (cfd < 0) {
+                continue;
+            }
+            _workers.emplace_back([this, cfd]() {
+                char buf[1024];
+                (void)::recv(cfd, buf, sizeof(buf), 0);
+                {
+                    std::unique_lock<std::mutex> lock(_mu);
+                    ++_inFlight;
+                    _cv.notify_all();
+                    _cv.wait_for(lock, std::chrono::milliseconds(2500),
+                                 [&]() { return _release || _stop.load(); });
+                }
+                const char resp[] =
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                (void)::send(cfd, resp, sizeof(resp) - 1, MSG_NOSIGNAL);
+                ::close(cfd);
+            });
+        }
+    }
+
+    int _listenFd;
+    int _port;
+    std::atomic<bool> _stop;
+    std::mutex _mu;
+    std::condition_variable _cv;
+    bool _release;
+    int _inFlight;
+    std::thread _acceptThread;
+    std::vector<std::thread> _workers;
+};
+
+} // namespace
+
+TEST(OctiHttpServerIntegrationTest, Envelope3AvatarSandboxAndSsrfTlsProbeGate)
+{
+    HttpServerConfig pCfg = testConfig();
+    pCfg.maxConcurrentUrlProbes = 4;
+    pCfg.probeRateLimitMax = 50;
+    startEnv(pCfg, true, nullptr);
+
+    std::string avDir = env->dir + "/avatars_e3";
+    env->store.setAvatarDir(avDir);
+
+    User alice = signIn("google", "sub-e3-alice", "Envelope3 Alice");
+
+    /* 1. SEC-05: SVG data URI upload rejected with 400 INVALID_AVATAR_URL */
+    std::string svgUri =
+        "data:image/svg+xml;base64," +
+        e3StdBase64Encode("<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>");
+    EXPECT_ERROR(400, "INVALID_AVATAR_URL",
+                 http().patch("/api/v1/profile/me", alice.token,
+                              Json{{"avatar_url", svgUri}}));
+
+    /* Fake PNG wrapping <script> rejected 400 INVALID_AVATAR_URL */
+    std::string scriptAsPng =
+        "data:image/png;base64," +
+        e3StdBase64Encode("<script>fetch('/api/v1/profile/me')</script>");
+    EXPECT_ERROR(400, "INVALID_AVATAR_URL",
+                 http().patch("/api/v1/profile/me", alice.token,
+                              Json{{"avatar_url", scriptAsPng}}));
+
+    /* Oversized 1025x1024 PNG & 16383x16383 WebP bomb rejected 400 INVALID_AVATAR_URL */
+    {
+        std::string png1025("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR"
+                            "\x00\x00\x04\x01\x00\x00\x04\x00"
+                            "\x08\x06\x00\x00\x00\x00\x00\x00\x00"
+                            "\x00\x00\x00\x00IEND\xae\x42\x60\x82", 45);
+        EXPECT_ERROR(400, "INVALID_AVATAR_URL",
+                     http().patch("/api/v1/profile/me", alice.token,
+                                  Json{{"avatar_url", "data:image/png;base64," + e3StdBase64Encode(png1025)}}));
+
+        const uint32_t packed16383 = 16382u | (16382u << 14);
+        unsigned char webpBombRaw[28] = {
+            'R', 'I', 'F', 'F', 20, 0, 0, 0, 'W', 'E', 'B', 'P',
+            'V', 'P', '8', 'L', 8, 0, 0, 0, 0x2F,
+            static_cast<unsigned char>(packed16383 & 0xFFu),
+            static_cast<unsigned char>((packed16383 >> 8) & 0xFFu),
+            static_cast<unsigned char>((packed16383 >> 16) & 0xFFu),
+            static_cast<unsigned char>((packed16383 >> 24) & 0xFFu),
+            0, 0, 0
+        };
+        std::string webpBombStr(reinterpret_cast<const char *>(webpBombRaw), sizeof(webpBombRaw));
+        EXPECT_ERROR(400, "INVALID_AVATAR_URL",
+                     http().patch("/api/v1/profile/me", alice.token,
+                                  Json{{"avatar_url", "data:image/webp;base64," + e3StdBase64Encode(webpBombStr)}}));
+    }
+
+    /* Nominal 1x1 GIF & 1x1 JPEG uploads accepted and served with CSP sandbox */
+    {
+        std::string gif1x1 =
+            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        Reply rOkGif = http().patch("/api/v1/profile/me", alice.token,
+                                    Json{{"avatar_url", gif1x1}});
+        EXPECT_STATUS(200, rOkGif);
+        std::string gifUrl = rOkGif.json.value("avatar_url", "");
+        std::string gifPath = gifUrl.substr(0, gifUrl.find('?'));
+        Reply rGetGif = http().get(gifPath);
+        EXPECT_STATUS(200, rGetGif);
+        STRCMP_EQUAL("image/gif", rGetGif.contentType.c_str());
+        STRCMP_EQUAL("sandbox; default-src 'none'",
+                     rGetGif.header("Content-Security-Policy").c_str());
+
+        std::string jpg1x1Raw(
+            "\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            "\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9", 35);
+        Reply rOkJpg = http().patch(
+            "/api/v1/profile/me", alice.token,
+            Json{{"avatar_url", "data:image/jpeg;base64," + e3StdBase64Encode(jpg1x1Raw)}});
+        EXPECT_STATUS(200, rOkJpg);
+        std::string jpgUrl = rOkJpg.json.value("avatar_url", "");
+        std::string jpgPath = jpgUrl.substr(0, jpgUrl.find('?'));
+        Reply rGetJpg = http().get(jpgPath);
+        EXPECT_STATUS(200, rGetJpg);
+        STRCMP_EQUAL("image/jpeg", rGetJpg.contentType.c_str());
+        STRCMP_EQUAL("sandbox; default-src 'none'",
+                     rGetJpg.header("Content-Security-Policy").c_str());
+    }
+
+    /* Valid 1x1 PNG accepted and served with CSP sandbox headers on both routes */
+    std::string png1x1 =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    Reply rOkPng = http().patch("/api/v1/profile/me", alice.token,
+                                Json{{"avatar_url", png1x1}});
+    EXPECT_STATUS(200, rOkPng);
+    std::string avUrl = rOkPng.json.value("avatar_url", "");
+    size_t qPos = avUrl.find('?');
+    std::string avPath = (qPos != std::string::npos) ? avUrl.substr(0, qPos) : avUrl;
+    std::string avFile = avPath.substr(std::string("/api/v1/avatars/").size());
+
+    Reply rAv1 = http().get(avPath);
+    EXPECT_STATUS(200, rAv1);
+    STRCMP_EQUAL("sandbox; default-src 'none'",
+                 rAv1.header("Content-Security-Policy").c_str());
+    STRCMP_EQUAL("nosniff",
+                 rAv1.header("X-Content-Type-Options").c_str());
+    STRCMP_EQUAL("", rAv1.header("Content-Disposition").c_str());
+
+    Reply rAvAlias = http().get("/avatar/" + avFile);
+    EXPECT_STATUS(200, rAvAlias);
+    STRCMP_EQUAL("sandbox; default-src 'none'",
+                 rAvAlias.header("Content-Security-Policy").c_str());
+
+    /* Legacy .svg file on disk served with Content-Security-Policy sandbox + Content-Disposition: attachment */
+    {
+        std::ofstream legacySvg((avDir + "/88888.svg").c_str(),
+                                std::ios::binary | std::ios::trunc);
+        legacySvg << "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
+    }
+    Reply rLegacySvg1 = http().get("/api/v1/avatars/88888.svg");
+    EXPECT_STATUS(200, rLegacySvg1);
+    STRCMP_EQUAL("sandbox; default-src 'none'",
+                 rLegacySvg1.header("Content-Security-Policy").c_str());
+    STRCMP_EQUAL("attachment",
+                 rLegacySvg1.header("Content-Disposition").c_str());
+
+    Reply rLegacySvg2 = http().get("/avatar/88888.svg");
+    EXPECT_STATUS(200, rLegacySvg2);
+    STRCMP_EQUAL("sandbox; default-src 'none'",
+                 rLegacySvg2.header("Content-Security-Policy").c_str());
+    STRCMP_EQUAL("attachment",
+                 rLegacySvg2.header("Content-Disposition").c_str());
+
+    /* 2. SEC-08: CGNAT 100.64.0.1 and multicast 224.0.0.1 rejected immediately as disallowed IPs */
+    auto t0 = std::chrono::steady_clock::now();
+    Reply rCgnat = http().post(
+        "/api/v1/robots", alice.token,
+        Json{{"robot_name", "e3-cgnat-bot"},
+             {"robot_url", "http://100.64.0.1/bot"}});
+    auto cgnatMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - t0).count();
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rCgnat);
+    CHECK_TRUE(cgnatMs < 1500);
+
+    Reply rMcast = http().post(
+        "/api/v1/robots", alice.token,
+        Json{{"robot_name", "e3-mcast-bot"},
+             {"robot_url", "http://224.0.0.1/bot"}});
+    EXPECT_ERROR(400, "INVALID_ROBOT_URL", rMcast);
+
+    const char *ssrfUrls[] = {
+        "http://[::ffff:127.0.0.1]/bot",
+        "http://[::ffff:169.254.169.254]/latest/meta-data",
+        "http://[64:ff9b::7f00:1]/bot",
+        "http://[2002:7f00:0001::1]/bot"
+    };
+    for (size_t i = 0; i < sizeof(ssrfUrls) / sizeof(ssrfUrls[0]); ++i) {
+        EXPECT_ERROR(400, "INVALID_ROBOT_URL",
+                     http().post("/api/v1/robots", alice.token,
+                                 Json{{"robot_name", "e3-ssrf-" + std::to_string(i)},
+                                      {"robot_url", ssrfUrls[i]}}));
+    }
+
+    /* 3. SEC-08: Untrusted self-signed TLS certificate rejected by SSL_VERIFY_PEER */
+    {
+        ScopedLoopbackProbeEnv allowLoop(true);
+        LocalSelfSignedTlsFixture tlsSrv("DNS:localhost,IP:127.0.0.1");
+        CHECK_TRUE(tlsSrv.port() > 0);
+        Reply rSelfSigned = http().post(
+            "/api/v1/robots", alice.token,
+            Json{{"robot_name", "e3-tls-selfsigned"},
+                 {"robot_url", "https://localhost:" + std::to_string(tlsSrv.port()) + "/"}});
+        EXPECT_ERROR(400, "INVALID_ROBOT_URL", rSelfSigned);
+    }
+
+    /* 3b. SEC-08: HEAD->405->GET fallback, >8 KiB header cap, and 302 redirect-to-bogon block */
+    {
+        ScopedLoopbackProbeEnv allowLoop(true);
+        int rawSrvFd = ::socket(AF_INET, SOCK_STREAM, 0);
+        CHECK_TRUE(rawSrvFd >= 0);
+        int opt = 1;
+        ::setsockopt(rawSrvFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        struct sockaddr_in sin;
+        std::memset(&sin, 0, sizeof(sin));
+        sin.sin_family = AF_INET;
+        sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sin.sin_port = 0;
+        CHECK_EQUAL(0, ::bind(rawSrvFd, reinterpret_cast<struct sockaddr *>(&sin), sizeof(sin)));
+        CHECK_EQUAL(0, ::listen(rawSrvFd, 8));
+        socklen_t slen = sizeof(sin);
+        CHECK_EQUAL(0, ::getsockname(rawSrvFd, reinterpret_cast<struct sockaddr *>(&sin), &slen));
+        const int rawPort = ntohs(sin.sin_port);
+
+        std::atomic<bool> rawStop(false);
+        std::thread rawSrvThread([&]() {
+            while (!rawStop.load()) {
+                struct pollfd pfd;
+                pfd.fd = rawSrvFd;
+                pfd.events = POLLIN;
+                if (::poll(&pfd, 1, 50) <= 0 || rawStop.load()) {
+                    continue;
+                }
+                int cfd = ::accept(rawSrvFd, nullptr, nullptr);
+                if (cfd < 0) {
+                    continue;
+                }
+                char reqBuf[1024];
+                ssize_t nr = ::recv(cfd, reqBuf, sizeof(reqBuf) - 1, 0);
+                std::string rq = (nr > 0) ? std::string(reqBuf, static_cast<size_t>(nr)) : std::string();
+                std::string resp;
+                if (rq.find("/head405 ") != std::string::npos) {
+                    if (rq.rfind("HEAD ", 0) == 0) {
+                        resp = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    } else {
+                        resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+                    }
+                } else if (rq.find("/redir-bogon ") != std::string::npos) {
+                    resp = "HTTP/1.1 302 Found\r\nLocation: http://100.64.0.1/internal\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                } else if (rq.find("/huge-hdr ") != std::string::npos) {
+                    resp = "HTTP/1.1 200 OK\r\nX-Big: " + std::string(9000, 'H') + "\r\n\r\n";
+                } else {
+                    resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                }
+                (void)::send(cfd, resp.data(), resp.size(), MSG_NOSIGNAL);
+                ::close(cfd);
+            }
+        });
+
+        Reply rHeadFallback = http().post(
+            "/api/v1/robots", alice.token,
+            Json{{"robot_name", "e3-head405-ok"},
+                 {"robot_url", "http://127.0.0.1:" + std::to_string(rawPort) + "/head405"}});
+        EXPECT_STATUS(201, rHeadFallback);
+
+        Reply rRedirBogon = http().post(
+            "/api/v1/robots", alice.token,
+            Json{{"robot_name", "e3-redir-bogon"},
+                 {"robot_url", "http://127.0.0.1:" + std::to_string(rawPort) + "/redir-bogon"}});
+        EXPECT_ERROR(400, "INVALID_ROBOT_URL", rRedirBogon);
+
+        Reply rHugeHdr = http().post(
+            "/api/v1/robots", alice.token,
+            Json{{"robot_name", "e3-huge-hdr"},
+                 {"robot_url", "http://127.0.0.1:" + std::to_string(rawPort) + "/huge-hdr"}});
+        EXPECT_ERROR(400, "INVALID_ROBOT_URL", rHugeHdr);
+
+        /* Also verify PATCH /api/v1/robots/:id rejects redirect-to-bogon */
+        std::string createdUuid = rHeadFallback.json.value("robot_uuid", "");
+        EXPECT_ERROR(400, "INVALID_ROBOT_URL",
+                     http().patch("/api/v1/robots/" + createdUuid, alice.token,
+                                  Json{{"robot_url", "http://127.0.0.1:" + std::to_string(rawPort) + "/redir-bogon"}}));
+
+        rawStop.store(true);
+        ::shutdown(rawSrvFd, SHUT_RDWR);
+        ::close(rawSrvFd);
+        rawSrvThread.join();
+    }
+
+    /* 4. SEC-08: maxConcurrentUrlProbes = 4 exact boundary (4 allowed, 5th returns 503 SERVICE_BUSY) */
+    {
+        ScopedLoopbackProbeEnv allowLoop(true);
+        LocalBarrierHttpProbeFixture slowHttp;
+        CHECK_TRUE(slowHttp.port() > 0);
+        const std::string slowUrl =
+            "http://127.0.0.1:" + std::to_string(slowHttp.port()) + "/bot";
+
+        std::vector<User> probeUsers;
+        for (int i = 0; i < 5; ++i) {
+            probeUsers.push_back(signIn("google",
+                                        "sub-e3-probe-" + std::to_string(i),
+                                        "ProbeUser" + std::to_string(i)));
+        }
+
+        std::vector<Reply> fourReplies(4);
+        std::vector<std::thread> fourThreads;
+        for (int i = 0; i < 4; ++i) {
+            fourThreads.emplace_back([&, i]() {
+                auto c = http();
+                fourReplies[i] = c.post(
+                    "/api/v1/robots", probeUsers[i].token,
+                    Json{{"robot_name", "e3-conc-bot-" + std::to_string(i)},
+                         {"robot_url", slowUrl}});
+            });
+        }
+
+        CHECK_TRUE(slowHttp.waitForInFlight(4, 2000));
+
+        Reply fifthReply = http().post(
+            "/api/v1/robots", probeUsers[4].token,
+            Json{{"robot_name", "e3-conc-bot-4"},
+                 {"robot_url", slowUrl}});
+
+        slowHttp.releaseAll();
+        for (size_t i = 0; i < fourThreads.size(); ++i) {
+            fourThreads[i].join();
+        }
+
+        EXPECT_ERROR(503, "SERVICE_BUSY", fifthReply);
+        for (int i = 0; i < 4; ++i) {
+            EXPECT_STATUS(201, fourReplies[i]);
+        }
+    }
+}
+
+namespace {
+
+bool gunzipToString(const std::string &compressed, std::string &out)
+{
+    out.clear();
+    if (compressed.size() < 10 ||
+        static_cast<unsigned char>(compressed[0]) != 0x1f ||
+        static_cast<unsigned char>(compressed[1]) != 0x8b) {
+        return false;
+    }
+    z_stream zs;
+    std::memset(&zs, 0, sizeof(zs));
+    if (inflateInit2(&zs, 15 + 16) != Z_OK) {
+        return false;
+    }
+    zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(compressed.data()));
+    zs.avail_in = static_cast<uInt>(compressed.size());
+    char buf[16384];
+    int ret = Z_OK;
+    while (ret != Z_STREAM_END) {
+        zs.next_out = reinterpret_cast<Bytef *>(buf);
+        zs.avail_out = sizeof(buf);
+        ret = inflate(&zs, Z_NO_FLUSH);
+        if (ret != Z_OK && ret != Z_STREAM_END) {
+            inflateEnd(&zs);
+            return false;
+        }
+        size_t have = sizeof(buf) - zs.avail_out;
+        out.append(buf, have);
+    }
+    inflateEnd(&zs);
+    return true;
+}
+
+} /* namespace */
+
+TEST(OctiHttpServerIntegrationTest, Envelope4StartupGzipSnapshotEtagAndExportGate)
+{
+    /* 1. Anonymous archive export must fail with 401 UNAUTHORIZED */
+    EXPECT_ERROR(401, "UNAUTHORIZED", http().get("/api/v1/archive/export"));
+
+    /* 2. Startup-precomputed GET / gzip + ETag + 304 Not Modified */
+    httplib::Headers gzHeaders = {{"Accept-Encoding", "gzip, deflate"}};
+    Reply rIdxGz = http().getRaw("/", "", gzHeaders);
+    EXPECT_STATUS(200, rIdxGz);
+    STRCMP_EQUAL("gzip", rIdxGz.header("Content-Encoding").c_str());
+    CHECK_TRUE(rIdxGz.header("Vary").find("Accept-Encoding") != std::string::npos);
+    std::string idxEtag = rIdxGz.header("ETag");
+    CHECK_FALSE(idxEtag.empty());
+    const std::string expectedHtml(webUiHtml());
+    CHECK_TRUE(rIdxGz.body.size() < expectedHtml.size() * 35 / 100);
+    std::string idxUnpacked;
+    CHECK_TRUE(gunzipToString(rIdxGz.body, idxUnpacked));
+    CHECK_TRUE(idxUnpacked == expectedHtml);
+
+    Reply rIdx304 = http().getRaw("/", "",
+                                  {{"Accept-Encoding", "gzip"},
+                                   {"If-None-Match", idxEtag}});
+    EXPECT_STATUS(304, rIdx304);
+    CHECK_TRUE(rIdx304.body.empty());
+
+    /* 3. < 1024 B dynamic JSON stays uncompressed; >= 1024 B uses gzip + 304 */
+    Reply rSmall = http().getRaw("/api/v1/tables", "", gzHeaders);
+    EXPECT_STATUS(200, rSmall);
+    CHECK_TRUE(rSmall.body.size() < 1024);
+    STRCMP_EQUAL("", rSmall.header("Content-Encoding").c_str());
+    std::string smallEtag = rSmall.header("ETag");
+    CHECK_FALSE(smallEtag.empty());
+    EXPECT_STATUS(304, http().getRaw("/api/v1/tables", "",
+                                     {{"If-None-Match", smallEtag}}));
+
+    /* Weak ETag matches 304; malformed If-None-Match falls back to 200; q=0 skips gzip */
+    EXPECT_STATUS(304, http().getRaw("/", "",
+                                     {{"If-None-Match", "W/" + idxEtag}}));
+    Reply rBadInm = http().getRaw("/", "",
+                                  {{"If-None-Match", "unquoted-malformed-etag"}});
+    EXPECT_STATUS(200, rBadInm);
+    Reply rNoGz = http().getRaw("/", "", {{"Accept-Encoding", "gzip;q=0"}});
+    EXPECT_STATUS(200, rNoGz);
+    STRCMP_EQUAL("", rNoGz.header("Content-Encoding").c_str());
+    CHECK_TRUE(rNoGz.body == expectedHtml);
+    CHECK_TRUE(rNoGz.body.find("<button type=\"button\" class=\"btn\" id=\"ar-export-btn\">") !=
+               std::string::npos);
+    CHECK_TRUE(rNoGz.header("Content-Security-Policy").find("object-src 'none'") !=
+               std::string::npos);
+    CHECK_TRUE(rNoGz.header("Content-Security-Policy").find("frame-ancestors 'none'") !=
+               std::string::npos);
+
+    /* Plain HTTP omits HSTS; trusted X-Forwarded-Proto: https emits HSTS */
+    STRCMP_EQUAL("", rNoGz.header("Strict-Transport-Security").c_str());
+    Reply rHttpsProxy = http().getRaw("/", "", {{"X-Forwarded-Proto", "https"}});
+    EXPECT_STATUS(200, rHttpsProxy);
+    CHECK_TRUE(rHttpsProxy.header("Strict-Transport-Security")
+                   .find("max-age=31536000") != std::string::npos);
+}
+
+TEST(OctiHttpServerIntegrationTest,
+     Envelope4SnapshotInvalidationLongPollKeysetExportAndRetention)
+{
+    User alice = signIn("google", "sub-e4-alice", "Alice E4");
+    User bob = signIn("apple", "sub-e4-bob", "Bob E4");
+
+    /* 1. Snapshot ETag -> 304, >= 1024 B Z_BEST_SPEED gzip, and immediate invalidation */
+    httplib::Headers gzHdr = {{"Accept-Encoding", "gzip"}};
+    Reply rTbl0 = http().getRaw("/api/v1/tables", "", gzHdr);
+    EXPECT_STATUS(200, rTbl0);
+    std::string etagTbl0 = rTbl0.header("ETag");
+    CHECK_FALSE(etagTbl0.empty());
+
+    std::string t1 = createTable(alice, Json{{"mode", "2P"}});
+    std::string t2 = createTable(bob, Json{{"mode", "2P"}, {"bases", 1}});
+    CHECK_FALSE(t1.empty());
+    CHECK_FALSE(t2.empty());
+
+    /* Old ETag must NOT return 304 after table creation; >= 1024 B payload is gzipped */
+    Reply rTbl1 = http().getRaw(
+        "/api/v1/tables", "",
+        {{"Accept-Encoding", "gzip"}, {"If-None-Match", etagTbl0}});
+    EXPECT_STATUS(200, rTbl1);
+    STRCMP_EQUAL("gzip", rTbl1.header("Content-Encoding").c_str());
+    std::string tbl1JsonStr;
+    CHECK_TRUE(gunzipToString(rTbl1.body, tbl1JsonStr));
+    CHECK_TRUE(tbl1JsonStr.size() >= 1024);
+    Json tbl1Json = Json::parse(tbl1JsonStr);
+    CHECK_EQUAL(2, static_cast<int>(tbl1Json["tables"].size()));
+    std::string etagTbl1 = rTbl1.header("ETag");
+    CHECK_TRUE(etagTbl1 != etagTbl0);
+    EXPECT_STATUS(304, http().getRaw("/api/v1/tables", "",
+                                     {{"If-None-Match", etagTbl1}}));
+
+    /* Passive non-SSE polls must not allocate anonymous observer entries */
+    size_t anonBefore = env->rooms->anonymousObserverCount();
+    EXPECT_STATUS(200, http().get("/api/v1/lobby/events?since_seq=0", "",
+                                  {{"X-Forwarded-For", "198.51.100.201"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/games/" + t1, "",
+                                  {{"X-Forwarded-For", "198.51.100.202"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/games/" + t1 + "/events?since_seq=0", "",
+                                  {{"X-Forwarded-For", "198.51.100.203"}}));
+    CHECK_EQUAL(anonBefore, env->rooms->anonymousObserverCount());
+
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + t1 + "/leave",
+                                   alice.token, Json::object()));
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + t2 + "/leave",
+                                   bob.token, Json::object()));
+
+    /* /lobby/state, /robots/directory, /leaderboard ETag -> 304 + rating mutation invalidation */
+    Reply rLs = http().getRaw("/api/v1/lobby/state", alice.token, gzHdr);
+    EXPECT_STATUS(200, rLs);
+    EXPECT_STATUS(304, http().getRaw("/api/v1/lobby/state", alice.token,
+                                     {{"If-None-Match", rLs.header("ETag")}}));
+
+    Reply rLb0 = http().getRaw("/api/v1/leaderboard?mode=2P_3B", "");
+    EXPECT_STATUS(200, rLb0);
+    std::string etagLb0 = rLb0.header("ETag");
+    EXPECT_STATUS(304, http().getRaw("/api/v1/leaderboard?mode=2P_3B", "",
+                                     {{"If-None-Match", etagLb0}}));
+
+    Reply rDir0 = http().getRaw("/api/v1/robots/directory", "");
+    EXPECT_STATUS(200, rDir0);
+    STRCMP_EQUAL("no-store", rDir0.header("Cache-Control").c_str());
+    std::string etagDir0 = rDir0.header("ETag");
+    EXPECT_STATUS(304, http().getRaw("/api/v1/robots/directory", "",
+                                     {{"If-None-Match", etagDir0}}));
+
+    /* 2. wait_ms long-polling wakes < 250 ms on lobby event and room move */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/lobby/events?since_seq=0&wait_ms=bad"));
+
+    Reply rCurEv = http().get("/api/v1/lobby/events?since_seq=999999");
+    EXPECT_STATUS(200, rCurEv);
+    int64_t curLobbySeq = rCurEv.json.value("latest_seq", 0LL);
+    std::string evEtag = rCurEv.header("ETag");
+    CHECK_FALSE(evEtag.empty());
+    EXPECT_STATUS(304, http().getRaw(
+                           "/api/v1/lobby/events?since_seq=" +
+                               std::to_string(curLobbySeq),
+                           "", {{"If-None-Match", evEtag}}));
+
+    Reply pollReply;
+    int64_t pollElapsedMs = 0;
+    std::thread waiter([&]() {
+        auto t0 = std::chrono::steady_clock::now();
+        pollReply = http().get("/api/v1/lobby/events?since_seq=" +
+                                   std::to_string(curLobbySeq) +
+                                   "&wait_ms=4000",
+                               bob.token);
+        auto t1 = std::chrono::steady_clock::now();
+        pollElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            t1 - t0)
+                            .count();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    auto postT0 = std::chrono::steady_clock::now();
+    EXPECT_STATUS(200, http().post("/api/v1/lobby/chat", alice.token,
+                                   Json{{"text", "wake long poll now"}}));
+    waiter.join();
+    auto postElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - postT0)
+                             .count();
+    EXPECT_STATUS(200, pollReply);
+    CHECK_TRUE(pollReply.json["events"].size() >= 1u);
+    CHECK_TRUE(postElapsedMs < 250);
+    CHECK_TRUE(pollElapsedMs < 1000);
+
+    /* 3. Play rated online game (>= 8 plies + resign) + upload client_upload games */
+    std::string onlineRoom = startGame({alice, bob}, Json{{"mode", "2P"}, {"rated", true}});
+    playPlies(onlineRoom, {alice, bob}, GAME_MODE_2, 8);
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + onlineRoom + "/resign",
+                                   bob.token, Json::object()));
+
+    /* Leaderboard ETag must invalidate immediately after rated online game */
+    Reply rLb1 = http().getRaw("/api/v1/leaderboard?mode=2P_3B", "",
+                               {{"If-None-Match", etagLb0}});
+    EXPECT_STATUS(200, rLb1);
+    CHECK_TRUE(rLb1.header("ETag") != etagLb0);
+
+    /* /archive/stats and /archive/games/:id/plies ETag -> 304 + upload invalidation */
+    Reply rStats0 = http().getRaw("/api/v1/archive/stats", "");
+    EXPECT_STATUS(200, rStats0);
+    std::string etagStats0 = rStats0.header("ETag");
+    EXPECT_STATUS(304, http().getRaw("/api/v1/archive/stats", "",
+                                     {{"If-None-Match", etagStats0}}));
+
+    Reply rPlies0 = http().getRaw("/api/v1/archive/games/" + onlineRoom + "/plies", "");
+    EXPECT_STATUS(200, rPlies0);
+    EXPECT_STATUS(304, http().getRaw(
+                           "/api/v1/archive/games/" + onlineRoom + "/plies", "",
+                           {{"If-None-Match", rPlies0.header("ETag")}}));
+
+    const std::vector<std::vector<std::string>> distinctMoveSeqs = {
+        {"33+a", "37+e"},
+        {"53+a", "57+e"},
+        {"73+a", "77+e"}
+    };
+    for (int i = 0; i < 3; ++i) {
+        std::string upTr = makeResignedTranscript(
+            distinctMoveSeqs[static_cast<size_t>(i)],
+            "inst-e4-exp-" + std::to_string(i), 3 + (i % 3), "linux-x86_64");
+        Json jTr = Json::parse(upTr);
+        jTr["client"]["extended"]["startedAt"] = 1750000000 + i * 10;
+        jTr["client"]["extended"]["endedAt"] = 1750000100 + i * 10;
+        EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "",
+                                       Json{{"transcript", jTr.dump()}}));
+    }
+
+    /* /archive/stats ETag invalidated after archive uploads */
+    Reply rStats1 = http().getRaw("/api/v1/archive/stats", "",
+                                  {{"If-None-Match", etagStats0}});
+    EXPECT_STATUS(200, rStats1);
+
+    /* 4. Authenticated keyset /api/v1/archive/export (human + robot token + gzip + cursor) */
+    Reply rBot = http().post("/api/v1/robots", alice.token,
+                             Json{{"robot_name", "e4_export_bot"}});
+    EXPECT_STATUS(201, rBot);
+    std::string botTok = rBot.json.value("robot_token", "");
+    CHECK_FALSE(botTok.empty());
+
+    /* Robot Bearer token succeeds */
+    Reply rBotExp = http().get("/api/v1/archive/export?limit=2", botTok);
+    EXPECT_STATUS(200, rBotExp);
+    CHECK_FALSE(rBotExp.header("X-Octi-Next-Cursor").empty());
+
+    /* Boundary & fault checks on offset / cursor */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/archive/export?offset=5001", alice.token));
+    EXPECT_STATUS(200,
+                  http().get("/api/v1/archive/export?offset=5000&limit=5", alice.token));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/archive/export?cursor=malformed", alice.token));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/archive/export?after_game_id=only_id", alice.token));
+
+    /* Walk entire 4-game corpus (1 online + 3 client_upload) with limit=2 via X-Octi-Next-Cursor */
+    std::vector<std::string> exportedIds;
+    std::set<std::string> seenSources;
+    std::string cursorParam;
+    for (int pageIdx = 0; pageIdx < 10; ++pageIdx) {
+        std::string url = "/api/v1/archive/export?limit=2" + cursorParam;
+        Reply rPage = http().get(url, alice.token);
+        EXPECT_STATUS(200, rPage);
+        int rowsInPage = 0;
+        std::stringstream ss(rPage.body);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.empty()) {
+                continue;
+            }
+            ++rowsInPage;
+            CHECK_TRUE(line.find('\r') == std::string::npos);
+            CHECK_TRUE(line.find("inst-e4-exp-") == std::string::npos);
+            CHECK_TRUE(line.find("\"extended\"") == std::string::npos);
+            Json row = Json::parse(line);
+            STRCMP_EQUAL("octi.transcript.v3", row.value("format", "").c_str());
+            STRCMP_EQUAL("CC-BY-4.0", row.value("license", "").c_str());
+            exportedIds.push_back(
+                row.value("gameId", row.value("game_id", "")));
+            seenSources.insert(row.value("source", ""));
+        }
+        std::string nextCur = rPage.header("X-Octi-Next-Cursor");
+        if (rowsInPage < 2 || nextCur.empty()) {
+            break;
+        }
+        cursorParam = "&cursor=" + nextCur;
+    }
+    CHECK_EQUAL(4, static_cast<int>(exportedIds.size()));
+    CHECK_EQUAL(4, static_cast<int>(std::set<std::string>(
+                                        exportedIds.begin(), exportedIds.end())
+                                        .size()));
+    CHECK_TRUE(seenSources.count("ONLINE") == 1);
+
+    /* Gzip streaming on /api/v1/archive/export (>= 1024 B) matches uncompressed byte-for-byte */
+    Reply rExpPlain = http().get("/api/v1/archive/export?limit=10", alice.token);
+    EXPECT_STATUS(200, rExpPlain);
+    CHECK_TRUE(rExpPlain.body.size() >= 1024);
+    Reply rExpGzip = http().getRaw("/api/v1/archive/export?limit=10", alice.token, gzHdr);
+    EXPECT_STATUS(200, rExpGzip);
+    STRCMP_EQUAL("gzip", rExpGzip.header("Content-Encoding").c_str());
+    std::string expGunzipped;
+    CHECK_TRUE(gunzipToString(rExpGzip.body, expGunzipped));
+    CHECK_TRUE(expGunzipped == rExpPlain.body);
+
+    /* 5. Concurrent export cap (maxConcurrentExports = 2 -> 3rd gets 503 + Retry-After) & tick retention */
+    {
+        HttpServerConfig cfg = testConfig();
+        cfg.maxConcurrentExports = 2;
+        cfg.exportBatchDelayMsForTesting = 250;
+        cfg.tickIntervalMs = 20;
+        cfg.retentionPurgeIntervalSec = 1;
+        cfg.retentionMaxRows = 2;
+        startEnv(cfg, true, nullptr);
+
+        User u1 = signIn("google", "sub-e4-c1", "Conc1");
+        User u2 = signIn("apple", "sub-e4-c2", "Conc2");
+        User u3 = signIn("microsoft", "sub-e4-c3", "Conc3");
+        std::string tr = makeResignedTranscript(
+            {"33+a", "37+e"}, "inst-e4-conc", 3, "linux-x86_64");
+        EXPECT_STATUS(200, http().post("/api/v1/archive/upload", "",
+                                       Json{{"transcript", tr}}));
+
+        auto fakeSec = std::make_shared<std::atomic<int64_t>>(realNow());
+        env->store.setClock([fakeSec]() { return fakeSec->load(); });
+
+        /* Seed 5 crash reports and 5 chat logs so tickLoop() prunes to retentionMaxRows = 2 */
+        const int64_t seedSec = fakeSec->load();
+        for (int i = 0; i < 5; ++i) {
+            CrashReportRecord cr;
+            cr.crashId = "tick-cr-" + std::to_string(i);
+            cr.createdAt = seedSec - 10 + i;
+            cr.platform = "linux";
+            cr.appVersion = "2.6.3";
+            cr.exceptionType = "SIGABRT";
+            std::string err;
+            env->store.recordCrashReport(cr, err);
+            env->store.appendLobbyChatLog(
+                static_cast<uint64_t>(i + 1), u1.uuid, u1.handle,
+                "tick chat " + std::to_string(i), (seedSec + i) * 1000LL);
+        }
+
+        Reply expA;
+        Reply expB;
+        std::thread tA([&]() {
+            expA = http().get("/api/v1/archive/export?limit=10", u1.token);
+        });
+        std::thread tB([&]() {
+            expB = http().get("/api/v1/archive/export?limit=10", u2.token);
+        });
+
+        bool twoInFlight = false;
+        for (int i = 0; i < 100 && !twoInFlight; ++i) {
+            twoInFlight = (env->server->activeExports() >= 2);
+            if (!twoInFlight) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        }
+        CHECK_TRUE(twoInFlight);
+
+        Reply expThird = http().get("/api/v1/archive/export?limit=10", u3.token);
+        EXPECT_ERROR(503, "SERVICE_BUSY", expThird);
+        STRCMP_EQUAL("5", expThird.header("Retry-After").c_str());
+
+        tA.join();
+        tB.join();
+        EXPECT_STATUS(200, expA);
+        EXPECT_STATUS(200, expB);
+
+        /* Advance simulated epoch clock past retentionPurgeIntervalSec = 1 and wait 2 ticks */
+        fakeSec->fetch_add(2);
+        const uint64_t baseTicks = env->server->tickCount();
+        for (int i = 0; i < 100 && env->server->tickCount() <= baseTicks + 1; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        CrashReportFilter cf;
+        cf.limit = 20;
+        std::vector<CrashReportRecord> crashes;
+        int64_t crashTotal = 0;
+        CHECK_TRUE(env->store.listCrashReports(cf, crashes, &crashTotal));
+        CHECK_EQUAL(2, static_cast<int>(crashTotal));
+
+        std::vector<LobbyChatLogRow> chats;
+        CHECK_TRUE(env->store.listLobbyChatLogs(chats, 20));
+        CHECK_EQUAL(2, static_cast<int>(chats.size()));
+    }
+}
+
+TEST(OctiHttpServerIntegrationTest, Envelope5AdminBansCrudCidrMoveSseAndXssGate)
+{
+    HttpServerConfig cfg = testConfig();
+    cfg.trustedProxies = {"127.0.0.1", "::1", "::ffff:127.0.0.1", "192.0.2.254"};
+    cfg.sseSessionRecheckMs = 50;
+    cfg.ssePollMs = 20;
+    startEnv(cfg, true, nullptr);
+
+    const std::string banConfigPath = env->dir + "/bans.json";
+    cfg.banConfigPath = banConfigPath;
+    startEnv(cfg, true, nullptr);
+
+    env->store.setAdminGoogleIdentities({"sub-e5-admin", "sub-e5-admin-two"});
+
+    /* 1. WebUI HTML Ban Editor controls present inside #account-admin-controls */
+    Reply rUi = http().getRaw("/");
+    EXPECT_STATUS(200, rUi);
+    CHECK_TRUE(rUi.body.find("id=\"account-admin-controls\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-temp-bans-table\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-perm-bans-table\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-ban-type\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-ban-target\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-ban-duration\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"admin-ban-reason\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"btn-admin-ban-add\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"btn-admin-promote-perm\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"btn-admin-demote-24h\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"btn-admin-unban-temp\"") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("id=\"btn-admin-unban-perm\"") != std::string::npos);
+
+    User admin = signIn("google", "sub-e5-admin", "AdminOne");
+    User adminTwo = signIn("google", "sub-e5-admin-two", "AdminTwo");
+    User mallory = signIn("apple", "sub-e5-mallory", "MalloryUser");
+    User bystander = signIn("microsoft", "sub-e5-bystander", "BystanderUser");
+
+    Reply rAdminBot = http().post("/api/v1/robots", admin.token,
+                                  Json{{"robot_name", "e5_admin_owned_bot"}});
+    EXPECT_STATUS(201, rAdminBot);
+    Reply rMalloryBot = http().post("/api/v1/robots", mallory.token,
+                                    Json{{"robot_name", "e5_mallory_bot"}});
+    EXPECT_STATUS(201, rMalloryBot);
+    const std::string malloryBotTok = rMalloryBot.json.value("robot_token", "");
+    const std::string malloryBotUuid = rMalloryBot.json.value("robot_uuid", "");
+    Reply rBystanderBot = http().post("/api/v1/robots", bystander.token,
+                                      Json{{"robot_name", "e5_rogue_bot"}});
+    EXPECT_STATUS(201, rBystanderBot);
+    const std::string rogueBotTok = rBystanderBot.json.value("robot_token", "");
+    const std::string rogueBotUuid = rBystanderBot.json.value("robot_uuid", "");
+
+    /* 2. Authorization gate on /api/v1/admin/bans* */
+    EXPECT_ERROR(401, "UNAUTHORIZED", http().get("/api/v1/admin/bans"));
+    EXPECT_ERROR(403, "FORBIDDEN", http().get("/api/v1/admin/bans", bystander.token));
+    EXPECT_ERROR(403, "FORBIDDEN", http().post("/api/v1/admin/bans", bystander.token,
+                                               Json{{"target_type", "ip"},
+                                                    {"target", "198.51.100.10"},
+                                                    {"duration", "24h"}}));
+    EXPECT_ERROR(403, "FORBIDDEN", http().get("/api/v1/admin/bans", rogueBotTok));
+
+    Reply rList0 = http().get("/api/v1/admin/bans", admin.token);
+    EXPECT_STATUS(200, rList0);
+    STRCMP_EQUAL("no-store", rList0.header("Cache-Control").c_str());
+    CHECK_TRUE(rList0.json.value("ok", false));
+    STRCMP_EQUAL(banConfigPath.c_str(),
+                 rList0.json.value("ban_config_path", "").c_str());
+    CHECK_EQUAL(0, static_cast<int>(rList0.json["temp_bans"].size()));
+    CHECK_EQUAL(0, static_cast<int>(rList0.json["permanent_bans"].size()));
+
+    /* 3. Anti-lockout & CIDR boundary rejections */
+    EXPECT_ERROR(400, "PROTECTED_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "127.0.0.1"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "PROTECTED_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "127.0.0.0/8"},
+                                  {"duration", "permanent"}}));
+    EXPECT_ERROR(400, "PROTECTED_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "::1"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "PROTECTED_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "192.0.2.254"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "PROTECTED_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "192.0.2.0/24"},
+                                  {"duration", "24h"}}));
+    /* Caller's current forwarded IP rejected with SELF_LOCKOUT_PREVENTED */
+    EXPECT_ERROR(400, "SELF_LOCKOUT_PREVENTED",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "203.0.113.250/24"},
+                                  {"duration", "24h"}},
+                             {{"X-Forwarded-For", "203.0.113.250"}}));
+    /* Self, other admin, and admin-owned robot rejected with SELF_LOCKOUT_PREVENTED */
+    EXPECT_ERROR(400, "SELF_LOCKOUT_PREVENTED",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "account"},
+                                  {"target", "@" + admin.handle},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "SELF_LOCKOUT_PREVENTED",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "account"},
+                                  {"target", adminTwo.uuid},
+                                  {"duration", "permanent"}}));
+    EXPECT_ERROR(400, "SELF_LOCKOUT_PREVENTED",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "robot"},
+                                  {"target", "e5_admin_owned_bot"},
+                                  {"duration", "24h"}}));
+
+    /* CIDR prefix boundaries: /7 IPv4 & /15 IPv6 rejected; /8 IPv4 & /16 IPv6 accepted */
+    EXPECT_ERROR(400, "INVALID_CIDR_PREFIX",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "0.0.0.0/0"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "INVALID_CIDR_PREFIX",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "198.0.0.0/7"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "INVALID_CIDR_PREFIX",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "::/0"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "INVALID_CIDR_PREFIX",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "2000::/15"},
+                                  {"duration", "24h"}}));
+    EXPECT_ERROR(400, "INVALID_BAN_TARGET",
+                 http().post("/api/v1/admin/bans", admin.token,
+                             Json{{"target_type", "ip"},
+                                  {"target", "not-a-valid-ip/24"},
+                                  {"duration", "24h"}}));
+
+    Reply rEdgeV4 = http().post("/api/v1/admin/bans", admin.token,
+                                Json{{"target_type", "ip"},
+                                     {"target", "203.0.0.1/8"},
+                                     {"duration", "24h"},
+                                     {"reason", "edge /8"}});
+    EXPECT_STATUS(200, rEdgeV4);
+    const std::string edgeV4Id = rEdgeV4.json["temp_bans"][0].value("ban_id", "");
+    STRCMP_EQUAL("203.0.0.0/8",
+                 rEdgeV4.json["temp_bans"][0].value("target_value", "").c_str());
+
+    Reply rEdgeV6 = http().post("/api/v1/admin/bans", admin.token,
+                                Json{{"target_type", "ip"},
+                                     {"target", "2001:db8::1/16"},
+                                     {"duration", "24h"},
+                                     {"reason", "edge /16"}});
+    EXPECT_STATUS(200, rEdgeV6);
+    std::string edgeV6Id;
+    for (const auto &tb : rEdgeV6.json["temp_bans"]) {
+        if (tb.value("target_value", "") == "2001::/16") {
+            edgeV6Id = tb.value("ban_id", "");
+        }
+    }
+    CHECK_FALSE(edgeV6Id.empty());
+    EXPECT_STATUS(200, http().post("/api/v1/admin/bans/remove", admin.token,
+                                   Json{{"ban_ids", Json::array({edgeV4Id, edgeV6Id})}}));
+
+    /* 4. Open SSE streams for mallory and IP 198.51.100.42 before banning */
+    SseClient mallorySse;
+    mallorySse.start(env->server->port(), "/api/v1/lobby/events?stream=1",
+                     mallory.token, {{"X-Forwarded-For", "192.0.2.55"}});
+    CHECK_TRUE(mallorySse.waitFor("retry:", 2000));
+
+    SseClient ipSse;
+    ipSse.start(env->server->port(), "/api/v1/lobby/events?stream=1",
+                "", {{"X-Forwarded-For", "198.51.100.42"}});
+    CHECK_TRUE(ipSse.waitFor("retry:", 2000));
+
+    /* Add IPv4 CIDR (198.51.100.45/24 -> 198.51.100.0/24) as 24h with XSS payload reason */
+    const std::string xssReason = "<img src=x onerror=alert(1)>";
+    Reply rAddV4 = http().post("/api/v1/admin/bans", admin.token,
+                               Json{{"target_type", "ip"},
+                                    {"target", "198.51.100.45/24"},
+                                    {"duration", "24h"},
+                                    {"reason", xssReason}});
+    EXPECT_STATUS(200, rAddV4);
+    CHECK_EQUAL(1, static_cast<int>(rAddV4.json["temp_bans"].size()));
+    STRCMP_EQUAL("198.51.100.0/24",
+                 rAddV4.json["temp_bans"][0].value("target_value", "").c_str());
+    STRCMP_EQUAL(xssReason.c_str(),
+                 rAddV4.json["temp_bans"][0].value("reason", "").c_str());
+    const std::string v4BanId = rAddV4.json["temp_bans"][0].value("ban_id", "");
+
+    /* IP SSE stream receives event: closed and terminates promptly */
+    CHECK_TRUE(ipSse.waitFinished(1500));
+    CHECK_TRUE(ipSse.data().find("event: closed") != std::string::npos);
+    CHECK_TRUE(ipSse.data().find("IP_BANNED") != std::string::npos);
+
+    /* CIDR matching: 198.51.100.255 and ::ffff:198.51.100.42 blocked; 198.51.101.1 unblocked */
+    Reply rBlockedV4 = http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "198.51.100.255"}});
+    EXPECT_ERROR(403, "IP_BANNED", rBlockedV4);
+    CHECK_FALSE(rBlockedV4.header("Retry-After").empty());
+
+    EXPECT_ERROR(403, "IP_BANNED",
+                 http().get("/api/v1/tables", "",
+                            {{"X-Forwarded-For", "::ffff:198.51.100.42"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "198.51.101.1"}}));
+    /* /health, /api/v1/health, and /robots.txt remain reachable even from banned IP */
+    EXPECT_STATUS(200, http().get("/health", "",
+                                  {{"X-Forwarded-For", "198.51.100.42"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/health", "",
+                                  {{"X-Forwarded-For", "198.51.100.42"}}));
+    EXPECT_STATUS(200, http().get("/robots.txt", "",
+                                  {{"X-Forwarded-For", "198.51.100.42"}}));
+
+    /* Add IPv6 CIDR (2001:db8:abcd:12::1/48 -> 2001:db8:abcd::/48) to permanent list */
+    Reply rAddV6 = http().post("/api/v1/admin/bans", admin.token,
+                               Json{{"target_type", "ip"},
+                                    {"target", "2001:db8:abcd:12::1/48"},
+                                    {"duration", "permanent"},
+                                    {"reason", "IPv6 subnet block"}});
+    EXPECT_STATUS(200, rAddV6);
+    CHECK_EQUAL(1, static_cast<int>(rAddV6.json["permanent_bans"].size()));
+    STRCMP_EQUAL("2001:db8:abcd::/48",
+                 rAddV6.json["permanent_bans"][0].value("target_value", "").c_str());
+    EXPECT_ERROR(403, "IP_BANNED",
+                 http().get("/api/v1/tables", "",
+                            {{"X-Forwarded-For", "2001:db8:abcd:ffff::99"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "2001:db8:abce::1"}}));
+
+    /* Ban @handle account (mallory) -> active SSE closes, session & SSO & owned bot rejected 403 */
+    Reply rBanAcct = http().post("/api/v1/admin/bans", admin.token,
+                                 Json{{"target_type", "account"},
+                                      {"target", "@" + mallory.handle},
+                                      {"duration", "24h"},
+                                      {"reason", "Account abuse"}});
+    EXPECT_STATUS(200, rBanAcct);
+    CHECK_TRUE(mallorySse.waitFinished(1500));
+    CHECK_TRUE(mallorySse.data().find("event: closed") != std::string::npos);
+    CHECK_TRUE(mallorySse.data().find("ACCOUNT_BANNED") != std::string::npos);
+
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().get("/api/v1/profile/me", mallory.token));
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().post("/api/v1/auth/sso", "",
+                             Json{{"provider", "apple"},
+                                  {"id_token", makeToken("apple", "sub-e5-mallory", "MalloryUser")}}));
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().post("/api/v1/robots/connect", malloryBotTok, Json::object()));
+
+    /* Ban standalone robot by name (e5_rogue_bot) while owner (bystander) stays unbanned */
+    Reply rBanBot = http().post("/api/v1/admin/bans", admin.token,
+                                Json{{"target_type", "robot"},
+                                     {"target", "e5_rogue_bot"},
+                                     {"duration", "permanent"},
+                                     {"reason", "Rogue bot"}});
+    EXPECT_STATUS(200, rBanBot);
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().post("/api/v1/robots/connect", rogueBotTok, Json::object()));
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().get("/api/v1/profile/me", rogueBotTok));
+    EXPECT_STATUS(200, http().get("/api/v1/profile/me", bystander.token));
+
+    /* 5. Move 24h -> permanent (verify 0640 bans.json & reload across restart) and permanent -> 24h */
+    Reply rPromote = http().post("/api/v1/admin/bans/move", admin.token,
+                                 Json{{"ban_ids", Json::array({v4BanId})},
+                                      {"target_duration", "permanent"}});
+    EXPECT_STATUS(200, rPromote);
+
+    struct stat banSt;
+    CHECK_EQUAL(0, ::stat(banConfigPath.c_str(), &banSt));
+    LONGS_EQUAL(0640, static_cast<long>(banSt.st_mode & 0777));
+    {
+        std::ifstream bfs(banConfigPath, std::ios::binary);
+        Json diskDoc = Json::parse(bfs, nullptr, false);
+        CHECK_TRUE(diskDoc.is_object());
+        LONGS_EQUAL(1, diskDoc.value("version", 0));
+        CHECK_EQUAL(3, static_cast<int>(diskDoc["entries"].size()));
+    }
+
+    /* Verify XSS payload never appears unescaped in GET / */
+    Reply rUiAfter = http().getRaw("/");
+    EXPECT_STATUS(200, rUiAfter);
+    CHECK_TRUE(rUiAfter.body.find(xssReason) == std::string::npos);
+
+    /* Restart OctiHttpServer on the same DB + bans.json and verify both perm & 24h bans reload */
+    env->server.reset();
+    std::string startErr;
+    env->server.reset(new OctiHttpServer(env->store, env->verifier, *env->rooms, cfg));
+    CHECK_TRUE_TEXT(env->server->start(startErr), startErr.c_str());
+
+    EXPECT_ERROR(403, "IP_BANNED",
+                 http().get("/api/v1/tables", "",
+                            {{"X-Forwarded-For", "198.51.100.42"}}));
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().get("/api/v1/profile/me", mallory.token));
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().post("/api/v1/robots/connect", rogueBotTok, Json::object()));
+
+    /* Find promoted IPv4 ban id, demote permanent -> 24h via PATCH, then unban via DELETE */
+    Reply rReloaded = http().get("/api/v1/admin/bans", admin.token);
+    EXPECT_STATUS(200, rReloaded);
+    std::string permV4Id;
+    std::string tempMalloryId;
+    for (const auto &pb : rReloaded.json["permanent_bans"]) {
+        if (pb.value("target_value", "") == "198.51.100.0/24") {
+            permV4Id = pb.value("ban_id", "");
+        }
+    }
+    for (const auto &tb : rReloaded.json["temp_bans"]) {
+        if (tb.value("target_value", "") == mallory.uuid) {
+            tempMalloryId = tb.value("ban_id", "");
+        }
+    }
+    CHECK_FALSE(permV4Id.empty());
+    CHECK_FALSE(tempMalloryId.empty());
+
+    Reply rDemote = http().patch("/api/v1/admin/bans/" + permV4Id, admin.token,
+                                 Json{{"target_duration", "24h"}});
+    EXPECT_STATUS(200, rDemote);
+    {
+        std::ifstream bfs(banConfigPath, std::ios::binary);
+        std::string raw((std::istreambuf_iterator<char>(bfs)),
+                        std::istreambuf_iterator<char>());
+        CHECK_TRUE(raw.find("198.51.100.0/24") == std::string::npos);
+    }
+    std::string demotedV4Id;
+    for (const auto &tb : rDemote.json["temp_bans"]) {
+        if (tb.value("target_value", "") == "198.51.100.0/24") {
+            demotedV4Id = tb.value("ban_id", "");
+            CHECK_TRUE(tb.value("remaining_sec", 0LL) > 86000);
+        }
+    }
+    CHECK_FALSE(demotedV4Id.empty());
+
+    /* Unban IPv4 CIDR and mallory -> immediate restoration of access */
+    EXPECT_STATUS(200, http().del("/api/v1/admin/bans/" + demotedV4Id, admin.token));
+    EXPECT_STATUS(200, http().del("/api/v1/admin/bans/" + tempMalloryId, admin.token));
+
+    EXPECT_STATUS(200, http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "198.51.100.42"}}));
+    User malloryAgain = signIn("apple", "sub-e5-mallory", "MalloryUser");
+    EXPECT_STATUS(200, http().get("/api/v1/profile/me", malloryAgain.token));
+}
+
+TEST(OctiHttpServerIntegrationTest,
+     Envelope5AutoBan24hEscalationRestartPersistenceAndAntiLockout)
+{
+    HttpServerConfig cfg = testConfig();
+    cfg.trustedProxies = {"127.0.0.1", "::1", "::ffff:127.0.0.1"};
+    cfg.lobbySnapAnonIpBurst = 2.0;
+    cfg.lobbySnapAnonIpRefillPerSec = 0.01;
+    cfg.tickIntervalMs = 20;
+    startEnv(cfg, true, nullptr);
+
+    auto fakeSec = std::make_shared<std::atomic<int64_t>>(1763440000LL);
+    env->store.setClock([fakeSec]() { return fakeSec->load(); });
+    env->store.setAdminGoogleIdentities({"sub-e5-auto-admin"});
+    User admin = signIn("google", "sub-e5-auto-admin", "AutoAdmin");
+
+    /* 1. Sustained 429 flood from 203.0.113.77 escalates to mandatory 24h auto-ban (>= 40 429s in 60s) */
+    int seen429 = 0;
+    int seen403 = 0;
+    for (int i = 0; i < 50; ++i) {
+        Reply r = http().get("/api/v1/tables", "",
+                             {{"X-Forwarded-For", "203.0.113.77"}});
+        if (r.status == 429) {
+            ++seen429;
+        } else if (r.status == 403 && r.json.value("error", "") == "IP_BANNED") {
+            ++seen403;
+            break;
+        }
+    }
+    CHECK_TRUE(seen429 >= 40);
+    CHECK_TRUE(seen403 >= 1);
+
+    Reply rBanned = http().get("/api/v1/lobby/state", "",
+                               {{"X-Forwarded-For", "203.0.113.77"}});
+    EXPECT_ERROR(403, "IP_BANNED", rBanned);
+    STRCMP_EQUAL("24h", rBanned.json.value("ban_type", "").c_str());
+    LONGS_EQUAL(1763440000LL + 86400LL, rBanned.json.value("expires_at", 0LL));
+    CHECK_FALSE(rBanned.header("Retry-After").empty());
+
+    /* Neighboring IP 203.0.113.78 and loopback 127.0.0.1 remain completely unaffected */
+    EXPECT_STATUS(200, http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "203.0.113.78"}}));
+    EXPECT_STATUS(200, http().get("/api/v1/tables", admin.token));
+
+    /* Abuse flood from loopback (127.0.0.1) or admin never auto-bans loopback or admin */
+    for (int i = 0; i < 55; ++i) {
+        (void)http().get("/api/v1/tables");
+    }
+    Reply rLoopbackAfter = http().get("/api/v1/profile/me", admin.token);
+    EXPECT_STATUS(200, rLoopbackAfter);
+
+    /* 2. Restart OctiHttpServer on the same SQLite DB -> 24h auto-ban persists */
+    env->server.reset();
+    std::string startErr;
+    env->server.reset(new OctiHttpServer(env->store, env->verifier, *env->rooms, cfg));
+    CHECK_TRUE_TEXT(env->server->start(startErr), startErr.c_str());
+
+    /* Exact expires_at boundary: t == expires_at - 1 is still blocked */
+    fakeSec->store(1763440000LL + 86399LL);
+    EXPECT_ERROR(403, "IP_BANNED",
+                 http().get("/api/v1/tables", "",
+                            {{"X-Forwarded-For", "203.0.113.77"}}));
+
+    /* t == expires_at is immediately unbanned on lookup, and t + 86401s + tickLoop() purges DB */
+    fakeSec->store(1763440000LL + 86400LL);
+    EXPECT_STATUS(200, http().get("/api/v1/tables", "",
+                                  {{"X-Forwarded-For", "203.0.113.77"}}));
+
+    fakeSec->store(1763440000LL + 86401LL);
+    const uint64_t baseTicks = env->server->tickCount();
+    for (int i = 0; i < 100 && env->server->tickCount() <= baseTicks + 1; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+    Reply rAdminAfter = http().get("/api/v1/admin/bans", admin.token);
+    EXPECT_STATUS(200, rAdminAfter);
+    CHECK_EQUAL(0, static_cast<int>(rAdminAfter.json["temp_bans"].size()));
+
+    /* 3. Disallowed crawler UA (>= 5 hits) escalates to 24h IP_BANNED even if UA changes */
+    fakeSec->store(1763530000LL);
+    for (int i = 0; i < 5; ++i) {
+        (void)http().get("/api/v1/tables", "",
+                         {{"X-Forwarded-For", "198.51.100.88"},
+                          {"User-Agent", "GPTBot/1.0"}});
+    }
+    Reply rCrawlerBanned = http().get("/api/v1/tables", "",
+                                      {{"X-Forwarded-For", "198.51.100.88"},
+                                       {"User-Agent", "Mozilla/5.0"}});
+    EXPECT_ERROR(403, "IP_BANNED", rCrawlerBanned);
+
+    /* 4. Exploit probes (malformed X-Octi-Protocol-Version >= 20 hits) escalate to 24h IP_BANNED */
+    for (int i = 0; i < 20; ++i) {
+        (void)http().get("/api/v1/tables", "",
+                         {{"X-Forwarded-For", "198.51.100.89"},
+                          {"X-Octi-Protocol-Version", "not-a-number"}});
+    }
+    EXPECT_ERROR(403, "IP_BANNED",
+                 http().get("/api/v1/tables", "",
+                            {{"X-Forwarded-For", "198.51.100.89"}}));
+
+    /* 5. Queued player banned by admin is immediately ejected from matchmaking & lobby */
+    User queuedUser = signIn("apple", "sub-e5-queued", "QueuedPlayer");
+    EXPECT_STATUS(200, http().post("/api/v1/matchmaking/enqueue", queuedUser.token,
+                                   Json{{"mode", "2P"}, {"bases", 3}}));
+    Reply rMatchBefore = http().get("/api/v1/matchmaking/status", queuedUser.token);
+    EXPECT_STATUS(200, rMatchBefore);
+    CHECK_TRUE(rMatchBefore.json.value("queued", false));
+
+    Reply rBanQueued = http().post("/api/v1/admin/bans", admin.token,
+                                   Json{{"target_type", "account"},
+                                        {"target", "@" + queuedUser.handle},
+                                        {"duration", "24h"},
+                                        {"reason", "Queue abuse"}});
+    EXPECT_STATUS(200, rBanQueued);
+    const std::string qBanId = rBanQueued.json.value("ban_id", "");
+    EXPECT_ERROR(403, "ACCOUNT_BANNED",
+                 http().get("/api/v1/matchmaking/status", queuedUser.token));
+    EXPECT_STATUS(200, http().del("/api/v1/admin/bans/" + qBanId, admin.token));
+    User queuedRestored = signIn("apple", "sub-e5-queued", "QueuedPlayer");
+    Reply rMatchAfter = http().get("/api/v1/matchmaking/status", queuedRestored.token);
+    EXPECT_STATUS(200, rMatchAfter);
+    CHECK_FALSE(rMatchAfter.json.value("queued", true));
 }
 
 int main(int argc, char **argv)

@@ -19,10 +19,14 @@ if [ "$1" = "configure" ]; then
 
     install -d -m 0700 -o octi -g octi /var/lib/octi
     install -d -m 0750 -o octi -g octi /var/octi /var/octi/avatar
-    install -d -m 0750 -o root -g octi /etc/octi
+    install -d -m 0750 -o octi -g octi /etc/octi
     if [ -f /etc/octi/oidc.json ]; then
         chown octi:octi /etc/octi/oidc.json
         chmod 0600 /etc/octi/oidc.json
+    fi
+    if [ -f /etc/octi/bans.json ]; then
+        chown octi:octi /etc/octi/bans.json
+        chmod 0640 /etc/octi/bans.json
     fi
 
     if [ -d /run/systemd/system ]; then

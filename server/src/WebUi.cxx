@@ -19,6 +19,7 @@ const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
 <title>OCTI &mdash; Web Player, Archive &amp; Leaderboard</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -2331,7 +2332,7 @@ tr.active-ply {
       <label>Player <input id="ar-player" size="20"
         placeholder="uuid (optional)"></label>
       <button type="button" class="btn" id="ar-go">Filter</button>
-      <a class="btn" id="ar-export-btn" href="/api/v1/archive/export" target="_blank">Export Filtered (NDJSON)</a>
+      <button type="button" class="btn" id="ar-export-btn">Export Filtered (NDJSON)</button>
     </div>
     <div id="ar-msg" class="dim"></div>
     <table id="ar-table"><thead><tr><th>Game ID</th><th>Variant</th><th>Source</th>
@@ -2857,6 +2858,101 @@ tr.active-ply {
           <button type="button" class="btn" id="btn-admin-recompute-ratings">Recompute All Ratings &amp; Stats</button>
         </div>
         <div id="admin-recompute-msg" class="dim" style="font-size:12.5px;margin-top:6px;"></div>
+      </div>
+
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #fecaca;">
+        <div style="margin-bottom:8px;">
+          <h4 style="margin:0 0 4px 0;color:#991b1b;font-size:14px;">Network Guardrail &amp; Ban Management</h4>
+          <div class="dim" style="font-size:12.5px;">Manage SQLite-persisted 24-hour bans (including automatic abuse-pattern escalations) and permanent bans stored in the separate server ban configuration file. Loopback, reverse-proxy, and administrator identities are protected from self-lockout.</div>
+        </div>
+
+        <div class="row" style="align-items:flex-end;gap:8px;margin:8px 0;flex-wrap:wrap;">
+          <div style="min-width:170px;">
+            <label for="admin-ban-type" class="dim" style="display:block;font-size:11.5px;font-weight:600;margin-bottom:3px;">Target Type</label>
+            <select id="admin-ban-type" style="width:100%;">
+              <option value="ip">IP / Netmask (CIDR)</option>
+              <option value="account">Account (@handle or UUID)</option>
+              <option value="robot">Bot (robot_name or UUID)</option>
+            </select>
+          </div>
+          <div style="flex:1 1 200px;min-width:180px;">
+            <label for="admin-ban-target" class="dim" style="display:block;font-size:11.5px;font-weight:600;margin-bottom:3px;">Target</label>
+            <input type="text" id="admin-ban-target" placeholder="198.51.100.0/24 or 2001:db8::/48" maxlength="128" style="width:100%;">
+          </div>
+          <div style="min-width:145px;">
+            <label for="admin-ban-duration" class="dim" style="display:block;font-size:11.5px;font-weight:600;margin-bottom:3px;">Duration</label>
+            <select id="admin-ban-duration" style="width:100%;">
+              <option value="24h">24-Hour Ban</option>
+              <option value="permanent">Permanent Ban</option>
+            </select>
+          </div>
+          <div style="flex:1 1 200px;min-width:170px;">
+            <label for="admin-ban-reason" class="dim" style="display:block;font-size:11.5px;font-weight:600;margin-bottom:3px;">Reason</label>
+            <input type="text" id="admin-ban-reason" placeholder="Reason or ticket note (optional)" maxlength="500" style="width:100%;">
+          </div>
+          <div class="row" style="margin:0;gap:6px;">
+            <button type="button" class="btn btn-primary" id="btn-admin-ban-add" style="background:#b91c1c;border-color:#991b1b;color:#ffffff;">Add Ban</button>
+            <button type="button" class="btn" id="btn-admin-ban-refresh">Refresh</button>
+          </div>
+        </div>
+        <div id="admin-ban-msg" class="dim" style="font-size:12.5px;min-height:16px;margin-bottom:10px;"></div>
+
+        <div style="margin-top:10px;">
+          <div class="row" style="align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px 0;flex-wrap:wrap;">
+            <div style="font-weight:700;color:#7f1d1d;font-size:13px;">
+              Active 24-Hour Bans (<span id="admin-temp-bans-count">0</span>)
+            </div>
+            <div class="row" style="margin:0;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn" id="btn-admin-promote-perm" style="font-size:12px;padding:4px 10px;">Move Selected &rarr; Permanent</button>
+              <button type="button" class="btn" id="btn-admin-unban-temp" style="font-size:12px;padding:4px 10px;">Unban Selected</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto;border:1px solid #fecaca;border-radius:6px;background:#ffffff;">
+            <table id="admin-temp-bans-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+              <thead>
+                <tr style="background:#fef2f2;text-align:left;">
+                  <th style="width:32px;padding:6px 8px;"><input type="checkbox" id="admin-temp-select-all" title="Select all 24-hour bans"></th>
+                  <th style="padding:6px 8px;">Type</th>
+                  <th style="padding:6px 8px;">Target</th>
+                  <th style="padding:6px 8px;">Reason / Pattern</th>
+                  <th style="padding:6px 8px;">Banned At</th>
+                  <th style="padding:6px 8px;">Expires In</th>
+                  <th style="padding:6px 8px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-temp-bans-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div class="row" style="align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px 0;flex-wrap:wrap;">
+            <div style="font-weight:700;color:#7f1d1d;font-size:13px;">
+              Permanent Bans (<span id="admin-perm-bans-count">0</span>)
+              <span id="admin-ban-config-path" class="mono dim" style="font-weight:400;font-size:11.5px;margin-left:6px;"></span>
+            </div>
+            <div class="row" style="margin:0;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn" id="btn-admin-demote-24h" style="font-size:12px;padding:4px 10px;">Move Selected &rarr; 24-Hour</button>
+              <button type="button" class="btn" id="btn-admin-unban-perm" style="font-size:12px;padding:4px 10px;">Unban Selected</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto;border:1px solid #fecaca;border-radius:6px;background:#ffffff;">
+            <table id="admin-perm-bans-table" style="width:100%;border-collapse:collapse;font-size:12.5px;">
+              <thead>
+                <tr style="background:#fef2f2;text-align:left;">
+                  <th style="width:32px;padding:6px 8px;"><input type="checkbox" id="admin-perm-select-all" title="Select all permanent bans"></th>
+                  <th style="padding:6px 8px;">Type</th>
+                  <th style="padding:6px 8px;">Target</th>
+                  <th style="padding:6px 8px;">Reason</th>
+                  <th style="padding:6px 8px;">Created By</th>
+                  <th style="padding:6px 8px;">Created At</th>
+                  <th style="padding:6px 8px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-perm-bans-tbody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -42964,6 +43060,9 @@ function switchTab(name) {
     if (currentUser || localStorage.getItem("octi_jwt_token")) {
       loadMyProfile();
       loadMyRobots();
+      if (currentUser && currentUser.is_admin && typeof loadAdminBans === "function") {
+        loadAdminBans();
+      }
     }
   }
 }
@@ -42988,15 +43087,7 @@ function handleAuthHash() {
   var params = null;
   var token = null;
 
-  if (window.location.search) {
-    var searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get("auth_token")) {
-      params = searchParams;
-      token = searchParams.get("auth_token");
-    }
-  }
-
-  if (!token && window.location.hash) {
+  if (window.location.hash) {
     var hashStr = window.location.hash.substring(1);
     if (hashStr.indexOf("auth_token=") !== -1) {
       var qIdx = hashStr.indexOf("?");
@@ -43152,6 +43243,7 @@ function renderGuestState() {
   if ($("account-admin-controls")) $("account-admin-controls").style.display = "none";
   if ($("web-admin-purge-toggle")) $("web-admin-purge-toggle").checked = false;
   if ($("admin-recompute-msg")) $("admin-recompute-msg").textContent = "";
+  if (typeof resetAdminBansUi === "function") resetAdminBansUi();
   if ($("robots-guest-card")) $("robots-guest-card").style.display = "block";
   if ($("robots-owner-card")) $("robots-owner-card").style.display = "none";
 
@@ -43195,6 +43287,11 @@ function renderAuthState() {
   if ($("account-profile-card")) $("account-profile-card").style.display = "block";
   if ($("account-admin-controls")) {
     $("account-admin-controls").style.display = currentUser.is_admin ? "block" : "none";
+  }
+  if (currentUser.is_admin && typeof loadAdminBans === "function") {
+    loadAdminBans();
+  } else if (typeof resetAdminBansUi === "function") {
+    resetAdminBansUi();
   }
   if ($("web-admin-purge-toggle")) {
     $("web-admin-purge-toggle").checked = Boolean(currentUser.is_admin && webAdminPurgeEnabled);
@@ -43301,6 +43398,415 @@ if ($("btn-admin-recompute-ratings")) {
         });
       }
     );
+  });
+}
+
+var adminBanCountdownTimer = null;
+var adminBanClockSkewSec = 0;
+
+function fmtRemainingDuration(sec) {
+  var s = Math.max(0, Math.floor(Number(sec) || 0));
+  if (s <= 0) return "Expired";
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  var r = s % 60;
+  function p2(n) { return n < 10 ? "0" + n : "" + n; }
+  return p2(h) + "h " + p2(m) + "m " + p2(r) + "s";
+}
+
+function setAdminBanMsg(text, isError) {
+  var msgEl = $("admin-ban-msg");
+  if (!msgEl) return;
+  msgEl.textContent = text || "";
+  msgEl.style.color = isError ? "#ef4444" : "#10b981";
+}
+
+function resetAdminBansUi() {
+  if (adminBanCountdownTimer) {
+    clearInterval(adminBanCountdownTimer);
+    adminBanCountdownTimer = null;
+  }
+  if ($("admin-temp-bans-tbody")) clear($("admin-temp-bans-tbody"));
+  if ($("admin-perm-bans-tbody")) clear($("admin-perm-bans-tbody"));
+  if ($("admin-temp-bans-count")) $("admin-temp-bans-count").textContent = "0";
+  if ($("admin-perm-bans-count")) $("admin-perm-bans-count").textContent = "0";
+  if ($("admin-ban-config-path")) $("admin-ban-config-path").textContent = "";
+  if ($("admin-ban-msg")) $("admin-ban-msg").textContent = "";
+  if ($("admin-temp-select-all")) $("admin-temp-select-all").checked = false;
+  if ($("admin-perm-select-all")) $("admin-perm-select-all").checked = false;
+}
+
+function makeBanTypeBadge(t) {
+  var s = String(t || "ip").toLowerCase();
+  var label = (s === "account") ? "ACCOUNT" : ((s === "robot") ? "BOT" : "IP / CIDR");
+  var span = el("span", label, "mono");
+  span.style.display = "inline-block";
+  span.style.padding = "1px 6px";
+  span.style.borderRadius = "4px";
+  span.style.fontSize = "11px";
+  span.style.fontWeight = "700";
+  if (s === "account") {
+    span.style.background = "#dbeafe";
+    span.style.color = "#1e40af";
+  } else if (s === "robot") {
+    span.style.background = "#fef3c7";
+    span.style.color = "#92400e";
+  } else {
+    span.style.background = "#fee2e2";
+    span.style.color = "#991b1b";
+  }
+  return span;
+}
+
+function makeTargetCellNode(entry) {
+  var wrap = document.createElement("div");
+  var primary = el("div", entry.display_label || entry.target_value || "-", "mono");
+  primary.style.fontWeight = "600";
+  wrap.appendChild(primary);
+  if (entry.display_label && entry.target_value && entry.display_label !== entry.target_value) {
+    var sub = el("div", entry.target_value, "mono dim");
+    sub.style.fontSize = "11px";
+    wrap.appendChild(sub);
+  }
+  return wrap;
+}
+
+function collectSelectedBanIds(tbodyId) {
+  var tbody = $(tbodyId);
+  if (!tbody) return [];
+  var boxes = tbody.querySelectorAll("input.admin-ban-row-cb:checked");
+  var ids = [];
+  for (var i = 0; i < boxes.length; i++) {
+    var bid = boxes[i].getAttribute("data-ban-id");
+    if (bid) ids.push(bid);
+  }
+  return ids;
+}
+
+function updateAdminBanCountdowns() {
+  var panel = $("account-admin-controls");
+  if (!panel || panel.style.display === "none") return;
+  var tbody = $("admin-temp-bans-tbody");
+  if (!tbody) return;
+  var nowEstSec = Math.floor(Date.now() / 1000) + adminBanClockSkewSec;
+  var nodes = tbody.querySelectorAll("span.admin-ban-rem");
+  for (var i = 0; i < nodes.length; i++) {
+    var exp = Number(nodes[i].getAttribute("data-expires-at") || 0);
+    nodes[i].textContent = fmtRemainingDuration(exp - nowEstSec);
+  }
+}
+
+function renderAdminBans(data) {
+  if (!data) return;
+  if (data.server_time) {
+    adminBanClockSkewSec = Number(data.server_time) - Math.floor(Date.now() / 1000);
+  }
+  var tempList = Array.isArray(data.temp_bans) ? data.temp_bans : [];
+  var permList = Array.isArray(data.permanent_bans) ? data.permanent_bans : [];
+
+  if ($("admin-temp-bans-count")) $("admin-temp-bans-count").textContent = String(tempList.length);
+  if ($("admin-perm-bans-count")) $("admin-perm-bans-count").textContent = String(permList.length);
+  if ($("admin-ban-config-path")) {
+    $("admin-ban-config-path").textContent = data.ban_config_path ? ("[" + data.ban_config_path + "]") : "";
+  }
+  if ($("admin-temp-select-all")) $("admin-temp-select-all").checked = false;
+  if ($("admin-perm-select-all")) $("admin-perm-select-all").checked = false;
+
+  var tempTbody = $("admin-temp-bans-tbody");
+  if (tempTbody) {
+    clear(tempTbody);
+    if (tempList.length === 0) {
+      var trEmptyT = document.createElement("tr");
+      var tdEmptyT = el("td", "No active 24-hour bans.", "dim");
+      tdEmptyT.colSpan = 7;
+      tdEmptyT.style.padding = "10px";
+      tdEmptyT.style.textAlign = "center";
+      trEmptyT.appendChild(tdEmptyT);
+      tempTbody.appendChild(trEmptyT);
+    } else {
+      tempList.forEach(function (entry) {
+        var tr = document.createElement("tr");
+        tr.style.borderTop = "1px solid #fee2e2";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "admin-ban-row-cb";
+        cb.setAttribute("data-ban-id", entry.ban_id || "");
+
+        var reasonWrap = document.createElement("div");
+        if (entry.source === "auto") {
+          var autoTag = el("span", "AUTO ", "mono");
+          autoTag.style.fontWeight = "700";
+          autoTag.style.color = "#b91c1c";
+          reasonWrap.appendChild(autoTag);
+        }
+        reasonWrap.appendChild(el("span", entry.reason || "-"));
+
+        var remSpan = el("span", fmtRemainingDuration(entry.remaining_sec), "mono admin-ban-rem");
+        remSpan.setAttribute("data-expires-at", String(entry.expires_at || 0));
+
+        var actWrap = document.createElement("div");
+        actWrap.className = "row";
+        actWrap.style.margin = "0";
+        actWrap.style.gap = "4px";
+
+        var btnToPerm = el("button", "To Permanent", "btn");
+        btnToPerm.type = "button";
+        btnToPerm.style.fontSize = "11.5px";
+        btnToPerm.style.padding = "2px 8px";
+        btnToPerm.addEventListener("click", function () {
+          moveAdminBans([entry.ban_id], "permanent");
+        });
+
+        var btnUnban = el("button", "Unban", "btn");
+        btnUnban.type = "button";
+        btnUnban.style.fontSize = "11.5px";
+        btnUnban.style.padding = "2px 8px";
+        btnUnban.addEventListener("click", function () {
+          removeAdminBans([entry.ban_id]);
+        });
+
+        actWrap.appendChild(btnToPerm);
+        actWrap.appendChild(btnUnban);
+
+        var cells = [
+          cb,
+          makeBanTypeBadge(entry.target_type),
+          makeTargetCellNode(entry),
+          reasonWrap,
+          fmtTime(entry.created_at),
+          remSpan,
+          actWrap
+        ];
+        cells.forEach(function (c) {
+          var td = document.createElement("td");
+          td.style.padding = "6px 8px";
+          if (c instanceof Node) td.appendChild(c);
+          else td.textContent = String(c);
+          tr.appendChild(td);
+        });
+        tempTbody.appendChild(tr);
+      });
+    }
+  }
+
+  var permTbody = $("admin-perm-bans-tbody");
+  if (permTbody) {
+    clear(permTbody);
+    if (permList.length === 0) {
+      var trEmptyP = document.createElement("tr");
+      var tdEmptyP = el("td", "No permanent bans configured.", "dim");
+      tdEmptyP.colSpan = 7;
+      tdEmptyP.style.padding = "10px";
+      tdEmptyP.style.textAlign = "center";
+      trEmptyP.appendChild(tdEmptyP);
+      permTbody.appendChild(trEmptyP);
+    } else {
+      permList.forEach(function (entry) {
+        var tr = document.createElement("tr");
+        tr.style.borderTop = "1px solid #fee2e2";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "admin-ban-row-cb";
+        cb.setAttribute("data-ban-id", entry.ban_id || "");
+
+        var actWrap = document.createElement("div");
+        actWrap.className = "row";
+        actWrap.style.margin = "0";
+        actWrap.style.gap = "4px";
+
+        var btnTo24h = el("button", "To 24h", "btn");
+        btnTo24h.type = "button";
+        btnTo24h.style.fontSize = "11.5px";
+        btnTo24h.style.padding = "2px 8px";
+        btnTo24h.addEventListener("click", function () {
+          moveAdminBans([entry.ban_id], "24h");
+        });
+
+        var btnUnban = el("button", "Unban", "btn");
+        btnUnban.type = "button";
+        btnUnban.style.fontSize = "11.5px";
+        btnUnban.style.padding = "2px 8px";
+        btnUnban.addEventListener("click", function () {
+          removeAdminBans([entry.ban_id]);
+        });
+
+        actWrap.appendChild(btnTo24h);
+        actWrap.appendChild(btnUnban);
+
+        var cells = [
+          cb,
+          makeBanTypeBadge(entry.target_type),
+          makeTargetCellNode(entry),
+          entry.reason || "-",
+          entry.created_by || "admin",
+          fmtTime(entry.created_at),
+          actWrap
+        ];
+        cells.forEach(function (c) {
+          var td = document.createElement("td");
+          td.style.padding = "6px 8px";
+          if (c instanceof Node) td.appendChild(c);
+          else td.textContent = String(c);
+          tr.appendChild(td);
+        });
+        permTbody.appendChild(tr);
+      });
+    }
+  }
+
+  if (tempList.length > 0 && !adminBanCountdownTimer) {
+    adminBanCountdownTimer = setInterval(updateAdminBanCountdowns, 1000);
+  } else if (tempList.length === 0 && adminBanCountdownTimer) {
+    clearInterval(adminBanCountdownTimer);
+    adminBanCountdownTimer = null;
+  }
+}
+
+function loadAdminBans() {
+  if (!currentUser || !currentUser.is_admin) return Promise.resolve(null);
+  return api("/api/v1/admin/bans").then(function (res) {
+    renderAdminBans(res);
+    return res;
+  }).catch(function (e) {
+    setAdminBanMsg("Failed to load ban lists: " + (e.message || "error"), true);
+    return null;
+  });
+}
+
+function moveAdminBans(banIds, targetDuration) {
+  if (!banIds || banIds.length === 0) {
+    setAdminBanMsg("Select at least one ban entry first.", true);
+    return;
+  }
+  api("/api/v1/admin/bans/move", {
+    method: "POST",
+    body: { ban_ids: banIds, target_duration: targetDuration }
+  }).then(function (res) {
+    renderAdminBans(res);
+    setAdminBanMsg("Moved " + banIds.length + " ban(s) to " +
+      (targetDuration === "permanent" ? "Permanent" : "24-Hour") + ".", false);
+  }).catch(function (e) {
+    setAdminBanMsg("Error: " + (e.message || "Failed to move ban(s)."), true);
+  });
+}
+
+function removeAdminBans(banIds) {
+  if (!banIds || banIds.length === 0) {
+    setAdminBanMsg("Select at least one ban entry first.", true);
+    return;
+  }
+  api("/api/v1/admin/bans/remove", {
+    method: "POST",
+    body: { ban_ids: banIds }
+  }).then(function (res) {
+    renderAdminBans(res);
+    setAdminBanMsg("Removed " + banIds.length + " ban(s).", false);
+  }).catch(function (e) {
+    setAdminBanMsg("Error: " + (e.message || "Failed to remove ban(s)."), true);
+  });
+}
+
+if ($("admin-ban-type")) {
+  $("admin-ban-type").addEventListener("change", function () {
+    var t = $("admin-ban-type").value;
+    var inp = $("admin-ban-target");
+    if (!inp) return;
+    if (t === "account") {
+      inp.placeholder = "@handle or player UUID";
+    } else if (t === "robot") {
+      inp.placeholder = "robot_name or robot UUID";
+    } else {
+      inp.placeholder = "198.51.100.0/24 or 2001:db8::/48";
+    }
+  });
+}
+
+if ($("btn-admin-ban-add")) {
+  $("btn-admin-ban-add").addEventListener("click", function () {
+    var tType = $("admin-ban-type") ? $("admin-ban-type").value : "ip";
+    var targetVal = $("admin-ban-target") ? $("admin-ban-target").value.trim() : "";
+    var durVal = $("admin-ban-duration") ? $("admin-ban-duration").value : "24h";
+    var reasonVal = $("admin-ban-reason") ? $("admin-ban-reason").value.trim() : "";
+    if (!targetVal) {
+      setAdminBanMsg("Enter an IP/CIDR, @handle, or robot name to ban.", true);
+      return;
+    }
+    var btn = $("btn-admin-ban-add");
+    if (btn) btn.disabled = true;
+    api("/api/v1/admin/bans", {
+      method: "POST",
+      body: {
+        target_type: tType,
+        target: targetVal,
+        duration: durVal,
+        reason: reasonVal
+      }
+    }).then(function (res) {
+      if (btn) btn.disabled = false;
+      if ($("admin-ban-target")) $("admin-ban-target").value = "";
+      if ($("admin-ban-reason")) $("admin-ban-reason").value = "";
+      renderAdminBans(res);
+      setAdminBanMsg("Ban added (" + (durVal === "permanent" ? "Permanent" : "24-Hour") + ").", false);
+    }).catch(function (e) {
+      if (btn) btn.disabled = false;
+      setAdminBanMsg("Error: " + (e.message || "Failed to add ban."), true);
+    });
+  });
+}
+
+if ($("btn-admin-ban-refresh")) {
+  $("btn-admin-ban-refresh").addEventListener("click", function () {
+    loadAdminBans().then(function (res) {
+      if (res) setAdminBanMsg("Ban lists refreshed.", false);
+    });
+  });
+}
+
+if ($("btn-admin-promote-perm")) {
+  $("btn-admin-promote-perm").addEventListener("click", function () {
+    moveAdminBans(collectSelectedBanIds("admin-temp-bans-tbody"), "permanent");
+  });
+}
+
+if ($("btn-admin-demote-24h")) {
+  $("btn-admin-demote-24h").addEventListener("click", function () {
+    moveAdminBans(collectSelectedBanIds("admin-perm-bans-tbody"), "24h");
+  });
+}
+
+if ($("btn-admin-unban-temp")) {
+  $("btn-admin-unban-temp").addEventListener("click", function () {
+    removeAdminBans(collectSelectedBanIds("admin-temp-bans-tbody"));
+  });
+}
+
+if ($("btn-admin-unban-perm")) {
+  $("btn-admin-unban-perm").addEventListener("click", function () {
+    removeAdminBans(collectSelectedBanIds("admin-perm-bans-tbody"));
+  });
+}
+
+if ($("admin-temp-select-all")) {
+  $("admin-temp-select-all").addEventListener("change", function () {
+    var checked = Boolean($("admin-temp-select-all").checked);
+    var tbody = $("admin-temp-bans-tbody");
+    if (!tbody) return;
+    Array.prototype.forEach.call(tbody.querySelectorAll("input.admin-ban-row-cb"), function (cb) {
+      cb.checked = checked;
+    });
+  });
+}
+
+if ($("admin-perm-select-all")) {
+  $("admin-perm-select-all").addEventListener("change", function () {
+    var checked = Boolean($("admin-perm-select-all").checked);
+    var tbody = $("admin-perm-bans-tbody");
+    if (!tbody) return;
+    Array.prototype.forEach.call(tbody.querySelectorAll("input.admin-ban-row-cb"), function (cb) {
+      cb.checked = checked;
+    });
   });
 }
 
@@ -44053,9 +44559,15 @@ function loadMyRobots() {
 
 if ($("btn-export-robots-conf")) {
   $("btn-export-robots-conf").addEventListener("click", function () {
-    var tok = sessionToken || (currentUser && currentUser.token) || "";
+    var tok = "";
+    try {
+      tok = localStorage.getItem("octi_jwt_token") || "";
+    } catch (e) {}
+    if (!tok && currentUser && currentUser.token) {
+      tok = currentUser.token;
+    }
     fetch("/api/v1/robots/export-conf", {
-      headers: tok ? { "Authorization": "Bearer " + tok } : {}
+      headers: tok ? { "Authorization": "Bearer " + tok, "X-Octi-Client-Type": "web" } : { "X-Octi-Client-Type": "web" }
     }).then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.blob();
@@ -52157,8 +52669,6 @@ function arSearch(offset) {
   arLoaded = true;
   arOffset = Math.max(0, offset);
   var q = buildArchiveQuery(arLimit, arOffset);
-  var expQ = buildArchiveQuery(1000, 0);
-  $("ar-export-btn").setAttribute("href", "/api/v1/archive/export" + expQ);
   api("/api/v1/archive/games" + q).then(function (j) {
     arTotal = j.total;
     var body = $("ar-table").querySelector("tbody");
@@ -52432,6 +52942,45 @@ function arOpen(id) {
 }
 
 $("ar-go").addEventListener("click", function () { arSearch(0); });
+if ($("ar-export-btn")) {
+  $("ar-export-btn").addEventListener("click", function () {
+    var tok = "";
+    try {
+      tok = localStorage.getItem("octi_jwt_token") || "";
+    } catch (e) {}
+    if (!tok && currentUser && currentUser.token) {
+      tok = currentUser.token;
+    }
+    if (!currentUser || !tok) {
+      alert("Please sign in on the Account tab to export archived games.");
+      switchTab("account");
+      return;
+    }
+    var expQ = buildArchiveQuery(1000, 0);
+    fetch("/api/v1/archive/export" + expQ, {
+      headers: {
+        "Authorization": "Bearer " + tok,
+        "X-Octi-Client-Type": "web"
+      }
+    }).then(function (res) {
+      if (!res.ok) {
+        throw new Error("HTTP " + res.status);
+      }
+      return res.blob();
+    }).then(function (blob) {
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "octi-archive-export.ndjson";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }).catch(function (err) {
+      alert("Archive export failed: " + err.message);
+    });
+  });
+}
 $("ar-prev").addEventListener("click", function () { arSearch(arOffset - arLimit); });
 $("ar-next").addEventListener("click", function () { arSearch(arOffset + arLimit); });
 $("ar-close").addEventListener("click", function () {

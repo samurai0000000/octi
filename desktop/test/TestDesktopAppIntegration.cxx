@@ -2125,17 +2125,21 @@ TEST(DesktopAppIntegrationTest, TelemetryConsentTriStatePersistenceAndDialogEscR
     std::remove(cfgPath.c_str());
 
     // 1. Initial defaults
+    std::string tok1;
     {
         ClientConfigStore store(cfgPath);
         std::string err;
         STRCMP_EQUAL("unset", store.preferences().telemetryConsent.c_str());
         LONGS_EQUAL(0, store.preferences().telemetryConsentVersion);
         CHECK_TRUE(store.preferences().installId.empty());
+        CHECK_TRUE(store.preferences().installDeleteToken.empty());
 
         store.preferences().telemetryConsent = "share";
         store.preferences().telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
         store.resetInstallId();
         CHECK_FALSE(store.preferences().installId.empty());
+        CHECK_FALSE(store.preferences().installDeleteToken.empty());
+        tok1 = store.preferences().installDeleteToken;
         CHECK_TRUE(store.save(err));
     }
 
@@ -2149,12 +2153,38 @@ TEST(DesktopAppIntegrationTest, TelemetryConsentTriStatePersistenceAndDialogEscR
         LONGS_EQUAL(ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION, store.preferences().telemetryConsentVersion);
         id1 = store.preferences().installId;
         CHECK_FALSE(id1.empty());
+        STRCMP_EQUAL(tok1.c_str(), store.preferences().installDeleteToken.c_str());
 
-        // Reset ID
+        // Reset ID rotates both installId and installDeleteToken
         store.resetInstallId();
         std::string id2 = store.preferences().installId;
+        std::string tok2 = store.preferences().installDeleteToken;
         CHECK_FALSE(id2.empty());
+        CHECK_FALSE(tok2.empty());
         CHECK_TRUE(id1 != id2);
+        CHECK_TRUE(tok1 != tok2);
+    }
+
+    // 2b. Boundary: legacy config file missing install_delete_token auto-populates a fresh token
+    // on load without losing install_id or session_token
+    {
+        std::ofstream ofs(cfgPath, std::ios::out | std::ios::trunc);
+        ofs << "{\n"
+               "  \"session_token\": \"legacy-sess-tok-123\",\n"
+               "  \"install_id\": \"legacy-install-uuid-456\",\n"
+               "  \"telemetry_consent\": \"share\",\n"
+               "  \"telemetry_consent_version\": 1\n"
+               "}\n";
+        ofs.close();
+#ifndef _WIN32
+        ::chmod(cfgPath.c_str(), 0600);
+#endif
+        ClientConfigStore legacyStore(cfgPath);
+        std::string err;
+        CHECK_TRUE(legacyStore.load(err));
+        STRCMP_EQUAL("legacy-sess-tok-123", legacyStore.preferences().sessionToken.c_str());
+        STRCMP_EQUAL("legacy-install-uuid-456", legacyStore.preferences().installId.c_str());
+        CHECK_FALSE(legacyStore.preferences().installDeleteToken.empty());
     }
 
     // 3. Test non-dismissible Esc behavior of OctiTelemetryConsentDialog
@@ -2249,9 +2279,26 @@ TEST(DesktopAppIntegrationTest, AutomaticUploadOfCompletedBotGameLoopback)
     STRCMP_EQUAL("B", games[0].winner.c_str());
     CHECK_FALSE(games[0].installId.empty());
 
-    // 4. Delete install data endpoint
+    // 4. Delete install data endpoint: unauthorized without token / with wrong token fails,
+    // authorized with matching installDeleteToken succeeds
     auto directClient = OctiNetworkClient::createForLoopbackTest(env.port());
-    auto delRes = directClient->deleteInstallArchiveData(games[0].installId);
+    auto unauthDelRes = directClient->deleteInstallArchiveData(games[0].installId);
+    CHECK_FALSE(unauthDelRes.ok);
+    LONGS_EQUAL(401, unauthDelRes.httpStatus);
+
+    auto wrongTokDelRes = directClient->deleteInstallArchiveData(
+        games[0].installId, "wrong-install-token-0123456789abcdef");
+    CHECK_FALSE(wrongTokDelRes.ok);
+    LONGS_EQUAL(403, wrongTokDelRes.httpStatus);
+
+    std::vector<GameRecord> gamesStillIntact;
+    int64_t totalStillIntact = 0;
+    CHECK_TRUE(env.store.listArchivedGames(f, gamesStillIntact, &totalStillIntact));
+    LONGS_EQUAL(1, totalStillIntact);
+
+    auto delRes = directClient->deleteInstallArchiveData(
+        games[0].installId,
+        win.configStore()->preferences().installDeleteToken);
     CHECK_TRUE_TEXT(delRes.ok, delRes.errorMessage.c_str());
     LONGS_EQUAL(1, delRes.data);
 

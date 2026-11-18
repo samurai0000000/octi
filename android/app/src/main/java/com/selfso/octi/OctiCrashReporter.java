@@ -28,6 +28,7 @@ public final class OctiCrashReporter {
     private static volatile File s_storageRootDir = null;
     private static volatile String s_appVersion = "2.1.2";
     private static volatile String s_installId = "";
+    private static volatile String s_installDeleteToken = "";
     private static final AtomicBoolean s_installed = new AtomicBoolean(false);
     private static volatile Thread.UncaughtExceptionHandler s_previousHandler = null;
 
@@ -167,6 +168,11 @@ public final class OctiCrashReporter {
     }
 
     public static void installGlobalHandler(File storageRootDir, String appVersion, String installId) {
+        installGlobalHandler(storageRootDir, appVersion, installId, s_installDeleteToken);
+    }
+
+    public static void installGlobalHandler(
+            File storageRootDir, String appVersion, String installId, String installDeleteToken) {
         if (storageRootDir != null) {
             setStorageRootDir(storageRootDir);
         }
@@ -175,6 +181,9 @@ public final class OctiCrashReporter {
         }
         if (installId != null) {
             s_installId = installId;
+        }
+        if (installDeleteToken != null) {
+            s_installDeleteToken = installDeleteToken;
         }
         if (s_installed.compareAndSet(false, true)) {
             s_previousHandler = Thread.getDefaultUncaughtExceptionHandler();
@@ -185,7 +194,8 @@ public final class OctiCrashReporter {
                         thread != null ? thread.getName() : "main",
                         throwable,
                         s_appVersion,
-                        s_installId
+                        s_installId,
+                        s_installDeleteToken
                     );
                 } catch (Throwable ignored) {
                 }
@@ -231,11 +241,25 @@ public final class OctiCrashReporter {
             Throwable throwable,
             String appVersion,
             String installId) {
+        return recordHandledException(
+                rootDir, threadName, throwable, appVersion, installId, s_installDeleteToken);
+    }
+
+    public static File recordHandledException(
+            File rootDir,
+            String threadName,
+            Throwable throwable,
+            String appVersion,
+            String installId,
+            String installDeleteToken) {
         File crashesDir = getCrashesDir(rootDir);
         long epochSec = System.currentTimeMillis() / 1000L;
         long epochMs = System.currentTimeMillis();
         String version = (appVersion != null && !appVersion.isEmpty()) ? appVersion : s_appVersion;
         String instId = (installId != null) ? installId : s_installId;
+        String instTok = (installDeleteToken != null && !installDeleteToken.isEmpty())
+                ? installDeleteToken
+                : s_installDeleteToken;
         String exType = throwable != null ? throwable.getClass().getName() : "UnknownException";
         String exMsg = (throwable != null && throwable.getMessage() != null) ? throwable.getMessage() : "";
         String thName = (threadName != null && !threadName.isEmpty()) ? threadName : "main";
@@ -269,6 +293,9 @@ public final class OctiCrashReporter {
         if (instId != null && !instId.isEmpty()) {
             root.put("install_id", instId);
         }
+        if (instTok != null && !instTok.isEmpty()) {
+            root.put("install_delete_token", instTok);
+        }
 
         String jsonString = OctiMiniJson.stringify(root);
         writeAtomicFile(crashFile, jsonString);
@@ -282,6 +309,15 @@ public final class OctiCrashReporter {
             String gameId,
             String transcriptJson,
             String clientId) {
+        return spoolTrainingTranscript(rootDir, gameId, transcriptJson, clientId, "");
+    }
+
+    public static File spoolTrainingTranscript(
+            File rootDir,
+            String gameId,
+            String transcriptJson,
+            String clientId,
+            String installDeleteToken) {
         File pendingDir = getPendingUploadsDir(rootDir);
         long epochMs = System.currentTimeMillis();
         String safeId = (gameId != null && !gameId.trim().isEmpty())
@@ -308,6 +344,9 @@ public final class OctiCrashReporter {
         root.put("transcript_json", transcriptJson != null ? transcriptJson : "");
         if (clientId != null && !clientId.isEmpty()) {
             root.put("client_id", clientId);
+        }
+        if (installDeleteToken != null && !installDeleteToken.isEmpty()) {
+            root.put("install_delete_token", installDeleteToken);
         }
 
         String jsonString = OctiMiniJson.stringify(root);
@@ -343,6 +382,14 @@ public final class OctiCrashReporter {
             File rootDir,
             OctiNetworkClient client,
             String fallbackInstallId) {
+        return flushPendingCrashReports(rootDir, client, fallbackInstallId, "");
+    }
+
+    public static int flushPendingCrashReports(
+            File rootDir,
+            OctiNetworkClient client,
+            String fallbackInstallId,
+            String fallbackInstallDeleteToken) {
         if (client == null) {
             return 0;
         }
@@ -409,6 +456,13 @@ public final class OctiCrashReporter {
                     req.installId = fallbackInstallId;
                 }
 
+                Object itok = map.get("install_delete_token");
+                if (itok != null && !itok.toString().isEmpty()) {
+                    req.installDeleteToken = itok.toString();
+                } else if (fallbackInstallDeleteToken != null && !fallbackInstallDeleteToken.isEmpty()) {
+                    req.installDeleteToken = fallbackInstallDeleteToken;
+                }
+
                 OctiNetworkClient.CrashReportResponse res = client.uploadCrashReport(req);
                 if (res.ok || res.httpStatus == 400 || res.httpStatus == 413) {
                     file.delete();
@@ -431,6 +485,14 @@ public final class OctiCrashReporter {
             File rootDir,
             OctiNetworkClient client,
             String fallbackClientId) {
+        return flushPendingTranscripts(rootDir, client, fallbackClientId, "");
+    }
+
+    public static int flushPendingTranscripts(
+            File rootDir,
+            OctiNetworkClient client,
+            String fallbackClientId,
+            String fallbackInstallDeleteToken) {
         if (client == null) {
             return 0;
         }
@@ -475,8 +537,15 @@ public final class OctiCrashReporter {
                     clientId = cid.toString();
                 }
 
+                String installDeleteToken =
+                        fallbackInstallDeleteToken != null ? fallbackInstallDeleteToken : "";
+                Object itok = map.get("install_delete_token");
+                if (itok != null && !itok.toString().isEmpty()) {
+                    installDeleteToken = itok.toString();
+                }
+
                 OctiNetworkClient.ApiResult<OctiNetworkClient.UploadTranscriptResponse> res =
-                        client.uploadTrainingTranscript(transcriptJson, clientId);
+                        client.uploadTrainingTranscript(transcriptJson, clientId, installDeleteToken);
 
                 if (res.ok || res.httpStatus == 400) {
                     file.delete();

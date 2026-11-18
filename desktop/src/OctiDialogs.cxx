@@ -6437,13 +6437,20 @@ OctiTelemetrySettingsDialog::OctiTelemetrySettingsDialog(ClientConfigStore *conf
     QObject::connect(resetBtn, &QPushButton::clicked, this, [this]() {
         if (_configStore) {
             _configStore->resetInstallId();
+            if (_netClient) {
+                _netClient->setInstallId(_configStore->preferences().installId);
+                _netClient->setInstallDeleteToken(
+                    _configStore->preferences().installDeleteToken);
+            }
             _installIdLabel->setText(QString::fromStdString(_configStore->preferences().installId));
         }
     });
 
     QObject::connect(deleteDataBtn, &QPushButton::clicked, this, [this]() {
         if (_configStore && _netClient && !_configStore->preferences().installId.empty()) {
-            auto res = _netClient->deleteInstallArchiveData(_configStore->preferences().installId);
+            auto res = _netClient->deleteInstallArchiveData(
+                _configStore->preferences().installId,
+                _configStore->preferences().installDeleteToken);
             if (res.ok) {
                 QMessageBox::information(this, "Data Deleted",
                     QString("Successfully deleted %1 uploaded games matching this Install ID.").arg(res.data));
@@ -6473,6 +6480,9 @@ OctiTelemetrySettingsDialog::OctiTelemetrySettingsDialog(ClientConfigStore *conf
             prefs.telemetryConsentVersion = ClientPreferences::CURRENT_TELEMETRY_CONSENT_VERSION;
             if (prefs.telemetryConsent == "share" && prefs.installId.empty()) {
                 prefs.installId = ClientConfigStore::generateUuidV4();
+            }
+            if (prefs.installDeleteToken.empty()) {
+                prefs.installDeleteToken = ClientConfigStore::generateUuidV4();
             }
             std::string err;
             _configStore->save(err);

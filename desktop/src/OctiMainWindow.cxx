@@ -278,13 +278,24 @@ OctiMainWindow::OctiMainWindow(
             _authenticated = !prefs.playerUuid.empty();
         }
     }
+    bool needSaveInstallIds = false;
     if (_configStore.preferences().installId.empty()) {
         _configStore.preferences().installId = ClientConfigStore::generateUuidV4();
+        needSaveInstallIds = true;
+    }
+    if (_configStore.preferences().installDeleteToken.empty()) {
+        _configStore.preferences().installDeleteToken =
+            ClientConfigStore::generateUuidV4();
+        needSaveInstallIds = true;
+    }
+    if (needSaveInstallIds) {
         std::string saveErr;
         _configStore.save(saveErr);
     }
     if (_netClient) {
         _netClient->setInstallId(_configStore.preferences().installId);
+        _netClient->setInstallDeleteToken(
+            _configStore.preferences().installDeleteToken);
     }
     _composer.setConfirmAllMoves(true);
     _configStore.preferences().confirmAllMoves = true;
@@ -4921,6 +4932,9 @@ void OctiMainWindow::checkPromptTelemetryConsentAtStartup()
             if (prefs.installId.empty()) {
                 prefs.installId = ClientConfigStore::generateUuidV4();
             }
+            if (prefs.installDeleteToken.empty()) {
+                prefs.installDeleteToken = ClientConfigStore::generateUuidV4();
+            }
         } else {
             prefs.telemetryConsent = "decline";
         }
@@ -4929,6 +4943,7 @@ void OctiMainWindow::checkPromptTelemetryConsentAtStartup()
         _configStore.save(err);
         if (_netClient) {
             _netClient->setInstallId(prefs.installId);
+            _netClient->setInstallDeleteToken(prefs.installDeleteToken);
         }
 
         if (_heldTranscriptPendingConsent) {
@@ -4946,10 +4961,14 @@ void OctiMainWindow::setTelemetryConsentForTesting(const std::string &choice)
     if (choice == "share" && prefs.installId.empty()) {
         prefs.installId = ClientConfigStore::generateUuidV4();
     }
+    if (prefs.installDeleteToken.empty()) {
+        prefs.installDeleteToken = ClientConfigStore::generateUuidV4();
+    }
     std::string err;
     _configStore.save(err);
     if (_netClient) {
         _netClient->setInstallId(prefs.installId);
+        _netClient->setInstallDeleteToken(prefs.installDeleteToken);
     }
     if (choice != "unset") {
         _heldTranscriptPendingConsent = false;
@@ -4991,20 +5010,26 @@ bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
     std::string gameId = "game_" + std::to_string(QDateTime::currentSecsSinceEpoch()) +
                          "_" + std::to_string(game ? game->getNumMoves() : 0);
     std::string clientId = (shareExtra && !prefs.installId.empty()) ? prefs.installId : "";
+    std::string installTok =
+        (shareExtra && !prefs.installDeleteToken.empty())
+            ? prefs.installDeleteToken
+            : "";
 
     std::string configDir = std::filesystem::path(_configStore.configFilePath()).parent_path().string();
     if (!configDir.empty()) {
         octi::desktop::OctiCrashReporter::setStorageRootDir(configDir);
     }
-    octi::desktop::OctiCrashReporter::spoolTrainingTranscript(gameId, jsonStr, clientId);
+    octi::desktop::OctiCrashReporter::spoolTrainingTranscript(
+        gameId, jsonStr, clientId, installTok);
 
     std::string uploadInstallId = shareExtra ? prefs.installId : "";
+    std::string uploadInstallTok = shareExtra ? prefs.installDeleteToken : "";
     if (synchronousForTest) {
         if (_netClient) {
             int flushed = octi::desktop::OctiCrashReporter::flushPendingTranscripts(
-                *_netClient, uploadInstallId);
+                *_netClient, uploadInstallId, uploadInstallTok);
             octi::desktop::OctiCrashReporter::flushPendingCrashReports(
-                *_netClient, uploadInstallId);
+                *_netClient, uploadInstallId, uploadInstallTok);
             return flushed > 0;
         }
         return false;
@@ -5013,27 +5038,29 @@ bool OctiMainWindow::uploadCompletedBotGameIfEligible(bool synchronousForTest)
             if (_uploadThread.joinable()) {
                 _uploadThread.join();
             }
-            _uploadThread = std::thread([this, installId = uploadInstallId]() {
-                try {
-                    if (_netClient) {
-                        octi::desktop::OctiCrashReporter::flushPendingTranscripts(
-                            *_netClient, installId);
-                        octi::desktop::OctiCrashReporter::flushPendingCrashReports(
-                            *_netClient, installId);
+            _uploadThread = std::thread(
+                [this, installId = uploadInstallId,
+                 installDeleteTok = uploadInstallTok]() {
+                    try {
+                        if (_netClient) {
+                            octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+                                *_netClient, installId, installDeleteTok);
+                            octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+                                *_netClient, installId, installDeleteTok);
+                        }
+                    } catch (const std::exception &ex) {
+                        octi::desktop::OctiCrashReporter::recordHandledException(
+                            "OctiUploadThread", typeid(ex).name(), ex.what(),
+                            octi::desktop::OctiCrashReporter::getGameContextJson(),
+                            installId, installDeleteTok);
+                    } catch (...) {
+                        octi::desktop::OctiCrashReporter::recordHandledException(
+                            "OctiUploadThread", "unknown_exception",
+                            "Unknown exception in upload thread",
+                            octi::desktop::OctiCrashReporter::getGameContextJson(),
+                            installId, installDeleteTok);
                     }
-                } catch (const std::exception &ex) {
-                    octi::desktop::OctiCrashReporter::recordHandledException(
-                        "OctiUploadThread", typeid(ex).name(), ex.what(),
-                        octi::desktop::OctiCrashReporter::getGameContextJson(),
-                        installId);
-                } catch (...) {
-                    octi::desktop::OctiCrashReporter::recordHandledException(
-                        "OctiUploadThread", "unknown_exception",
-                        "Unknown exception in upload thread",
-                        octi::desktop::OctiCrashReporter::getGameContextJson(),
-                        installId);
-                }
-            });
+                });
         }
         return true;
     }
@@ -5058,36 +5085,39 @@ void OctiMainWindow::flushPendingTelemetry(bool async)
     const ClientPreferences &prefs = _configStore.preferences();
     bool shareExtra = (prefs.telemetryConsent == "share");
     std::string uploadInstallId = shareExtra ? prefs.installId : "";
+    std::string uploadInstallTok = shareExtra ? prefs.installDeleteToken : "";
     if (async) {
         if (_uploadThread.joinable()) {
             _uploadThread.join();
         }
-        _uploadThread = std::thread([this, installId = uploadInstallId]() {
-            try {
-                if (_netClient) {
-                    octi::desktop::OctiCrashReporter::flushPendingTranscripts(
-                        *_netClient, installId);
-                    octi::desktop::OctiCrashReporter::flushPendingCrashReports(
-                        *_netClient, installId);
+        _uploadThread = std::thread(
+            [this, installId = uploadInstallId,
+             installDeleteTok = uploadInstallTok]() {
+                try {
+                    if (_netClient) {
+                        octi::desktop::OctiCrashReporter::flushPendingTranscripts(
+                            *_netClient, installId, installDeleteTok);
+                        octi::desktop::OctiCrashReporter::flushPendingCrashReports(
+                            *_netClient, installId, installDeleteTok);
+                    }
+                } catch (const std::exception &ex) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiUploadThread", typeid(ex).name(), ex.what(),
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        installId, installDeleteTok);
+                } catch (...) {
+                    octi::desktop::OctiCrashReporter::recordHandledException(
+                        "OctiUploadThread", "unknown_exception",
+                        "Unknown exception in upload thread",
+                        octi::desktop::OctiCrashReporter::getGameContextJson(),
+                        installId, installDeleteTok);
                 }
-            } catch (const std::exception &ex) {
-                octi::desktop::OctiCrashReporter::recordHandledException(
-                    "OctiUploadThread", typeid(ex).name(), ex.what(),
-                    octi::desktop::OctiCrashReporter::getGameContextJson(),
-                    installId);
-            } catch (...) {
-                octi::desktop::OctiCrashReporter::recordHandledException(
-                    "OctiUploadThread", "unknown_exception",
-                    "Unknown exception in upload thread",
-                    octi::desktop::OctiCrashReporter::getGameContextJson(),
-                    installId);
-            }
-        });
+            });
     } else {
         octi::desktop::OctiCrashReporter::flushPendingTranscripts(
-            *_netClient, uploadInstallId);
+            *_netClient, uploadInstallId, uploadInstallTok);
         octi::desktop::OctiCrashReporter::flushPendingCrashReports(
-            *_netClient, uploadInstallId);
+            *_netClient, uploadInstallId, uploadInstallTok);
     }
 }
 
@@ -5097,6 +5127,8 @@ void OctiMainWindow::showTelemetrySettingsDialog()
     if (dlg.exec() == QDialog::Accepted) {
         if (_netClient) {
             _netClient->setInstallId(_configStore.preferences().installId);
+            _netClient->setInstallDeleteToken(
+                _configStore.preferences().installDeleteToken);
         }
         if (_heldTranscriptPendingConsent && _configStore.preferences().telemetryConsent != "unset") {
             _heldTranscriptPendingConsent = false;

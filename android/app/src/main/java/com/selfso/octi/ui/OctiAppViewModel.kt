@@ -739,7 +739,11 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (configStore.preferences().installId.isEmpty()) {
             configStore.preferences().installId = ClientConfigStore.generateUuidV4()
         }
+        if (configStore.preferences().installDeleteToken.isEmpty()) {
+            configStore.preferences().installDeleteToken = ClientConfigStore.generateUuidV4()
+        }
         netClient.setInstallId(configStore.preferences().installId ?: "")
+        netClient.setInstallDeleteToken(configStore.preferences().installDeleteToken ?: "")
     }
 
     fun setShowTelemetryConsentDialog(show: Boolean) {
@@ -756,7 +760,11 @@ class OctiAppViewModel @JvmOverloads constructor(
         if (choice == "share" && configStore.preferences().installId.isEmpty()) {
             configStore.preferences().installId = ClientConfigStore.generateUuidV4()
         }
+        if (configStore.preferences().installDeleteToken.isEmpty()) {
+            configStore.preferences().installDeleteToken = ClientConfigStore.generateUuidV4()
+        }
         netClient.setInstallId(configStore.preferences().installId ?: "")
+        netClient.setInstallDeleteToken(configStore.preferences().installDeleteToken ?: "")
         configStore.save()
         _telemetryConsent.value = choice
         _telemetryConsentVersion.value = ClientConfigStore.ClientPreferences.CURRENT_TELEMETRY_CONSENT_VERSION
@@ -771,10 +779,11 @@ class OctiAppViewModel @JvmOverloads constructor(
 
     fun resetInstallIdAndRequestDeletion() {
         val oldId = configStore.preferences().installId
+        val oldToken = configStore.preferences().installDeleteToken ?: ""
         if (!oldId.isNullOrEmpty()) {
             Thread({
                 try {
-                    netClient.deleteInstallArchiveData(oldId)
+                    netClient.deleteInstallArchiveData(oldId, oldToken)
                 } catch (_: Throwable) {
                 }
             }, "OctiDeleteInstallDataThread").apply {
@@ -785,6 +794,7 @@ class OctiAppViewModel @JvmOverloads constructor(
         configStore.resetInstallId()
         configStore.save()
         netClient.setInstallId(configStore.preferences().installId ?: "")
+        netClient.setInstallDeleteToken(configStore.preferences().installDeleteToken ?: "")
         _installId.value = configStore.preferences().installId ?: ""
     }
 
@@ -935,11 +945,20 @@ class OctiAppViewModel @JvmOverloads constructor(
         netClient.setCrashReporter(_crashReporter)
         OctiCrashReporter.updateGameContext(_matchType.value.name, livePlyCount(), board.toPositionString())
         val prefs = configStore.preferences()
+        var needSaveInstallPrefs = false
         if (prefs.installId.isEmpty()) {
             prefs.installId = ClientConfigStore.generateUuidV4()
+            needSaveInstallPrefs = true
+        }
+        if (prefs.installDeleteToken.isEmpty()) {
+            prefs.installDeleteToken = ClientConfigStore.generateUuidV4()
+            needSaveInstallPrefs = true
+        }
+        if (needSaveInstallPrefs) {
             configStore.save()
         }
         netClient.setInstallId(prefs.installId)
+        netClient.setInstallDeleteToken(prefs.installDeleteToken)
         _theme.value = prefs.getTheme()
         _confirmAllMoves.value = true
         _sfxMuted.value = prefs.isSfxMuted()
@@ -2083,26 +2102,28 @@ class OctiAppViewModel @JvmOverloads constructor(
         val shareExtra = (consent == "share")
         val jsonStr = buildCurrentGameTranscriptJson(shareExtra)
         val installId = if (shareExtra) (configStore.preferences().installId ?: "") else ""
+        val installToken = if (shareExtra) (configStore.preferences().installDeleteToken ?: "") else ""
 
         val gameId = try { g.computeCanonicalGameId() } catch (_: Throwable) { "game_" + System.currentTimeMillis() }
-        OctiCrashReporter.spoolTrainingTranscript(storageRootDir, gameId, jsonStr, installId)
+        OctiCrashReporter.spoolTrainingTranscript(storageRootDir, gameId, jsonStr, installId, installToken)
 
         if (synchronousForTest) {
-            val flushed = OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId)
-            OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId)
+            val flushed = OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId, installToken)
+            OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId, installToken)
             return flushed > 0
         } else {
             val thread = Thread({
                 try {
-                    OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId)
-                    OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId)
+                    OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId, installToken)
+                    OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId, installToken)
                 } catch (t: Throwable) {
                     OctiCrashReporter.recordHandledException(
                         storageRootDir,
                         "OctiTrainingUploadThread",
                         t,
                         try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "2.1.2" },
-                        installId
+                        installId,
+                        installToken
                     )
                 }
             }, "OctiTrainingUploadThread")
@@ -2116,18 +2137,20 @@ class OctiAppViewModel @JvmOverloads constructor(
     fun flushPendingTelemetry(async: Boolean = true) {
         val shareExtra = (configStore.preferences().telemetryConsent == "share")
         val installId = if (shareExtra) (configStore.preferences().installId ?: "") else ""
+        val installToken = if (shareExtra) (configStore.preferences().installDeleteToken ?: "") else ""
         if (async) {
             val t = Thread({
                 try {
-                    OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId)
-                    OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId)
+                    OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId, installToken)
+                    OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId, installToken)
                 } catch (ex: Throwable) {
                     OctiCrashReporter.recordHandledException(
                         storageRootDir,
                         "OctiUploadThread",
                         ex,
                         try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "2.1.2" },
-                        installId
+                        installId,
+                        installToken
                     )
                 }
             }, "OctiUploadThread")
@@ -2135,15 +2158,16 @@ class OctiAppViewModel @JvmOverloads constructor(
             t.start()
         } else {
             try {
-                OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId)
-                OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId)
+                OctiCrashReporter.flushPendingTranscripts(storageRootDir, netClient, installId, installToken)
+                OctiCrashReporter.flushPendingCrashReports(storageRootDir, netClient, installId, installToken)
             } catch (ex: Throwable) {
                 OctiCrashReporter.recordHandledException(
                     storageRootDir,
                     "OctiUploadThread",
                     ex,
                     try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "2.1.2" },
-                    installId
+                    installId,
+                    installToken
                 )
             }
         }

@@ -17,7 +17,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cerrno>
 #include <condition_variable>
@@ -79,6 +81,179 @@ bool validBindAddress(const std::string &s)
         if (c <= 0x20 || c >= 0x7F) {
             return false;
         }
+    }
+    return true;
+}
+
+std::string trimAscii(const std::string &s)
+{
+    size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return std::string();
+    }
+    size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+bool parseTrustedProxiesCsv(const std::string &csv,
+                            std::vector<std::string> &out,
+                            std::string &errMsg)
+{
+    std::string trimmed = trimAscii(csv);
+    if (trimmed.empty()) {
+        errMsg = "Invalid --trusted-proxies: value must not be empty";
+        return false;
+    }
+    std::string lowerVal = trimmed;
+    for (size_t i = 0; i < lowerVal.size(); ++i) {
+        lowerVal[i] = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(lowerVal[i])));
+    }
+    if (lowerVal == "none") {
+        out.clear();
+        return true;
+    }
+
+    std::vector<std::string> parsed;
+    size_t start = 0;
+    while (start <= csv.size()) {
+        size_t comma = csv.find(',', start);
+        std::string token = (comma == std::string::npos)
+                                ? csv.substr(start)
+                                : csv.substr(start, comma - start);
+        token = trimAscii(token);
+        if (token.empty()) {
+            errMsg = "Invalid --trusted-proxies: empty proxy IP entry";
+            return false;
+        }
+        std::string norm = OctiHttpServer::normalizeIpLiteral(token);
+        if (norm.empty()) {
+            errMsg = "Invalid trusted proxy IP: " + token;
+            return false;
+        }
+        if (std::find(parsed.begin(), parsed.end(), norm) == parsed.end()) {
+            parsed.push_back(norm);
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+    out = std::move(parsed);
+    return true;
+}
+
+bool normalizePublicBaseUrl(const std::string &raw,
+                            std::string &out,
+                            std::string &errMsg)
+{
+    if (raw.empty() || raw.size() > 256) {
+        errMsg = "Invalid --public-base-url: empty or oversized URL";
+        return false;
+    }
+    for (size_t i = 0; i < raw.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(raw[i]);
+        if (c <= 0x20 || c >= 0x7F || c == '?' || c == '#' || c == '@') {
+            errMsg = "Invalid --public-base-url: " + raw;
+            return false;
+        }
+    }
+
+    std::string lowerRaw = raw;
+    for (size_t i = 0; i < lowerRaw.size(); ++i) {
+        lowerRaw[i] = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(lowerRaw[i])));
+    }
+
+    std::string scheme;
+    size_t authStart = 0;
+    if (lowerRaw.rfind("https://", 0) == 0) {
+        scheme = "https";
+        authStart = 8;
+    } else if (lowerRaw.rfind("http://", 0) == 0) {
+        scheme = "http";
+        authStart = 7;
+    } else {
+        errMsg = "Invalid --public-base-url: scheme must be http:// or https://";
+        return false;
+    }
+
+    std::string authority = raw.substr(authStart);
+    if (!authority.empty() && authority.back() == '/') {
+        authority.pop_back();
+    }
+    if (authority.empty() || authority.find('/') != std::string::npos) {
+        errMsg = "Invalid --public-base-url: expected scheme://host[:port]";
+        return false;
+    }
+
+    std::string host;
+    std::string portStr;
+    if (authority.front() == '[') {
+        size_t closeBracket = authority.find(']');
+        if (closeBracket == std::string::npos || closeBracket <= 1) {
+            errMsg = "Invalid --public-base-url: malformed IPv6 host";
+            return false;
+        }
+        std::string innerIp = authority.substr(1, closeBracket - 1);
+        std::string normIp = OctiHttpServer::normalizeIpLiteral(innerIp);
+        if (normIp.empty()) {
+            errMsg = "Invalid --public-base-url: invalid IPv6 host";
+            return false;
+        }
+        host = "[" + normIp + "]";
+        if (closeBracket + 1 < authority.size()) {
+            if (authority[closeBracket + 1] != ':') {
+                errMsg = "Invalid --public-base-url: unexpected suffix after ']'";
+                return false;
+            }
+            portStr = authority.substr(closeBracket + 2);
+            if (portStr.empty()) {
+                errMsg = "Invalid --public-base-url: empty port";
+                return false;
+            }
+        }
+    } else {
+        size_t colon = authority.find(':');
+        if (colon != std::string::npos) {
+            if (authority.find(':', colon + 1) != std::string::npos) {
+                errMsg = "Invalid --public-base-url: unbracketed IPv6 host";
+                return false;
+            }
+            host = authority.substr(0, colon);
+            portStr = authority.substr(colon + 1);
+            if (portStr.empty()) {
+                errMsg = "Invalid --public-base-url: empty port";
+                return false;
+            }
+        } else {
+            host = authority;
+        }
+        if (host.empty() || host.front() == '.' || host.front() == '-') {
+            errMsg = "Invalid --public-base-url: invalid host";
+            return false;
+        }
+        for (size_t i = 0; i < host.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(host[i]);
+            if (!(std::isalnum(c) || c == '.' || c == '-')) {
+                errMsg = "Invalid --public-base-url: invalid host character";
+                return false;
+            }
+            host[i] = static_cast<char>(std::tolower(c));
+        }
+    }
+
+    if (!portStr.empty()) {
+        char *endPtr = nullptr;
+        unsigned long parsedPort = std::strtoul(portStr.c_str(), &endPtr, 10);
+        if (endPtr == portStr.c_str() || *endPtr != '\0' ||
+            parsedPort < 1UL || parsedPort > 65535UL) {
+            errMsg = "Invalid --public-base-url: invalid port";
+            return false;
+        }
+        out = scheme + "://" + host + ":" + std::to_string(parsedPort);
+    } else {
+        out = scheme + "://" + host;
     }
     return true;
 }
@@ -229,6 +404,29 @@ bool ServerApp::parseArgs(int argc, const char * const argv[], std::string &errM
                            _config.avatarDir, errMsg)) {
                 return false;
             }
+        } else if (std::strcmp(arg, "--ban-config") == 0) {
+            if (!takeValue(argc, argv, i, "--ban-config",
+                           _config.banConfigPath, errMsg)) {
+                return false;
+            }
+        } else if (std::strcmp(arg, "--trusted-proxies") == 0) {
+            std::string val;
+            if (!takeValue(argc, argv, i, "--trusted-proxies", val, errMsg)) {
+                return false;
+            }
+            if (!parseTrustedProxiesCsv(val, _config.trustedProxies, errMsg)) {
+                return false;
+            }
+        } else if (std::strcmp(arg, "--public-base-url") == 0) {
+            std::string val;
+            if (!takeValue(argc, argv, i, "--public-base-url", val, errMsg)) {
+                return false;
+            }
+            if (!normalizePublicBaseUrl(val, _config.publicBaseUrl, errMsg)) {
+                return false;
+            }
+        } else if (std::strcmp(arg, "--behind-tls") == 0) {
+            _config.behindTls = true;
         } else {
             errMsg = std::string("Unknown option: ") + arg;
             return false;
@@ -445,6 +643,26 @@ int ServerApp::run(std::ostream &out, std::ostream &err)
     HttpServerConfig http;
     http.bindAddress = _config.bindAddress;
     http.port = _config.port;
+    http.trustedProxies = _config.trustedProxies;
+    http.publicBaseUrl = _config.publicBaseUrl;
+    http.behindTls = _config.behindTls;
+    if (!_config.banConfigPath.empty()) {
+        http.banConfigPath = _config.banConfigPath;
+    } else {
+        std::filesystem::path defaultBanDir = "/etc/octi";
+        std::error_code ec;
+        if (std::filesystem::exists(defaultBanDir, ec) &&
+            ::access(defaultBanDir.c_str(), W_OK) == 0) {
+            http.banConfigPath = (defaultBanDir / "bans.json").string();
+        } else {
+            std::filesystem::path parent =
+                std::filesystem::path(_config.dbPath).parent_path();
+            if (parent.empty()) {
+                parent = ".";
+            }
+            http.banConfigPath = (parent / "bans.json").string();
+        }
+    }
     for (OidcConfig::const_iterator it = oidc.begin(); it != oidc.end(); ++it) {
         if (!it->second.clientIds.empty()) {
             if (!verifier.setClientIds(it->first, it->second.clientIds)) {
@@ -569,6 +787,12 @@ std::string ServerApp::usageBanner(const char *progName)
         << "      --oidc-config <f>  JSON file with per-provider OIDC client ids\n"
         << "                         (0600 required when it holds an app_secret)\n"
         << "      --avatar-dir <dir> Custom directory for uploaded avatar storage\n"
+        << "      --ban-config <f>   JSON file for permanent IP/account/bot bans\n"
+        << "      --trusted-proxies <csv>\n"
+        << "                         Trusted reverse-proxy IPs (default: loopback)\n"
+        << "      --public-base-url <url>\n"
+        << "                         Canonical public base URL (e.g. https://octi.selfso.com)\n"
+        << "      --behind-tls       Server sits behind a TLS-terminating reverse proxy\n"
         << "  -v, --version          Print version information and exit\n"
         << "  -h, --help             Print this help message and exit\n"
         << "Environment:\n"

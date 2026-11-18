@@ -1,0 +1,68 @@
+#
+# apache2-octi.conf.example
+#
+# Copyright (C) 2026, Charles Chiou
+#
+# Reference Apache2 TLS reverse-proxy virtual host for octi-server
+# (listening on 127.0.0.1:6874).
+#
+# Required Apache2 modules:
+#   sudo a2enmod ssl proxy proxy_http headers reqtimeout rewrite
+#
+
+<VirtualHost *:80>
+    ServerName octi.selfso.com
+    RewriteEngine On
+    RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerName octi.selfso.com
+
+    SSLEngine on
+    SSLCertificateFile      /etc/letsencrypt/live/octi.selfso.com/fullchain.pem
+    SSLCertificateKeyFile   /etc/letsencrypt/live/octi.selfso.com/privkey.pem
+
+    # Security and transport hardening headers
+    Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Slowloris / request header & body timeout mitigation (mod_reqtimeout)
+    <IfModule mod_reqtimeout.c>
+        RequestReadTimeout header=10-20,MinRate=500 body=15,MinRate=500
+    </IfModule>
+
+    # Preserve Host and append client IP to X-Forwarded-For for trusted-proxy extraction
+    ProxyRequests Off
+    ProxyPreserveHost On
+    ProxyAddHeaders On
+    RequestHeader set X-Forwarded-Proto "https"
+
+    # Unbuffered Server-Sent Events (SSE) endpoints
+    ProxyPass        /api/v1/lobby/events http://127.0.0.1:6874/api/v1/lobby/events flushpackets=on connectiontimeout=5 timeout=600
+    ProxyPassReverse /api/v1/lobby/events http://127.0.0.1:6874/api/v1/lobby/events
+
+    <LocationMatch "^/api/v1/games/[^/]+/events$">
+        SetEnv proxy-sendchunked 1
+        SetEnv proxy-nokeepalive 1
+    </LocationMatch>
+
+    # Standard API, crawler policy, avatar, and WebUI routes
+    ProxyPass        /api/       http://127.0.0.1:6874/api/       connectiontimeout=5 timeout=60
+    ProxyPassReverse /api/       http://127.0.0.1:6874/api/
+    ProxyPass        /avatar/    http://127.0.0.1:6874/avatar/    connectiontimeout=5 timeout=30
+    ProxyPassReverse /avatar/    http://127.0.0.1:6874/avatar/
+    ProxyPass        /robots.txt http://127.0.0.1:6874/robots.txt connectiontimeout=5 timeout=15
+    ProxyPassReverse /robots.txt http://127.0.0.1:6874/robots.txt
+    ProxyPass        /health     http://127.0.0.1:6874/health     connectiontimeout=5 timeout=15
+    ProxyPassReverse /health     http://127.0.0.1:6874/health
+    ProxyPass        /           http://127.0.0.1:6874/           connectiontimeout=5 timeout=60
+    ProxyPassReverse /           http://127.0.0.1:6874/
+
+    ErrorLog  ${APACHE_LOG_DIR}/octi-error.log
+    CustomLog ${APACHE_LOG_DIR}/octi-access.log combined
+</VirtualHost>
+</IfModule>

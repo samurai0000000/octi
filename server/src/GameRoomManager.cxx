@@ -14,6 +14,9 @@
 #include "OctiSquare.hxx"
 
 #include <nlohmann/json.hpp>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
 
 #include <algorithm>
 #include <array>
@@ -22,6 +25,7 @@
 #include <ctime>
 #include <exception>
 #include <sstream>
+#include <stdexcept>
 
 namespace octi {
 
@@ -567,6 +571,12 @@ GameRoomManager::GameRoomManager(AccountStore &store)
       _lobbyChatCount(0),
       _roomCounter(0)
 {
+    _anonHmacKey.fill(0);
+    if (RAND_bytes(_anonHmacKey.data(),
+                   static_cast<int>(_anonHmacKey.size())) != 1) {
+        throw std::runtime_error(
+            "RAND_bytes failed for anonymous observer HMAC key");
+    }
     _queue.setClock([this]() -> int64_t { return _clock(); });
     restoreFromStoreLocked();
 }
@@ -620,6 +630,85 @@ void GameRoomManager::setMatchmakingConfig(const MatchmakingConfig &config)
     _queue.setConfig(config);
 }
 
+void GameRoomManager::setAnonymizeObserverHandles(bool enabled)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _anonymizeObserverHandles = enabled;
+}
+
+void GameRoomManager::setEventWakeCallback(std::function<void()> cb)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _eventWakeCb = std::move(cb);
+}
+
+int64_t GameRoomManager::currentClockMs() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return nowMs();
+}
+
+int64_t GameRoomManager::latestLobbySeq() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _lobbySeq;
+}
+
+uint64_t GameRoomManager::lobbySnapshotRevision() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _lobbySnapshotRev;
+}
+
+uint64_t GameRoomManager::lobbyMetaSaveCount() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _lobbyMetaSaves;
+}
+
+void GameRoomManager::notifyEventWakeLocked()
+{
+    if (!_restoring && _eventWakeCb) {
+        _eventWakeCb();
+    }
+}
+
+std::string GameRoomManager::escapeLogLine(const std::string &s)
+{
+    static const char kHex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c == '\r') {
+            out += "\\r";
+        } else if (c == '\n') {
+            out += "\\n";
+        } else if (c == '\t') {
+            out += "\\t";
+        } else if (c < 0x20 || c == 0x7F) {
+            out += "\\x";
+            out.push_back(kHex[(c >> 4) & 0x0F]);
+            out.push_back(kHex[c & 0x0F]);
+        } else if (c == 0xC2 && i + 1 < s.size() &&
+                   static_cast<unsigned char>(s[i + 1]) == 0x85) {
+            out += "\\u0085";
+            ++i;
+        } else if (c == 0xE2 && i + 2 < s.size() &&
+                   static_cast<unsigned char>(s[i + 1]) == 0x80 &&
+                   (static_cast<unsigned char>(s[i + 2]) == 0xA8 ||
+                    static_cast<unsigned char>(s[i + 2]) == 0xA9)) {
+            out += (static_cast<unsigned char>(s[i + 2]) == 0xA8)
+                       ? "\\u2028"
+                       : "\\u2029";
+            i += 2;
+        } else {
+            out.push_back(static_cast<char>(c));
+        }
+    }
+    return out;
+}
+
 int64_t GameRoomManager::nowMs() const
 {
     return _clock();
@@ -640,7 +729,7 @@ int64_t GameRoomManager::currentWallEpochMs() const
         .count();
 }
 
-int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
+std::string GameRoomManager::sanitizeObserverIp(const std::string &ipAddress)
 {
     std::string sanitized;
     for (size_t i = 0; i < ipAddress.size(); ++i) {
@@ -649,7 +738,8 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
             (c >= 'a' && c <= 'f') ||
             (c >= 'A' && c <= 'F') ||
             c == ':' || c == '.' || c == '_' || c == '-') {
-            sanitized.push_back(c);
+            sanitized.push_back(
+                (c >= 'A' && c <= 'F') ? static_cast<char>(c - 'A' + 'a') : c);
             if (sanitized.size() >= 45) {
                 break;
             }
@@ -658,9 +748,167 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
     if (sanitized.empty()) {
         sanitized = "unknown";
     }
+    return sanitized;
+}
+
+bool GameRoomManager::isLoopbackObserverIp(const std::string &sanitized)
+{
+    return sanitized == "127.0.0.1" ||
+           sanitized.rfind("127.", 0) == 0 ||
+           sanitized == "::1" ||
+           sanitized == "::ffff:127.0.0.1" ||
+           sanitized == "localhost" ||
+           sanitized == "unknown";
+}
+
+std::string GameRoomManager::buildAnonymousHandleLocked(
+    const std::string &sanitized) const
+{
+    if (!_anonymizeObserverHandles || isLoopbackObserverIp(sanitized)) {
+        return "anonymous-" + sanitized;
+    }
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digestLen = 0;
+    if (HMAC(EVP_sha256(),
+             _anonHmacKey.data(),
+             static_cast<int>(_anonHmacKey.size()),
+             reinterpret_cast<const unsigned char *>(sanitized.data()),
+             sanitized.size(),
+             digest, &digestLen) == nullptr ||
+        digestLen < 4) {
+        return "anonymous-00000000";
+    }
+    static const char kHex[] = "0123456789abcdef";
+    std::string handle = "anonymous-";
+    for (int i = 0; i < 4; ++i) {
+        handle.push_back(kHex[(digest[i] >> 4) & 0x0F]);
+        handle.push_back(kHex[digest[i] & 0x0F]);
+    }
+    return handle;
+}
+
+void GameRoomManager::evictAnonymousObserverLocked(int64_t anonId, int64_t now)
+{
+    std::map<int64_t, std::set<std::string>>::iterator ob =
+        _observing.find(anonId);
+    if (ob != _observing.end()) {
+        std::vector<std::string> ids(ob->second.begin(), ob->second.end());
+        for (size_t i = 0; i < ids.size(); ++i) {
+            Room *r = findRoomLocked(ids[i]);
+            if (r != nullptr) {
+                r->observers.erase(anonId);
+                RoomEvent e;
+                e.type = RoomEventType::OBSERVER_LEFT;
+                e.playerId = anonId;
+                e.handle = handleOf(anonId);
+                e.detail = "expired";
+                emitLocked(*r, e, now);
+                announceTableLocked(*r, false);
+                saveRoomLocked(*r);
+            }
+        }
+        _observing.erase(ob);
+    }
+    std::map<int64_t, PlayerInfo>::iterator pit = _players.find(anonId);
+    if (pit != _players.end()) {
+        if (pit->second.online) {
+            pit->second.online = false;
+            pit->second.onlineSinceMs = 0;
+            pit->second.clientLastSeenMs.clear();
+            refreshPresenceLocked(anonId);
+        }
+        _players.erase(pit);
+    }
+    std::map<int64_t, std::string>::iterator ipIt = _anonIdToIp.find(anonId);
+    if (ipIt != _anonIdToIp.end()) {
+        _anonIpToId.erase(ipIt->second);
+        _anonIdToIp.erase(ipIt);
+    }
+    ++_lobbySnapshotRev;
+}
+
+void GameRoomManager::pruneAnonymousObserversLocked(int64_t now, size_t maxKeep)
+{
+    std::vector<int64_t> expired;
+    for (std::map<int64_t, std::string>::const_iterator it = _anonIdToIp.begin();
+         it != _anonIdToIp.end(); ++it) {
+        int64_t anonId = it->first;
+        std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(anonId);
+        int64_t lastSeen = (pit != _players.end()) ? pit->second.lastActiveMs : 0;
+        if (now >= lastSeen && (now - lastSeen) >= kAnonymousObserverTtlMs) {
+            expired.push_back(anonId);
+        }
+    }
+    for (size_t i = 0; i < expired.size(); ++i) {
+        evictAnonymousObserverLocked(expired[i], now);
+    }
+
+    while (_anonIdToIp.size() > maxKeep) {
+        int64_t victimId = 0;
+        int64_t oldestMs = INT64_MAX;
+        bool foundIdle = false;
+        for (std::map<int64_t, std::string>::const_iterator it =
+                 _anonIdToIp.begin();
+             it != _anonIdToIp.end(); ++it) {
+            int64_t anonId = it->first;
+            bool isIdle = (_observing.find(anonId) == _observing.end());
+            std::map<int64_t, PlayerInfo>::const_iterator pit =
+                _players.find(anonId);
+            int64_t lastSeen =
+                (pit != _players.end()) ? pit->second.lastActiveMs : 0;
+            if (isIdle && (!foundIdle || lastSeen < oldestMs)) {
+                foundIdle = true;
+                oldestMs = lastSeen;
+                victimId = anonId;
+            } else if (!foundIdle && (victimId == 0 || lastSeen < oldestMs)) {
+                oldestMs = lastSeen;
+                victimId = anonId;
+            }
+        }
+        if (victimId == 0) {
+            break;
+        }
+        evictAnonymousObserverLocked(victimId, now);
+    }
+}
+
+int64_t GameRoomManager::findAnonymousObserver(
+    const std::string &ipAddress) const
+{
+    const std::string sanitized = sanitizeObserverIp(ipAddress);
+    std::lock_guard<std::mutex> lock(_mutex);
+    std::map<std::string, int64_t>::const_iterator it =
+        _anonIpToId.find(sanitized);
+    if (it == _anonIpToId.end()) {
+        return 0;
+    }
+    int64_t anonId = it->second;
+    std::map<int64_t, PlayerInfo>::const_iterator pit = _players.find(anonId);
+    if (pit == _players.end()) {
+        return 0;
+    }
+    int64_t now = nowMs();
+    if (now >= pit->second.lastActiveMs &&
+        (now - pit->second.lastActiveMs) >= kAnonymousObserverTtlMs) {
+        return 0;
+    }
+    return anonId;
+}
+
+size_t GameRoomManager::anonymousObserverCount() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _anonIdToIp.size();
+}
+
+int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
+{
+    const std::string sanitized = sanitizeObserverIp(ipAddress);
 
     std::lock_guard<std::mutex> lock(_mutex);
     int64_t now = nowMs();
+    pruneAnonymousObserversLocked(now, kMaxAnonymousObservers);
+
     std::map<std::string, int64_t>::iterator it = _anonIpToId.find(sanitized);
     if (it != _anonIpToId.end()) {
         int64_t anonId = it->second;
@@ -668,24 +916,30 @@ int64_t GameRoomManager::ensureAnonymousObserver(const std::string &ipAddress)
         if (!pi.online) {
             pi.online = true;
             pi.onlineSinceMs = now;
+            ++_lobbySnapshotRev;
         } else if (pi.onlineSinceMs <= 0) {
             pi.onlineSinceMs = now;
         }
-        if (pi.lastActiveMs <= 0) {
-            pi.lastActiveMs = now;
-        }
+        pi.lastActiveMs = now;
         return anonId;
+    }
+
+    if (kMaxAnonymousObservers > 0 &&
+        _anonIdToIp.size() >= kMaxAnonymousObservers) {
+        pruneAnonymousObserversLocked(now, kMaxAnonymousObservers - 1);
     }
 
     int64_t anonId = _nextAnonId--;
     _anonIpToId[sanitized] = anonId;
+    _anonIdToIp[anonId] = sanitized;
     PlayerInfo pi;
-    pi.handle = "anonymous-" + sanitized;
+    pi.handle = buildAnonymousHandleLocked(sanitized);
     pi.online = true;
     pi.onlineSinceMs = now;
     pi.lastActiveMs = now;
     pi.lastPresence = PresenceStatus::OFFLINE;
     _players[anonId] = pi;
+    ++_lobbySnapshotRev;
     return anonId;
 }
 
@@ -728,6 +982,9 @@ bool GameRoomManager::ensurePlayerLocked(int64_t playerId, bool refresh)
         return false;
     }
     PlayerInfo &pi = _players[playerId];
+    if (pi.handle != p.handle || pi.avatarUrl != p.avatarUrl) {
+        ++_lobbySnapshotRev;
+    }
     pi.handle = p.handle;
     pi.isRobot = false;
     pi.playerUuid = p.uuid;
@@ -757,6 +1014,7 @@ void GameRoomManager::refreshCachedPlayerStats()
             }
         }
     }
+    ++_lobbySnapshotRev;
 }
 
 void GameRoomManager::touchOnlineLocked(int64_t playerId)
@@ -869,7 +1127,8 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
             e.robotDraws = pit->second.robotDraws;
         }
     }
-    bool isChat = e.type == LobbyEventType::LOBBY_CHAT;
+    const LobbyEventType evType = e.type;
+    bool isChat = evType == LobbyEventType::LOBBY_CHAT;
     _lobbyEvents.push_back(std::move(e));
     if (isChat) {
         ++_lobbyChatCount;
@@ -894,7 +1153,9 @@ void GameRoomManager::pushLobbyEventLocked(LobbyEvent e)
         _lobbyEvictedUpToSeq = std::max(_lobbyEvictedUpToSeq, front.seq);
         _lobbyEvents.pop_front();
     }
-    saveLobbyMetaLocked();
+    ++_lobbySnapshotRev;
+    saveLobbyMetaLocked(evType == LobbyEventType::PRESENCE);
+    notifyEventWakeLocked();
 }
 
 void GameRoomManager::purgeExpiredLobbyChatLocked()
@@ -1082,11 +1343,15 @@ void GameRoomManager::recordClientHeartbeat(int64_t playerId,
     } else if (pi.onlineSinceMs <= 0) {
         pi.onlineSinceMs = now;
     }
-    if (interactiveAction || pi.lastActiveMs <= 0) {
+    if (interactiveAction || pi.lastActiveMs <= 0 ||
+        (playerId < 0 && !isRobotActorId(playerId))) {
         pi.lastActiveMs = now;
     }
     if (clientType == "web" || clientType == "android" ||
         clientType == "desktop" || clientType == "robot") {
+        if (pi.clientLastSeenMs.find(clientType) == pi.clientLastSeenMs.end()) {
+            ++_lobbySnapshotRev;
+        }
         pi.clientLastSeenMs[clientType] = now;
     }
     refreshPresenceLocked(playerId);
@@ -1104,7 +1369,9 @@ void GameRoomManager::clearClientPresence(int64_t playerId,
         std::map<int64_t, PlayerInfo>::iterator pit = _players.find(playerId);
         if (pit != _players.end()) {
             if (!clientType.empty()) {
-                pit->second.clientLastSeenMs.erase(clientType);
+                if (pit->second.clientLastSeenMs.erase(clientType) > 0) {
+                    ++_lobbySnapshotRev;
+                }
             }
             int64_t now = nowMs();
             for (std::map<std::string, int64_t>::iterator it =
@@ -1112,6 +1379,7 @@ void GameRoomManager::clearClientPresence(int64_t playerId,
                  it != pit->second.clientLastSeenMs.end(); ) {
                 if (now > it->second && (now - it->second) > kClientPresenceTtlMs) {
                     it = pit->second.clientLastSeenMs.erase(it);
+                    ++_lobbySnapshotRev;
                 } else {
                     ++it;
                 }
@@ -1137,6 +1405,7 @@ void GameRoomManager::pruneClientPresenceLocked(int64_t now)
                  cit != pi.clientLastSeenMs.end(); ) {
                 if (now > cit->second && (now - cit->second) > kClientPresenceTtlMs) {
                     cit = pi.clientLastSeenMs.erase(cit);
+                    ++_lobbySnapshotRev;
                 } else {
                     ++cit;
                 }
@@ -1193,12 +1462,14 @@ RoomResult GameRoomManager::postLobbyChat(int64_t playerId,
     if (_store.getProfileById(playerId, senderProfile)) {
         senderUuid = senderProfile.uuid;
     }
+    const std::string safeHandle = escapeLogLine(senderHandle);
+    const std::string safeText = escapeLogLine(clean);
     std::fprintf(stderr, "[LOBBY_CHAT] seq=%lld ts_ms=%lld user=@%s (%lld): %s\n",
                  static_cast<long long>(_lobbySeq),
                  static_cast<long long>(createdAtMs),
-                 senderHandle.c_str(),
+                 safeHandle.c_str(),
                  static_cast<long long>(playerId),
-                 clean.c_str());
+                 safeText.c_str());
     _store.appendLobbyChatLog(static_cast<uint64_t>(_lobbySeq),
                               senderUuid, senderHandle, clean, createdAtMs);
 
@@ -1574,6 +1845,8 @@ int64_t GameRoomManager::emitLocked(Room &r, RoomEvent e, int64_t now)
         r.evictedUpToSeq = std::max(r.evictedUpToSeq, r.events.front().seq);
         r.events.pop_front();
     }
+    ++_lobbySnapshotRev;
+    notifyEventWakeLocked();
     return seq;
 }
 
@@ -2405,6 +2678,12 @@ TickReport GameRoomManager::tick()
             it->second.pop_front();
         }
         it = it->second.empty() ? _lobbyChatTimes.erase(it) : std::next(it);
+    }
+
+    pruneAnonymousObserversLocked(now, kMaxAnonymousObservers);
+    if (_lobbyMetaDirty && now >= _lobbyMetaDirtySinceMs &&
+        (now - _lobbyMetaDirtySinceMs) >= kLobbyMetaPresenceDebounceMs) {
+        saveLobbyMetaLocked(false);
     }
     return rep;
 }
@@ -3598,7 +3877,20 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
         meta.players.push_back(pmd);
     }
 
-    return r.board->serializeJson(meta);
+    std::string raw = r.board->serializeJson(meta);
+    try {
+        Json j = Json::parse(raw, nullptr, false);
+        if (!j.is_discarded() && j.is_object()) {
+            if (j.contains("client") && j["client"].is_object()) {
+                j["client"].erase("extended");
+            }
+            j["license"] = "CC-BY-4.0";
+            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            return j.dump();
+        }
+    } catch (...) {
+    }
+    return raw;
 }
 
 /* ------------------------------------------------------------------ */
@@ -4082,12 +4374,13 @@ bool GameRoomManager::checkpointToStoreLocked()
          it != _rooms.end(); ++it) {
         saveRoomLocked(*it->second);
     }
-    saveLobbyMetaLocked();
+    saveLobbyMetaLocked(false);
     return true;
 }
 
 void GameRoomManager::saveRoomLocked(const Room &r)
 {
+    ++_lobbySnapshotRev;
     if (_restoring) {
         return;
     }
@@ -4267,12 +4560,25 @@ void GameRoomManager::saveRoomLocked(const Room &r)
     _store.upsertLiveRoom(r.id, j.dump(), err);
 }
 
-void GameRoomManager::saveLobbyMetaLocked()
+void GameRoomManager::saveLobbyMetaLocked(bool presenceOnly)
 {
     if (_restoring) {
         return;
     }
     int64_t now = nowMs();
+    if (presenceOnly) {
+        if (!_lobbyMetaDirty) {
+            _lobbyMetaDirty = true;
+            _lobbyMetaDirtySinceMs = now;
+        }
+        if (now >= _lobbyMetaDirtySinceMs &&
+            (now - _lobbyMetaDirtySinceMs) < kLobbyMetaPresenceDebounceMs) {
+            return;
+        }
+    }
+    _lobbyMetaDirty = false;
+    _lobbyMetaDirtySinceMs = 0;
+    _lastLobbyMetaSaveMs = now;
     Json j;
     j["roomCounter"] = _roomCounter;
     j["lobbySeq"] = _lobbySeq;
@@ -4325,11 +4631,16 @@ void GameRoomManager::saveLobbyMetaLocked()
     j["queue"] = qArr;
 
     std::string err;
-    _store.setLiveMeta("lobby_state", j.dump(), err);
+    if (_store.setLiveMeta("lobby_state", j.dump(), err)) {
+        ++_lobbyMetaSaves;
+    }
 }
 
 bool GameRoomManager::restoreFromStoreLocked()
 {
+    ++_lobbySnapshotRev;
+    _lobbyMetaDirty = false;
+    _lobbyMetaDirtySinceMs = 0;
     _restoring = true;
     struct RestoringGuard {
         bool &flag;

@@ -305,6 +305,14 @@ bool ClientConfigStore::load(std::string &errorOut)
     if (doc.contains("install_id") && doc["install_id"].is_string()) {
         parsed.installId = doc["install_id"].get<std::string>();
     }
+    if (doc.contains("install_delete_token") &&
+        doc["install_delete_token"].is_string()) {
+        parsed.installDeleteToken =
+            doc["install_delete_token"].get<std::string>();
+    }
+    if (parsed.installDeleteToken.empty()) {
+        parsed.installDeleteToken = generateUuidV4();
+    }
 
     _prefs = std::move(parsed);
     return true;
@@ -354,6 +362,9 @@ bool ClientConfigStore::save(std::string &errorOut) const
     doc["telemetry_consent"] = _prefs.telemetryConsent;
     doc["telemetry_consent_version"] = _prefs.telemetryConsentVersion;
     doc["install_id"] = _prefs.installId;
+    doc["install_delete_token"] = _prefs.installDeleteToken.empty()
+                                      ? generateUuidV4()
+                                      : _prefs.installDeleteToken;
 
     std::string serialized = doc.dump(2) + "\n";
 
@@ -476,6 +487,7 @@ std::string ClientConfigStore::generateUuidV4()
 void ClientConfigStore::resetInstallId()
 {
     _prefs.installId = generateUuidV4();
+    _prefs.installDeleteToken = generateUuidV4();
 }
 
 } // namespace octi

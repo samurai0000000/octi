@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <sqlite3.h>
@@ -87,6 +88,7 @@ const char kSchemaSql[] =
     " provider TEXT NOT NULL,"
     " provider_sub TEXT NOT NULL,"
     " provider_email TEXT NOT NULL DEFAULT '',"
+    " email_verified INTEGER NOT NULL DEFAULT 0,"
     " display_hint TEXT NOT NULL DEFAULT '',"
     " linked_at INTEGER NOT NULL,"
     " last_login_at INTEGER NOT NULL,"
@@ -173,6 +175,7 @@ const char kSchemaSql[] =
     " elo_pool INTEGER NOT NULL DEFAULT 0"
     ");"
     "CREATE INDEX IF NOT EXISTS idx_games_ended_at ON games(ended_at DESC);"
+    "CREATE INDEX IF NOT EXISTS idx_games_export_cursor ON games(ended_at DESC, game_id DESC);"
     "CREATE INDEX IF NOT EXISTS idx_games_p1 ON games(p1_player_id);"
     "CREATE INDEX IF NOT EXISTS idx_games_p2 ON games(p2_player_id);"
     "CREATE TABLE IF NOT EXISTS live_rooms ("
@@ -214,6 +217,11 @@ const char kSchemaSql[] =
     " last_seen_at INTEGER NOT NULL"
     ");"
     "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);"
+    "CREATE TABLE IF NOT EXISTS install_tokens ("
+    " install_id TEXT PRIMARY KEY,"
+    " token_hash TEXT NOT NULL,"
+    " created_at INTEGER NOT NULL"
+    ");"
     "CREATE TABLE IF NOT EXISTS lobby_chat_logs ("
     " seq INTEGER PRIMARY KEY,"
     " sender_uuid TEXT NOT NULL,"
@@ -221,7 +229,29 @@ const char kSchemaSql[] =
     " text TEXT NOT NULL,"
     " created_at_ms INTEGER NOT NULL"
     ");"
-    "CREATE INDEX IF NOT EXISTS idx_lobby_chat_logs_created_at ON lobby_chat_logs(created_at_ms);";
+    "CREATE INDEX IF NOT EXISTS idx_lobby_chat_logs_created_at ON lobby_chat_logs(created_at_ms);"
+    "CREATE TABLE IF NOT EXISTS temp_bans ("
+    " ban_id TEXT PRIMARY KEY,"
+    " target_type TEXT NOT NULL,"
+    " target_value TEXT NOT NULL,"
+    " display_label TEXT NOT NULL DEFAULT '',"
+    " reason TEXT NOT NULL DEFAULT '',"
+    " source TEXT NOT NULL DEFAULT 'auto',"
+    " created_by TEXT NOT NULL DEFAULT 'system',"
+    " created_at INTEGER NOT NULL,"
+    " expires_at INTEGER NOT NULL,"
+    " UNIQUE(target_type, target_value)"
+    ");"
+    "CREATE INDEX IF NOT EXISTS idx_temp_bans_expires ON temp_bans(expires_at);"
+    "CREATE TABLE IF NOT EXISTS ban_audit_log ("
+    " audit_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " created_at INTEGER NOT NULL,"
+    " actor_label TEXT NOT NULL,"
+    " action TEXT NOT NULL,"
+    " target_type TEXT NOT NULL,"
+    " target_value TEXT NOT NULL,"
+    " reason TEXT NOT NULL DEFAULT ''"
+    ");";
 
 const char kProfileCols[] =
     "player_id, uuid, handle, display_name, avatar_url, bio, location, banned,"
@@ -550,10 +580,159 @@ static void userPngFlushFn(png_structp /*pngPtr*/)
 
 } // anonymous namespace
 
+bool AccountStore::validateRasterAvatarBytes(const std::string &ext,
+                                             const std::string &bytes)
+{
+    if (bytes.empty() || bytes.size() > kMaxAvatarDataUriBytes) {
+        return false;
+    }
+
+    std::string normExt = ext;
+    for (size_t i = 0; i < normExt.size(); ++i) {
+        normExt[i] = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(normExt[i])));
+    }
+
+    const unsigned char *b =
+        reinterpret_cast<const unsigned char *>(bytes.data());
+    const uint32_t maxDim = static_cast<uint32_t>(kMaxAvatarDimension);
+
+    if (normExt == "png") {
+        /* 8-byte PNG signature + 25-byte IHDR chunk (4 len + 4 'IHDR' + 13 body + 4 CRC) */
+        static const unsigned char kPngSig[8] = {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+        };
+        if (bytes.size() < 33 || std::memcmp(b, kPngSig, 8) != 0) {
+            return false;
+        }
+        uint32_t ihdrLen = (static_cast<uint32_t>(b[8]) << 24) |
+                           (static_cast<uint32_t>(b[9]) << 16) |
+                           (static_cast<uint32_t>(b[10]) << 8) |
+                           static_cast<uint32_t>(b[11]);
+        if (ihdrLen != 13 || std::memcmp(b + 12, "IHDR", 4) != 0) {
+            return false;
+        }
+        uint32_t width = (static_cast<uint32_t>(b[16]) << 24) |
+                         (static_cast<uint32_t>(b[17]) << 16) |
+                         (static_cast<uint32_t>(b[18]) << 8) |
+                         static_cast<uint32_t>(b[19]);
+        uint32_t height = (static_cast<uint32_t>(b[20]) << 24) |
+                          (static_cast<uint32_t>(b[21]) << 16) |
+                          (static_cast<uint32_t>(b[22]) << 8) |
+                          static_cast<uint32_t>(b[23]);
+        unsigned char bitDepth = b[24];
+        unsigned char colorType = b[25];
+        unsigned char compression = b[26];
+        unsigned char filter = b[27];
+        unsigned char interlace = b[28];
+        if (width < 1 || width > maxDim || height < 1 || height > maxDim) {
+            return false;
+        }
+        bool depthOk = (bitDepth == 1 || bitDepth == 2 || bitDepth == 4 ||
+                        bitDepth == 8 || bitDepth == 16);
+        bool colorOk = (colorType == 0 || colorType == 2 || colorType == 3 ||
+                        colorType == 4 || colorType == 6);
+        if (!depthOk || !colorOk || compression != 0 || filter != 0 ||
+            interlace > 1) {
+            return false;
+        }
+        return true;
+    }
+
+    if (normExt == "jpg" || normExt == "jpeg") {
+        if (bytes.size() < 11 || b[0] != 0xFF || b[1] != 0xD8 || b[2] != 0xFF) {
+            return false;
+        }
+        size_t pos = 2;
+        while (pos < bytes.size()) {
+            if (b[pos] != 0xFF) {
+                return false;
+            }
+            while (pos < bytes.size() && b[pos] == 0xFF) {
+                ++pos;
+            }
+            if (pos >= bytes.size()) {
+                return false;
+            }
+            unsigned char marker = b[pos++];
+            if (marker == 0x00 || marker == 0xD9 || marker == 0xDA) {
+                return false;
+            }
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD8)) {
+                continue;
+            }
+            if (pos + 2 > bytes.size()) {
+                return false;
+            }
+            uint16_t segLen = (static_cast<uint16_t>(b[pos]) << 8) |
+                              static_cast<uint16_t>(b[pos + 1]);
+            if (segLen < 2 || pos + segLen > bytes.size()) {
+                return false;
+            }
+            bool isSof = (marker >= 0xC0 && marker <= 0xCF &&
+                          marker != 0xC4 && marker != 0xC8 && marker != 0xCC);
+            if (isSof) {
+                if (segLen < 8) {
+                    return false;
+                }
+                unsigned char precision = b[pos + 2];
+                uint16_t height = (static_cast<uint16_t>(b[pos + 3]) << 8) |
+                                  static_cast<uint16_t>(b[pos + 4]);
+                uint16_t width = (static_cast<uint16_t>(b[pos + 5]) << 8) |
+                                 static_cast<uint16_t>(b[pos + 6]);
+                unsigned char components = b[pos + 7];
+                if (precision != 8 && precision != 12 && precision != 16) {
+                    return false;
+                }
+                if (components < 1 || components > 4) {
+                    return false;
+                }
+                return width >= 1 && width <= kMaxAvatarDimension &&
+                       height >= 1 && height <= kMaxAvatarDimension;
+            }
+            pos += segLen;
+        }
+        return false;
+    }
+
+    if (normExt == "gif") {
+        if (bytes.size() < 13) {
+            return false;
+        }
+        if (std::memcmp(b, "GIF87a", 6) != 0 &&
+            std::memcmp(b, "GIF89a", 6) != 0) {
+            return false;
+        }
+        uint16_t width = static_cast<uint16_t>(b[6]) |
+                         (static_cast<uint16_t>(b[7]) << 8);
+        uint16_t height = static_cast<uint16_t>(b[8]) |
+                          (static_cast<uint16_t>(b[9]) << 8);
+        return width >= 1 && width <= kMaxAvatarDimension &&
+               height >= 1 && height <= kMaxAvatarDimension;
+    }
+
+    if (normExt == "webp") {
+        if (bytes.size() < 16 ||
+            std::memcmp(b, "RIFF", 4) != 0 ||
+            std::memcmp(b + 8, "WEBP", 4) != 0) {
+            return false;
+        }
+        int width = 0;
+        int height = 0;
+        if (!WebPGetInfo(b, bytes.size(), &width, &height)) {
+            return false;
+        }
+        return width >= 1 && width <= kMaxAvatarDimension &&
+               height >= 1 && height <= kMaxAvatarDimension;
+    }
+
+    return false;
+}
+
 bool transcodeWebpToPng(const std::string &webpBytes, std::string &outPngBytes)
 {
     outPngBytes.clear();
-    if (webpBytes.empty()) {
+    if (!AccountStore::validateRasterAvatarBytes("webp", webpBytes)) {
         return false;
     }
 
@@ -561,7 +740,9 @@ bool transcodeWebpToPng(const std::string &webpBytes, std::string &outPngBytes)
     int height = 0;
     uint8_t *rgba = WebPDecodeRGBA(reinterpret_cast<const uint8_t *>(webpBytes.data()),
                                    webpBytes.size(), &width, &height);
-    if (!rgba || width <= 0 || height <= 0) {
+    if (!rgba || width <= 0 || height <= 0 ||
+        width > AccountStore::kMaxAvatarDimension ||
+        height > AccountStore::kMaxAvatarDimension) {
         if (rgba) {
             WebPFree(rgba);
         }
@@ -874,8 +1055,8 @@ bool loadProfileById(sqlite3 *db, int64_t playerId, PlayerProfile &out)
 bool loadIdentities(sqlite3 *db, int64_t playerId,
                     std::vector<LinkedIdentity> &out)
 {
-    Stmt s(db, "SELECT provider, provider_sub, provider_email, display_hint,"
-               " linked_at, last_login_at FROM linked_identities"
+    Stmt s(db, "SELECT provider, provider_sub, provider_email, email_verified,"
+               " display_hint, linked_at, last_login_at FROM linked_identities"
                " WHERE player_id = ?1 ORDER BY identity_id ASC");
     s.bindInt(1, playerId);
     out.clear();
@@ -885,9 +1066,10 @@ bool loadIdentities(sqlite3 *db, int64_t playerId,
         li.provider = s.colText(0);
         li.providerSub = s.colText(1);
         li.providerEmail = s.colText(2);
-        li.displayHint = s.colText(3);
-        li.linkedAt = s.colInt(4);
-        li.lastLoginAt = s.colInt(5);
+        li.emailVerified = (s.colInt(3) != 0);
+        li.displayHint = s.colText(4);
+        li.linkedAt = s.colInt(5);
+        li.lastLoginAt = s.colInt(6);
         out.push_back(li);
     }
     return rc == SQLITE_DONE;
@@ -924,6 +1106,22 @@ bool mintSessionLocked(sqlite3 *db, int64_t playerId,
     s.bindInt(4, now);
     s.bindInt(5, now + ttl);
     if (s.step() != SQLITE_DONE) {
+        error = sqlite3_errmsg(db);
+        return false;
+    }
+    Stmt prune(db,
+               "DELETE FROM sessions"
+               " WHERE player_id = ?1 AND revoked = 0 AND expires_at > ?2"
+               "   AND session_id NOT IN ("
+               "       SELECT session_id FROM sessions"
+               "       WHERE player_id = ?1 AND revoked = 0 AND expires_at > ?2"
+               "       ORDER BY created_at DESC, session_id DESC"
+               "       LIMIT ?3"
+               "   )");
+    prune.bindInt(1, playerId);
+    prune.bindInt(2, now);
+    prune.bindInt(3, AccountStore::kMaxActiveSessionsPerPlayer);
+    if (prune.step() != SQLITE_DONE) {
         error = sqlite3_errmsg(db);
         return false;
     }
@@ -1250,6 +1448,35 @@ void bindOptionalPlayer(Stmt &s, int idx, int64_t id)
     }
 }
 
+std::string compactTranscriptForInsert(const std::string &raw)
+{
+    if (raw.find("\"octi.transcript.v3\"") == std::string::npos) {
+        return raw;
+    }
+    const bool needsNormalize =
+        raw.find_first_of("\r\n") != std::string::npos ||
+        raw.find("\"extended\"") != std::string::npos ||
+        raw.find("\"license\"") == std::string::npos ||
+        raw.find("\"attribution\"") == std::string::npos;
+    if (!needsNormalize) {
+        return raw;
+    }
+    try {
+        nlohmann::json j = nlohmann::json::parse(raw, nullptr, false);
+        if (!j.is_discarded() && j.is_object() &&
+            j.value("format", "") == "octi.transcript.v3") {
+            if (j.contains("client") && j["client"].is_object()) {
+                j["client"].erase("extended");
+            }
+            j["license"] = "CC-BY-4.0";
+            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            return j.dump();
+        }
+    } catch (...) {
+    }
+    return raw;
+}
+
 ArchiveStatus archiveLocked(sqlite3 *db, const GameRecord &g,
                             std::string &error)
 {
@@ -1266,6 +1493,8 @@ ArchiveStatus archiveLocked(sqlite3 *db, const GameRecord &g,
             return ArchiveStatus::ERROR;
         }
     }
+    const std::string compactTranscript =
+        compactTranscriptForInsert(g.octiTranscript);
     Stmt s(db, "INSERT INTO games(game_id, game_mode, game_bases, super_prongs,"
                " edgeless, time_control, p1_player_id, p2_player_id,"
                " p3_player_id, p4_player_id, p1_handle, p2_handle, p3_handle,"
@@ -1295,8 +1524,8 @@ ArchiveStatus archiveLocked(sqlite3 *db, const GameRecord &g,
     s.bindInt(16, g.winnerSeat);
     s.bindText(17, g.termination);
     s.bindInt(18, g.plyCount);
-    s.bindText(19, g.octiTranscript);
-    s.bindText(20, g.octiTranscript);
+    s.bindText(19, compactTranscript);
+    s.bindText(20, compactTranscript);
     s.bindText(21, g.finalFen);
     s.bindInt(22, g.startedAt);
     s.bindInt(23, g.endedAt);
@@ -1669,62 +1898,75 @@ void reconcileRobotStatsLocked(sqlite3 *db)
     if (!db) {
         return;
     }
-    // Backfill robot attribution and clean player IDs in games for seats 1..4
+    // Ensure client_upload rows never retain robot attribution
+    execSql(db, "UPDATE games SET"
+                " p1_robot_id = 0, p2_robot_id = 0, p3_robot_id = 0, p4_robot_id = 0"
+                " WHERE source != 'online'"
+                "   AND (p1_robot_id != 0 OR p2_robot_id != 0 OR p3_robot_id != 0 OR p4_robot_id != 0);");
+
+    // Backfill robot attribution and clean player IDs strictly for online games (seats 1..4)
     execSql(db, "UPDATE games SET"
                 " p1_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE LIMIT 1)"
-                " WHERE p1_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE);");
+                " WHERE source = 'online' AND p1_robot_id = 0"
+                "   AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p1_handle COLLATE NOCASE);");
     execSql(db, "UPDATE games SET"
                 " p1_player_id = NULL"
-                " WHERE p1_robot_id > 0 AND p1_player_id IS NOT NULL AND EXISTS ("
+                " WHERE source = 'online' AND p1_robot_id > 0 AND p1_player_id IS NOT NULL AND EXISTS ("
                 "   SELECT 1 FROM players p WHERE p.player_id = games.p1_player_id AND LOWER(games.p1_handle) != LOWER(p.handle)"
                 " );");
 
     execSql(db, "UPDATE games SET"
                 " p2_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE LIMIT 1)"
-                " WHERE p2_robot_id = 0 AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE);");
+                " WHERE source = 'online' AND p2_robot_id = 0"
+                "   AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p2_handle COLLATE NOCASE);");
     execSql(db, "UPDATE games SET"
                 " p2_player_id = NULL"
-                " WHERE p2_robot_id > 0 AND p2_player_id IS NOT NULL AND EXISTS ("
+                " WHERE source = 'online' AND p2_robot_id > 0 AND p2_player_id IS NOT NULL AND EXISTS ("
                 "   SELECT 1 FROM players p WHERE p.player_id = games.p2_player_id AND LOWER(games.p2_handle) != LOWER(p.handle)"
                 " );");
 
     execSql(db, "UPDATE games SET"
                 " p3_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE LIMIT 1)"
-                " WHERE p3_robot_id = 0 AND games.p3_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE);");
+                " WHERE source = 'online' AND p3_robot_id = 0 AND games.p3_handle != ''"
+                "   AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p3_handle COLLATE NOCASE);");
     execSql(db, "UPDATE games SET"
                 " p3_player_id = NULL"
-                " WHERE p3_robot_id > 0 AND p3_player_id IS NOT NULL AND EXISTS ("
+                " WHERE source = 'online' AND p3_robot_id > 0 AND p3_player_id IS NOT NULL AND EXISTS ("
                 "   SELECT 1 FROM players p WHERE p.player_id = games.p3_player_id AND LOWER(games.p3_handle) != LOWER(p.handle)"
                 " );");
 
     execSql(db, "UPDATE games SET"
                 " p4_robot_id = (SELECT r.robot_id FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE LIMIT 1)"
-                " WHERE p4_robot_id = 0 AND games.p4_handle != '' AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE);");
+                " WHERE source = 'online' AND p4_robot_id = 0 AND games.p4_handle != ''"
+                "   AND EXISTS (SELECT 1 FROM robots r WHERE r.robot_name = games.p4_handle COLLATE NOCASE);");
     execSql(db, "UPDATE games SET"
                 " p4_player_id = NULL"
-                " WHERE p4_robot_id > 0 AND p4_player_id IS NOT NULL AND EXISTS ("
+                " WHERE source = 'online' AND p4_robot_id > 0 AND p4_player_id IS NOT NULL AND EXISTS ("
                 "   SELECT 1 FROM players p WHERE p.player_id = games.p4_player_id AND LOWER(games.p4_handle) != LOWER(p.handle)"
                 " );");
 
-    // Recompute games_played, wins, losses, and draws for all robots from archived games
+    // Recompute games_played, wins, losses, and draws for all robots strictly from online games
     execSql(db, "UPDATE robots SET"
                 " games_played = ("
                 "   SELECT COUNT(*) FROM games g"
-                "   WHERE g.p1_robot_id = robots.robot_id"
-                "      OR g.p2_robot_id = robots.robot_id"
-                "      OR g.p3_robot_id = robots.robot_id"
-                "      OR g.p4_robot_id = robots.robot_id"
+                "   WHERE g.source = 'online'"
+                "     AND (g.p1_robot_id = robots.robot_id"
+                "       OR g.p2_robot_id = robots.robot_id"
+                "       OR g.p3_robot_id = robots.robot_id"
+                "       OR g.p4_robot_id = robots.robot_id)"
                 " ),"
                 " wins = ("
                 "   SELECT COUNT(*) FROM games g"
-                "   WHERE (g.p1_robot_id = robots.robot_id AND (g.result IN ('P1_WIN', 'TEAM_13_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 1 OR g.winner = 'A'))))"
-                "      OR (g.p2_robot_id = robots.robot_id AND (g.result IN ('P2_WIN', 'TEAM_24_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 2 OR g.winner = 'B'))))"
-                "      OR (g.p3_robot_id = robots.robot_id AND (g.result = 'TEAM_13_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 3 OR g.winner = 'C'))))"
-                "      OR (g.p4_robot_id = robots.robot_id AND (g.result = 'TEAM_24_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 4 OR g.winner = 'D'))))"
+                "   WHERE g.source = 'online'"
+                "     AND ((g.p1_robot_id = robots.robot_id AND (g.result IN ('P1_WIN', 'TEAM_13_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 1 OR g.winner = 'A'))))"
+                "       OR (g.p2_robot_id = robots.robot_id AND (g.result IN ('P2_WIN', 'TEAM_24_WIN') OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 2 OR g.winner = 'B'))))"
+                "       OR (g.p3_robot_id = robots.robot_id AND (g.result = 'TEAM_13_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 3 OR g.winner = 'C'))))"
+                "       OR (g.p4_robot_id = robots.robot_id AND (g.result = 'TEAM_24_WIN' OR (g.result NOT IN ('DRAW', 'TEAM_13_WIN', 'TEAM_24_WIN') AND (g.winner_seat = 4 OR g.winner = 'D')))))"
                 " ),"
                 " draws = ("
                 "   SELECT COUNT(*) FROM games g"
-                "   WHERE (g.p1_robot_id = robots.robot_id OR g.p2_robot_id = robots.robot_id OR g.p3_robot_id = robots.robot_id OR g.p4_robot_id = robots.robot_id)"
+                "   WHERE g.source = 'online'"
+                "     AND (g.p1_robot_id = robots.robot_id OR g.p2_robot_id = robots.robot_id OR g.p3_robot_id = robots.robot_id OR g.p4_robot_id = robots.robot_id)"
                 "     AND (g.result = 'DRAW' OR (g.winner_seat = 0 AND g.winner = 'NONE'))"
                 " );");
     execSql(db, "UPDATE robots SET losses = CASE WHEN games_played >= wins + draws THEN games_played - wins - draws ELSE 0 END;");
@@ -2216,8 +2458,7 @@ bool AccountStore::validAvatarUrl(const std::string &url)
         "data:image/png;base64,",
         "data:image/jpeg;base64,",
         "data:image/webp;base64,",
-        "data:image/gif;base64,",
-        "data:image/svg+xml;base64,"
+        "data:image/gif;base64,"
     };
     for (size_t i = 0; i < sizeof(dataPrefixes) / sizeof(dataPrefixes[0]); ++i) {
         const std::string &pfx = dataPrefixes[i];
@@ -2412,6 +2653,18 @@ void AccountStore::setClock(std::function<int64_t()> clock)
                 .count();
         };
     }
+    bumpMutationRev();
+}
+
+int64_t AccountStore::currentEpochSec() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return nowSec();
+}
+
+uint64_t AccountStore::mutationRevision() const
+{
+    return _mutationRev.load(std::memory_order_acquire);
 }
 
 void AccountStore::setSessionTtlSec(int64_t seconds)
@@ -2480,12 +2733,14 @@ bool AccountStore::isPlayerAdminLocked(int64_t playerId) const
     if (_adminGoogleIds.empty() || playerId <= 0 || !_db) {
         return false;
     }
-    Stmt s(_db, "SELECT provider_sub, provider_email FROM linked_identities "
-                "WHERE player_id = ?1 AND provider = 'google'");
+    Stmt s(_db, "SELECT provider_sub, provider_email, email_verified"
+                " FROM linked_identities"
+                " WHERE player_id = ?1 AND provider = 'google'");
     s.bindInt(1, playerId);
     while (s.step() == SQLITE_ROW) {
         std::string sub = s.colText(0);
         std::string email = s.colText(1);
+        bool emailVerified = (s.colInt(2) != 0);
         std::string lowerEmail = email;
         std::transform(lowerEmail.begin(), lowerEmail.end(), lowerEmail.begin(),
                        [](unsigned char c) {
@@ -2495,13 +2750,15 @@ bool AccountStore::isPlayerAdminLocked(int64_t playerId) const
             if (!sub.empty() && sub == adminId) {
                 return true;
             }
-            std::string lowerAdminId = adminId;
-            std::transform(lowerAdminId.begin(), lowerAdminId.end(),
-                           lowerAdminId.begin(), [](unsigned char c) {
-                               return static_cast<char>(std::tolower(c));
-                           });
-            if (!lowerEmail.empty() && lowerEmail == lowerAdminId) {
-                return true;
+            if (emailVerified && !lowerEmail.empty()) {
+                std::string lowerAdminId = adminId;
+                std::transform(lowerAdminId.begin(), lowerAdminId.end(),
+                               lowerAdminId.begin(), [](unsigned char c) {
+                                   return static_cast<char>(std::tolower(c));
+                               });
+                if (lowerEmail == lowerAdminId) {
+                    return true;
+                }
             }
         }
     }
@@ -2565,6 +2822,12 @@ bool AccountStore::readAvatarFile(const std::string &fileName,
         }
     }
 
+    std::error_code fszEc;
+    uintmax_t fileSize = std::filesystem::file_size(filePath, fszEc);
+    if (fszEc || fileSize == 0 || fileSize > 4u * 1024u * 1024u) {
+        return false;
+    }
+
     std::ifstream in(filePath.c_str(), std::ios::binary);
     if (!in) {
         return false;
@@ -2582,13 +2845,11 @@ bool AccountStore::readAvatarFile(const std::string &fileName,
 
     if (isWebp) {
         std::string pngBytes;
-        if (transcodeWebpToPng(rawBytes, pngBytes)) {
-            outBytes = std::move(pngBytes);
-            outMimeType = "image/png";
-            return true;
+        if (!transcodeWebpToPng(rawBytes, pngBytes)) {
+            return false;
         }
-        outBytes = std::move(rawBytes);
-        outMimeType = "image/webp";
+        outBytes = std::move(pngBytes);
+        outMimeType = "image/png";
         return true;
     }
 
@@ -2600,6 +2861,12 @@ bool AccountStore::isOpen() const
 {
     std::lock_guard<std::mutex> lock(_mutex);
     return _db != nullptr;
+}
+
+std::string AccountStore::dbPath() const
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _dbPath;
 }
 
 bool AccountStore::openOrCreate(const std::string &path, std::string &error)
@@ -2755,6 +3022,21 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                         " last_seen_at INTEGER NOT NULL"
                         ");");
             execSql(db, "CREATE INDEX IF NOT EXISTS idx_player_installs_player ON player_installs(player_id);");
+            execSql(db, "CREATE TABLE IF NOT EXISTS install_tokens ("
+                        " install_id TEXT PRIMARY KEY,"
+                        " token_hash TEXT NOT NULL,"
+                        " created_at INTEGER NOT NULL"
+                        ");");
+
+            std::set<std::string> licols;
+            Stmt liinfo(db, "PRAGMA table_info(linked_identities)");
+            while (liinfo.step() == SQLITE_ROW) {
+                licols.insert(liinfo.colText(1));
+            }
+            if (!licols.empty() && licols.find("email_verified") == licols.end()) {
+                execSql(db, "ALTER TABLE linked_identities ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;");
+                execSql(db, "UPDATE linked_identities SET email_verified = 1 WHERE provider_email != '';");
+            }
 
             std::set<std::string> cols;
             Stmt info(db, "PRAGMA table_info(games)");
@@ -2814,6 +3096,7 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                 execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_p1_robot ON games(p1_robot_id);");
                 execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_p2_robot ON games(p2_robot_id);");
                 execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_elo_pool_ended ON games(elo_pool, ended_at DESC);");
+                execSql(db, "CREATE INDEX IF NOT EXISTS idx_games_export_cursor ON games(ended_at DESC, game_id DESC);");
             }
 
             // Backfill owner snapshots on robots from players
@@ -2832,6 +3115,28 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
                         " created_at_ms INTEGER NOT NULL"
                         ");");
             execSql(db, "CREATE INDEX IF NOT EXISTS idx_lobby_chat_logs_created_at ON lobby_chat_logs(created_at_ms);");
+            execSql(db, "CREATE TABLE IF NOT EXISTS temp_bans ("
+                        " ban_id TEXT PRIMARY KEY,"
+                        " target_type TEXT NOT NULL,"
+                        " target_value TEXT NOT NULL,"
+                        " display_label TEXT NOT NULL DEFAULT '',"
+                        " reason TEXT NOT NULL DEFAULT '',"
+                        " source TEXT NOT NULL DEFAULT 'auto',"
+                        " created_by TEXT NOT NULL DEFAULT 'system',"
+                        " created_at INTEGER NOT NULL,"
+                        " expires_at INTEGER NOT NULL,"
+                        " UNIQUE(target_type, target_value)"
+                        ");");
+            execSql(db, "CREATE INDEX IF NOT EXISTS idx_temp_bans_expires ON temp_bans(expires_at);");
+            execSql(db, "CREATE TABLE IF NOT EXISTS ban_audit_log ("
+                        " audit_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        " created_at INTEGER NOT NULL,"
+                        " actor_label TEXT NOT NULL,"
+                        " action TEXT NOT NULL,"
+                        " target_type TEXT NOT NULL,"
+                        " target_value TEXT NOT NULL,"
+                        " reason TEXT NOT NULL DEFAULT ''"
+                        ");");
             repairInvertedArchiveRecordsLocked(db);
         }
     }
@@ -2843,6 +3148,7 @@ bool AccountStore::openOrCreate(const std::string &path, std::string &error)
     ::chmod((path + "-wal").c_str(), 0600);
     ::chmod((path + "-shm").c_str(), 0600);
     _db = db;
+    _dbPath = path;
     return true;
 }
 
@@ -2853,6 +3159,7 @@ void AccountStore::close()
         sqlite3_close(_db);
         _db = nullptr;
     }
+    _dbPath.clear();
 }
 
 LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
@@ -2870,6 +3177,7 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
     }
     const int64_t now = nowSec();
     const std::string email = cleanText(claims.email, kMaxEmailBytes);
+    const int emailVerifiedInt = (!email.empty() && claims.emailVerified) ? 1 : 0;
     const std::string hint = cleanText(claims.name, kMaxHintBytes);
 
     Tx tx(_db);
@@ -2888,12 +3196,28 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
         if (rc == SQLITE_ROW) {
             int64_t identityId = find.colInt(0);
             playerId = find.colInt(1);
+            PlayerProfile existingProf;
+            if (!loadProfileById(_db, playerId, existingProf)) {
+                res.error = "player not found";
+                return res;
+            }
+            if (existingProf.banned) {
+                res.ok = false;
+                res.banned = true;
+                res.profile = existingProf;
+                res.profile.isAdmin = isPlayerAdminLocked(playerId);
+                res.error = "account is banned";
+                res.sessionToken.clear();
+                return res;
+            }
             Stmt upd(_db, "UPDATE linked_identities SET last_login_at = ?1,"
-                          " provider_email = COALESCE(NULLIF(?2, ''),"
-                          " provider_email) WHERE identity_id = ?3");
+                          " provider_email = COALESCE(NULLIF(?2, ''), provider_email),"
+                          " email_verified = CASE WHEN ?2 != '' THEN ?3 ELSE email_verified END"
+                          " WHERE identity_id = ?4");
             upd.bindInt(1, now);
             upd.bindText(2, email);
-            upd.bindInt(3, identityId);
+            upd.bindInt(3, emailVerifiedInt);
+            upd.bindInt(4, identityId);
             if (upd.step() != SQLITE_DONE) {
                 res.error = sqlite3_errmsg(_db);
                 return res;
@@ -2935,15 +3259,16 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
             }
             playerId = sqlite3_last_insert_rowid(_db);
             Stmt link(_db, "INSERT INTO linked_identities(player_id, provider,"
-                           " provider_sub, provider_email, display_hint,"
-                           " linked_at, last_login_at)"
-                           " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)");
+                           " provider_sub, provider_email, email_verified,"
+                           " display_hint, linked_at, last_login_at)"
+                           " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)");
             link.bindInt(1, playerId);
             link.bindText(2, claims.provider);
             link.bindText(3, claims.sub);
             link.bindText(4, email);
-            link.bindText(5, hint);
-            link.bindInt(6, now);
+            link.bindInt(5, emailVerifiedInt);
+            link.bindText(6, hint);
+            link.bindInt(7, now);
             if (link.step() != SQLITE_DONE) {
                 res.error = sqlite3_errmsg(_db);
                 return res;
@@ -2973,6 +3298,7 @@ LoginResult AccountStore::loginWithSso(const VerifiedClaims &claims,
     }
     res.profile.isAdmin = isPlayerAdminLocked(res.profile.playerId);
     res.ok = true;
+    bumpMutationRev();
     return res;
 }
 
@@ -2993,6 +3319,7 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
     }
     const int64_t now = nowSec();
     const std::string email = cleanText(claims.email, kMaxEmailBytes);
+    const int emailVerifiedInt = (!email.empty() && claims.emailVerified) ? 1 : 0;
     const std::string hint = cleanText(claims.name, kMaxHintBytes);
 
     Tx tx(_db);
@@ -3060,12 +3387,14 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
             if (other.gamesPlayed == 0 && identitiesCount == 1 && activeRobotsCount == 0) {
                 Stmt upd(_db, "UPDATE linked_identities SET player_id = ?1,"
                               " provider_email = COALESCE(NULLIF(?2, ''), provider_email),"
-                              " last_login_at = ?3 WHERE provider = ?4 AND provider_sub = ?5");
+                              " email_verified = CASE WHEN ?2 != '' THEN ?3 ELSE email_verified END,"
+                              " last_login_at = ?4 WHERE provider = ?5 AND provider_sub = ?6");
                 upd.bindInt(1, playerId);
                 upd.bindText(2, email);
-                upd.bindInt(3, now);
-                upd.bindText(4, claims.provider);
-                upd.bindText(5, claims.sub);
+                upd.bindInt(3, emailVerifiedInt);
+                upd.bindInt(4, now);
+                upd.bindText(5, claims.provider);
+                upd.bindText(6, claims.sub);
                 if (upd.step() != SQLITE_DONE) {
                     res.error = sqlite3_errmsg(_db);
                     return res;
@@ -3090,13 +3419,15 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
 
     if (ownerId == playerId) {
         Stmt upd(_db, "UPDATE linked_identities SET last_login_at = ?1,"
-                      " provider_email = COALESCE(NULLIF(?2, ''),"
-                      " provider_email), display_hint = COALESCE(NULLIF(?3, ''),"
-                      " display_hint) WHERE identity_id = ?4");
+                      " provider_email = COALESCE(NULLIF(?2, ''), provider_email),"
+                      " email_verified = CASE WHEN ?2 != '' THEN ?3 ELSE email_verified END,"
+                      " display_hint = COALESCE(NULLIF(?4, ''), display_hint)"
+                      " WHERE identity_id = ?5");
         upd.bindInt(1, now);
         upd.bindText(2, email);
-        upd.bindText(3, hint);
-        upd.bindInt(4, identityId);
+        upd.bindInt(3, emailVerifiedInt);
+        upd.bindText(4, hint);
+        upd.bindInt(5, identityId);
         if (upd.step() != SQLITE_DONE || !tx.commit()) {
             res.error = sqlite3_errmsg(_db);
             return res;
@@ -3106,14 +3437,16 @@ LinkResult AccountStore::linkIdentity(int64_t playerId,
     }
 
     Stmt ins(_db, "INSERT INTO linked_identities(player_id, provider,"
-                  " provider_sub, provider_email, display_hint, linked_at,"
-                  " last_login_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)");
+                  " provider_sub, provider_email, email_verified, display_hint,"
+                  " linked_at, last_login_at)"
+                  " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)");
     ins.bindInt(1, playerId);
     ins.bindText(2, claims.provider);
     ins.bindText(3, claims.sub);
     ins.bindText(4, email);
-    ins.bindText(5, hint);
-    ins.bindInt(6, now);
+    ins.bindInt(5, emailVerifiedInt);
+    ins.bindText(6, hint);
+    ins.bindInt(7, now);
     if (ins.step() != SQLITE_DONE || !tx.commit()) {
         res.error = sqlite3_errmsg(_db);
         return res;
@@ -3195,6 +3528,10 @@ bool AccountStore::mintSession(int64_t playerId, const std::string &clientAgent,
         error = "player not found";
         return false;
     }
+    if (p.banned) {
+        error = "account is banned";
+        return false;
+    }
     return mintSessionLocked(_db, playerId, clientAgent, nowSec(),
                              _sessionTtlSec, token, expiresAt, error);
 }
@@ -3228,21 +3565,31 @@ SessionValidation AccountStore::validateSession(const std::string &token,
         v.reason = "unknown";
         return v;
     }
-    Stmt s(_db, "SELECT player_id, expires_at, revoked FROM sessions"
-                " WHERE token_hash = ?1");
+    Stmt s(_db, "SELECT s.player_id, s.expires_at, s.revoked, COALESCE(p.banned, 0)"
+                " FROM sessions s"
+                " JOIN players p ON p.player_id = s.player_id"
+                " WHERE s.token_hash = ?1");
     s.bindText(1, sha256Hex(token));
     if (s.step() != SQLITE_ROW) {
         v.reason = "unknown";
         return v;
     }
+    int64_t playerId = s.colInt(0);
     int64_t expiresAt = s.colInt(1);
-    if (s.colInt(2) != 0) {
+    bool isRevoked = (s.colInt(2) != 0);
+    bool isPlayerBanned = (s.colInt(3) != 0);
+    if (isPlayerBanned) {
+        v.valid = false;
+        v.banned = true;
+        v.playerId = playerId;
+        v.reason = "banned";
+    } else if (isRevoked) {
         v.reason = "revoked";
     } else if (now >= expiresAt) {
         v.reason = "expired";
     } else {
         v.valid = true;
-        v.playerId = s.colInt(0);
+        v.playerId = playerId;
         v.expiresAt = expiresAt;
     }
     return v;
@@ -3364,7 +3711,7 @@ bool AccountStore::getProfileByHandle(const std::string &handle, PlayerProfile &
 }
 
 int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallId,
-                                  int64_t filterPlayerId)
+                                  int64_t filterPlayerId, bool claimUnattributed)
 {
     struct ReconcileCandidate {
         std::string gameId;
@@ -3379,7 +3726,8 @@ int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallI
 
     std::map<std::string, ReconcileCandidate> candidates;
 
-    // 1. Games joined via player_installs
+    // 1. Games joined via player_installs (only claim unattributed rows on initial install bind;
+    //    periodic/rename sweeps never retroactively attribute post-bind unauthenticated uploads)
     {
         std::string sql =
             "SELECT g.game_id, COALESCE(g.p1_player_id, 0), COALESCE(g.p2_player_id, 0),"
@@ -3389,9 +3737,12 @@ int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallI
             " JOIN player_installs pi ON pi.install_id = g.install_id"
             " JOIN players p ON p.player_id = pi.player_id"
             " WHERE g.source = 'client_upload'"
-            " AND ("
-            "   (COALESCE(g.p1_player_id, 0) = 0 AND COALESCE(g.p2_player_id, 0) = 0)"
-            "   OR (g.p1_player_id = p.player_id AND g.p1_handle != p.handle)"
+            " AND (";
+        if (claimUnattributed) {
+            sql += "   (COALESCE(g.p1_player_id, 0) = 0 AND COALESCE(g.p2_player_id, 0) = 0) OR ";
+        }
+        sql +=
+            "   (g.p1_player_id = p.player_id AND g.p1_handle != p.handle)"
             "   OR (g.p2_player_id = p.player_id AND g.p2_handle != p.handle)"
             " )";
         if (!filterInstallId.empty()) {
@@ -3564,14 +3915,11 @@ int reconcileAnonymousGamesLocked(sqlite3 *db, const std::string &filterInstallI
     return reconciledCount;
 }
 
-bool AccountStore::bindInstallToPlayer(const std::string &installId,
-                                      int64_t playerId,
-                                      int *reconciledCount)
+namespace {
+
+bool isValidInstallIdSyntax(const std::string &installId)
 {
-    if (reconciledCount) {
-        *reconciledCount = 0;
-    }
-    if (installId.empty() || installId.size() > 128 || playerId <= 0) {
+    if (installId.empty() || installId.size() > 128) {
         return false;
     }
     for (size_t i = 0; i < installId.size(); ++i) {
@@ -3579,6 +3927,21 @@ bool AccountStore::bindInstallToPlayer(const std::string &installId,
         if (!(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '@')) {
             return false;
         }
+    }
+    return true;
+}
+
+} // namespace
+
+bool AccountStore::bindInstallToPlayer(const std::string &installId,
+                                      int64_t playerId,
+                                      int *reconciledCount)
+{
+    if (reconciledCount) {
+        *reconciledCount = 0;
+    }
+    if (!isValidInstallIdSyntax(installId) || playerId <= 0) {
+        return false;
     }
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_db) {
@@ -3592,18 +3955,30 @@ bool AccountStore::bindInstallToPlayer(const std::string &installId,
     if (!tx.begun()) {
         return false;
     }
+    bool alreadyBound = false;
+    {
+        Stmt chk(_db, "SELECT player_id FROM player_installs WHERE install_id = ?1");
+        chk.bindText(1, installId);
+        if (chk.step() == SQLITE_ROW) {
+            alreadyBound = true;
+        }
+    }
     const int64_t now = nowSec();
     Stmt ins(_db, "INSERT INTO player_installs(install_id, player_id, linked_at, last_seen_at)"
                   " VALUES(?1, ?2, ?3, ?3)"
                   " ON CONFLICT(install_id) DO UPDATE SET"
-                  " player_id = excluded.player_id, last_seen_at = excluded.last_seen_at");
+                  " last_seen_at = excluded.last_seen_at"
+                  " WHERE player_installs.player_id = excluded.player_id");
     ins.bindText(1, installId);
     ins.bindInt(2, playerId);
     ins.bindInt(3, now);
     if (ins.step() != SQLITE_DONE) {
         return false;
     }
-    int count = reconcileAnonymousGamesLocked(_db, installId, playerId);
+    if (sqlite3_changes(_db) == 0) {
+        return false;
+    }
+    int count = reconcileAnonymousGamesLocked(_db, installId, playerId, !alreadyBound);
     if (reconciledCount) {
         *reconciledCount = count;
     }
@@ -3638,6 +4013,124 @@ bool AccountStore::getPlayerByInstallId(const std::string &installId,
     return true;
 }
 
+bool AccountStore::isValidInstallToken(const std::string &rawToken)
+{
+    if (rawToken.size() < 16 || rawToken.size() > 256) {
+        return false;
+    }
+    for (size_t i = 0; i < rawToken.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(rawToken[i]);
+        if (c <= 0x20 || c >= 0x7F) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AccountStore::hasInstallToken(const std::string &installId)
+{
+    if (!isValidInstallIdSyntax(installId)) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db, "SELECT 1 FROM install_tokens WHERE install_id = ?1");
+    s.bindText(1, installId);
+    return s.step() == SQLITE_ROW;
+}
+
+bool AccountStore::registerOrVerifyInstallToken(const std::string &installId,
+                                                const std::string &rawToken)
+{
+    if (!isValidInstallIdSyntax(installId) || !isValidInstallToken(rawToken)) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    const std::string candidateHash = sha256Hex(rawToken);
+    if (candidateHash.size() != 64) {
+        return false;
+    }
+    {
+        Stmt find(_db, "SELECT token_hash FROM install_tokens WHERE install_id = ?1");
+        find.bindText(1, installId);
+        int rc = find.step();
+        if (rc == SQLITE_ROW) {
+            std::string existingHash = find.colText(0);
+            return existingHash.size() == 64 &&
+                   CRYPTO_memcmp(existingHash.data(), candidateHash.data(), 64) == 0;
+        }
+        if (rc != SQLITE_DONE) {
+            return false;
+        }
+    }
+    Stmt ins(_db, "INSERT INTO install_tokens(install_id, token_hash, created_at)"
+                  " VALUES(?1, ?2, ?3)"
+                  " ON CONFLICT(install_id) DO NOTHING");
+    ins.bindText(1, installId);
+    ins.bindText(2, candidateHash);
+    ins.bindInt(3, nowSec());
+    if (ins.step() != SQLITE_DONE) {
+        return false;
+    }
+    Stmt verify(_db, "SELECT token_hash FROM install_tokens WHERE install_id = ?1");
+    verify.bindText(1, installId);
+    if (verify.step() != SQLITE_ROW) {
+        return false;
+    }
+    std::string storedHash = verify.colText(0);
+    return storedHash.size() == 64 &&
+           CRYPTO_memcmp(storedHash.data(), candidateHash.data(), 64) == 0;
+}
+
+InstallDeleteAuthStatus AccountStore::verifyInstallDeleteAuth(
+    const std::string &installId,
+    const std::string &rawInstallToken,
+    int64_t authedPlayerId)
+{
+    if (!isValidInstallIdSyntax(installId)) {
+        return InstallDeleteAuthStatus::INVALID;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return InstallDeleteAuthStatus::INVALID;
+    }
+    if (rawInstallToken.empty() && authedPlayerId <= 0) {
+        return InstallDeleteAuthStatus::UNAUTHORIZED;
+    }
+    if (authedPlayerId > 0 && isPlayerAdminLocked(authedPlayerId)) {
+        return InstallDeleteAuthStatus::AUTHORIZED;
+    }
+    if (!rawInstallToken.empty()) {
+        if (!isValidInstallToken(rawInstallToken)) {
+            return InstallDeleteAuthStatus::FORBIDDEN;
+        }
+        Stmt s(_db, "SELECT token_hash FROM install_tokens WHERE install_id = ?1");
+        s.bindText(1, installId);
+        if (s.step() == SQLITE_ROW) {
+            std::string expectedHash = s.colText(0);
+            std::string actualHash = sha256Hex(rawInstallToken);
+            if (expectedHash.size() == 64 && actualHash.size() == 64 &&
+                CRYPTO_memcmp(expectedHash.data(), actualHash.data(), 64) == 0) {
+                return InstallDeleteAuthStatus::AUTHORIZED;
+            }
+        }
+        return InstallDeleteAuthStatus::FORBIDDEN;
+    }
+    if (authedPlayerId > 0) {
+        Stmt own(_db, "SELECT player_id FROM player_installs WHERE install_id = ?1");
+        own.bindText(1, installId);
+        if (own.step() == SQLITE_ROW && own.colInt(0) == authedPlayerId) {
+            return InstallDeleteAuthStatus::AUTHORIZED;
+        }
+    }
+    return InstallDeleteAuthStatus::FORBIDDEN;
+}
+
 int AccountStore::reconcileAnonymousGames()
 {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -3648,9 +4141,12 @@ int AccountStore::reconcileAnonymousGames()
     if (!tx.begun()) {
         return -1;
     }
-    int count = reconcileAnonymousGamesLocked(_db, "", 0);
+    int count = reconcileAnonymousGamesLocked(_db, "", 0, false);
     if (!tx.commit()) {
         return -1;
+    }
+    if (count > 0) {
+        bumpMutationRev();
     }
     return count;
 }
@@ -3673,6 +4169,31 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     }
     if (update.setAvatarUrl && !validAvatarUrl(update.avatarUrl)) {
         return UpdateStatus::INVALID_AVATAR_URL;
+    }
+    std::string avatarDataExt;
+    std::string decodedAvatarBytes;
+    if (update.setAvatarUrl && update.avatarUrl.rfind("data:image/", 0) == 0) {
+        std::string prefix;
+        if (update.avatarUrl.rfind("data:image/png;base64,", 0) == 0) {
+            avatarDataExt = "png";
+            prefix = "data:image/png;base64,";
+        } else if (update.avatarUrl.rfind("data:image/jpeg;base64,", 0) == 0) {
+            avatarDataExt = "jpg";
+            prefix = "data:image/jpeg;base64,";
+        } else if (update.avatarUrl.rfind("data:image/webp;base64,", 0) == 0) {
+            avatarDataExt = "webp";
+            prefix = "data:image/webp;base64,";
+        } else if (update.avatarUrl.rfind("data:image/gif;base64,", 0) == 0) {
+            avatarDataExt = "gif";
+            prefix = "data:image/gif;base64,";
+        } else {
+            return UpdateStatus::INVALID_AVATAR_URL;
+        }
+        if (!base64Decode(update.avatarUrl.substr(prefix.size()),
+                          decodedAvatarBytes) ||
+            !validateRasterAvatarBytes(avatarDataExt, decodedAvatarBytes)) {
+            return UpdateStatus::INVALID_AVATAR_URL;
+        }
     }
     if (update.setBio && !validBio(update.bio)) {
         return UpdateStatus::INVALID_BIO;
@@ -3710,36 +4231,16 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     std::string finalAvatarUrl = current.avatarUrl;
     if (update.setAvatarUrl) {
         if (!_avatarDir.empty()) {
-            if (update.avatarUrl.rfind("data:image/", 0) == 0) {
-                std::string ext;
-                std::string prefix;
-                if (update.avatarUrl.rfind("data:image/png;base64,", 0) == 0) {
-                    ext = "png";
-                    prefix = "data:image/png;base64,";
-                } else if (update.avatarUrl.rfind("data:image/jpeg;base64,", 0) == 0) {
-                    ext = "jpg";
-                    prefix = "data:image/jpeg;base64,";
-                } else if (update.avatarUrl.rfind("data:image/webp;base64,", 0) == 0) {
-                    ext = "webp";
-                    prefix = "data:image/webp;base64,";
-                } else if (update.avatarUrl.rfind("data:image/gif;base64,", 0) == 0) {
-                    ext = "gif";
-                    prefix = "data:image/gif;base64,";
-                } else if (update.avatarUrl.rfind("data:image/svg+xml;base64,", 0) == 0) {
-                    ext = "svg";
-                    prefix = "data:image/svg+xml;base64,";
-                }
-                std::string decodedBytes;
-                if (ext.empty() ||
-                    !base64Decode(update.avatarUrl.substr(prefix.size()), decodedBytes)) {
-                    return UpdateStatus::INVALID_AVATAR_URL;
-                }
+            if (!avatarDataExt.empty()) {
+                std::string ext = avatarDataExt;
+                std::string diskBytes = std::move(decodedAvatarBytes);
                 if (ext == "webp") {
                     std::string pngBytes;
-                    if (transcodeWebpToPng(decodedBytes, pngBytes)) {
-                        ext = "png";
-                        decodedBytes = std::move(pngBytes);
+                    if (!transcodeWebpToPng(diskBytes, pngBytes)) {
+                        return UpdateStatus::INVALID_AVATAR_URL;
                     }
+                    ext = "png";
+                    diskBytes = std::move(pngBytes);
                 }
                 std::error_code ec;
                 std::filesystem::create_directories(_avatarDir, ec);
@@ -3756,7 +4257,7 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
                     if (!out) {
                         return UpdateStatus::ERROR;
                     }
-                    out.write(decodedBytes.data(), decodedBytes.size());
+                    out.write(diskBytes.data(), diskBytes.size());
                     out.flush();
                 }
                 ::chmod(tmpPath.c_str(), 0640);
@@ -3799,7 +4300,7 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
     }
 
     if (handleActuallyChanged) {
-        reconcileAnonymousGamesLocked(_db, "", playerId);
+        reconcileAnonymousGamesLocked(_db, "", playerId, false);
     }
 
     if (!tx.commit()) {
@@ -3809,6 +4310,7 @@ UpdateStatus AccountStore::updateProfile(int64_t playerId,
         loadProfileById(_db, playerId, *updated);
         updated->isAdmin = isPlayerAdminLocked(updated->playerId);
     }
+    bumpMutationRev();
     return UpdateStatus::OK;
 }
 
@@ -3827,6 +4329,9 @@ bool AccountStore::setBanned(int64_t playerId, bool banned)
     sqlite3_bind_int64(stmt, 2, playerId);
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
     sqlite3_finalize(stmt);
+    if (ok) {
+        bumpMutationRev();
+    }
     return ok;
 }
 
@@ -4142,6 +4647,7 @@ CreateRobotResult AccountStore::createRobot(int64_t ownerPlayerId,
     res.robot.elo2p3b = 1200;
     res.robot.elo2p1b = 1200;
     res.robot.eloOfk = 1200;
+    bumpMutationRev();
     return res;
 }
 
@@ -4379,6 +4885,7 @@ RobotStatus AccountStore::updateRobot(int64_t ownerPlayerId,
     if (updated != nullptr) {
         loadRobotByIdLocked(_db, robotId, *updated);
     }
+    bumpMutationRev();
     return RobotStatus::OK;
 }
 
@@ -4520,6 +5027,7 @@ RobotStatus AccountStore::revokeRobot(int64_t ownerPlayerId,
     if (upd.step() != SQLITE_DONE || !tx.commit()) {
         return RobotStatus::DB_ERROR;
     }
+    bumpMutationRev();
     return RobotStatus::OK;
 }
 
@@ -4577,6 +5085,7 @@ RobotStatus AccountStore::deleteRobot(int64_t ownerPlayerId,
         if (upd.step() != SQLITE_DONE || !tx.commit()) {
             return RobotStatus::DB_ERROR;
         }
+        bumpMutationRev();
         return RobotStatus::OK;
     }
 
@@ -4585,6 +5094,7 @@ RobotStatus AccountStore::deleteRobot(int64_t ownerPlayerId,
     if (del.step() != SQLITE_DONE || !tx.commit()) {
         return RobotStatus::DB_ERROR;
     }
+    bumpMutationRev();
     return RobotStatus::OK;
 }
 
@@ -4646,6 +5156,7 @@ RobotTokenValidation AccountStore::validateRobotToken(const std::string &rawToke
     }
     res.owner.isAdmin = isPlayerAdminLocked(res.owner.playerId);
     if (res.owner.banned) {
+        res.banned = true;
         return res;
     }
     res.valid = true;
@@ -4884,7 +5395,11 @@ bool AccountStore::recordRobotGameOutcome(int64_t robotId, GameOutcome outcome)
     if (s.step() != SQLITE_DONE) {
         return false;
     }
-    return sqlite3_changes(_db) > 0;
+    bool changed = sqlite3_changes(_db) > 0;
+    if (changed) {
+        bumpMutationRev();
+    }
+    return changed;
 }
 
 bool AccountStore::reconcileRobotStats()
@@ -4898,7 +5413,11 @@ bool AccountStore::reconcileRobotStats()
         return false;
     }
     reconcileRobotStatsLocked(_db);
-    return tx.commit();
+    bool ok = tx.commit();
+    if (ok) {
+        bumpMutationRev();
+    }
+    return ok;
 }
 
 bool AccountStore::leaderboard(const std::string &mode, int limit,
@@ -5283,6 +5802,7 @@ bool AccountStore::applyRatingUpdates(const std::string &mode,
         error = sqlite3_errmsg(_db);
         return false;
     }
+    bumpMutationRev();
     return true;
 }
 
@@ -5310,6 +5830,7 @@ ArchiveStatus AccountStore::archiveGame(const GameRecord &record,
         error = sqlite3_errmsg(_db);
         return ArchiveStatus::ERROR;
     }
+    bumpMutationRev();
     return ArchiveStatus::OK;
 }
 
@@ -5378,6 +5899,7 @@ AccountStore::archiveGameWithRatings(
         error = sqlite3_errmsg(_db);
         return ArchiveStatus::ERROR;
     }
+    bumpMutationRev();
     return ArchiveStatus::OK;
 }
 
@@ -5923,6 +6445,7 @@ bool AccountStore::recomputeAllRatings(RecomputeRatingsResult &outResult,
         errorOut = "tx_commit_failed";
         return false;
     }
+    bumpMutationRev();
     return true;
 }
 
@@ -5964,6 +6487,7 @@ bool AccountStore::purgeArchivedGame(const std::string &gameId,
         errorOut = "tx_commit_failed";
         return false;
     }
+    bumpMutationRev();
     return true;
 }
 
@@ -6208,6 +6732,25 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
         where += " AND COALESCE(NULLIF(uploaded_at, 0), ended_at) <= ?" + std::to_string(paramIdx);
         intParams.push_back({paramIdx++, filter.toSec});
     }
+    if (filter.hasCursor || !filter.afterGameId.empty()) {
+        if (!filter.sortField.empty() && filter.sortField != "ended_at") {
+            return false;
+        }
+        const char *cmp = filter.sortAsc ? ">" : "<";
+        if (!filter.afterGameId.empty()) {
+            std::string pEnd = std::to_string(paramIdx++);
+            std::string pId = std::to_string(paramIdx++);
+            intParams.push_back({std::stoi(pEnd), filter.afterEndedAt});
+            textParams.push_back({std::stoi(pId), filter.afterGameId});
+            where += " AND (ended_at " + std::string(cmp) + " ?" + pEnd +
+                     " OR (ended_at = ?" + pEnd + " AND game_id " +
+                     std::string(cmp) + " ?" + pId + "))";
+        } else {
+            where += " AND ended_at " + std::string(cmp) + " ?" +
+                     std::to_string(paramIdx);
+            intParams.push_back({paramIdx++, filter.afterEndedAt});
+        }
+    }
 
     if (total) {
         std::string csql = "SELECT COUNT(*) FROM games" + where;
@@ -6252,16 +6795,13 @@ bool AccountStore::listArchivedGames(const ArchiveFilter &filter,
         GameRecord g;
         readGame(s, g);
         if (filter.includeTranscript) {
-            try {
-                auto j = nlohmann::json::parse(g.octiTranscript);
-                if (!j.is_object() || j.value("format", "") != "octi.transcript.v3") {
-                    continue;
-                }
-            } catch (...) {
+            if (g.octiTranscript.empty() ||
+                g.octiTranscript.find("\"octi.transcript.v3\"") ==
+                    std::string::npos) {
                 continue;
             }
         }
-        out.push_back(g);
+        out.push_back(std::move(g));
     }
     return rc == SQLITE_DONE;
 }
@@ -6273,6 +6813,10 @@ int AccountStore::deleteGamesByInstallId(const std::string &installId)
     }
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_db) {
+        return -1;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
         return -1;
     }
     int totalDeleted = 0;
@@ -6298,6 +6842,12 @@ int AccountStore::deleteGamesByInstallId(const std::string &installId)
         if (s.step() != SQLITE_DONE) {
             return -1;
         }
+    }
+    if (!tx.commit()) {
+        return -1;
+    }
+    if (totalDeleted > 0) {
+        bumpMutationRev();
     }
     return totalDeleted;
 }
@@ -6716,6 +7266,47 @@ bool AccountStore::listCrashReports(const CrashReportFilter &filter,
     return rc == SQLITE_DONE;
 }
 
+int AccountStore::purgeOldCrashReports(int64_t cutoffSec, int maxRows)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return -1;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return -1;
+    }
+    int deleted = 0;
+    {
+        Stmt s(_db,
+               "DELETE FROM crash_reports"
+               " WHERE COALESCE(NULLIF(uploaded_at, 0), created_at) < ?1");
+        s.bindInt(1, cutoffSec);
+        if (s.step() != SQLITE_DONE) {
+            return -1;
+        }
+        deleted += static_cast<int>(sqlite3_changes(_db));
+    }
+    if (maxRows > 0) {
+        Stmt cap(_db,
+                 "DELETE FROM crash_reports"
+                 " WHERE crash_id NOT IN ("
+                 "     SELECT crash_id FROM crash_reports"
+                 "     ORDER BY uploaded_at DESC, created_at DESC, crash_id DESC"
+                 "     LIMIT ?1"
+                 " )");
+        cap.bindInt(1, maxRows);
+        if (cap.step() != SQLITE_DONE) {
+            return -1;
+        }
+        deleted += static_cast<int>(sqlite3_changes(_db));
+    }
+    if (!tx.commit()) {
+        return -1;
+    }
+    return deleted;
+}
+
 bool AccountStore::appendLobbyChatLog(uint64_t seq,
                                       const std::string &senderUuid,
                                       const std::string &senderHandle,
@@ -6737,15 +7328,37 @@ bool AccountStore::appendLobbyChatLog(uint64_t seq,
     return s.step() == SQLITE_DONE;
 }
 
-bool AccountStore::purgeLobbyChatLogsBefore(int64_t cutoffEpochMs)
+bool AccountStore::purgeLobbyChatLogsBefore(int64_t cutoffEpochMs, int maxRows)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_db) {
         return false;
     }
-    Stmt s(_db, "DELETE FROM lobby_chat_logs WHERE created_at_ms < ?1");
-    s.bindInt(1, cutoffEpochMs);
-    return s.step() == SQLITE_DONE;
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    {
+        Stmt s(_db, "DELETE FROM lobby_chat_logs WHERE created_at_ms < ?1");
+        s.bindInt(1, cutoffEpochMs);
+        if (s.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    if (maxRows > 0) {
+        Stmt cap(_db,
+                 "DELETE FROM lobby_chat_logs"
+                 " WHERE seq NOT IN ("
+                 "     SELECT seq FROM lobby_chat_logs"
+                 "     ORDER BY seq DESC"
+                 "     LIMIT ?1"
+                 " )");
+        cap.bindInt(1, maxRows);
+        if (cap.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    return tx.commit();
 }
 
 bool AccountStore::listLobbyChatLogs(std::vector<LobbyChatLogRow> &out,
@@ -6773,6 +7386,320 @@ bool AccountStore::listLobbyChatLogs(std::vector<LobbyChatLogRow> &out,
         row.senderHandle = s.colText(2);
         row.text = s.colText(3);
         row.createdAtMs = s.colInt(4);
+        out.push_back(std::move(row));
+    }
+    return rc == SQLITE_DONE;
+}
+
+bool AccountStore::upsertTempBan(const TempBanRow &row)
+{
+    if (row.banId.empty() || row.targetType.empty() || row.targetValue.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    {
+        Stmt s(_db,
+               "INSERT INTO temp_bans("
+               " ban_id, target_type, target_value, display_label, reason,"
+               " source, created_by, created_at, expires_at)"
+               " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+               " ON CONFLICT(target_type, target_value) DO UPDATE SET"
+               " ban_id = excluded.ban_id,"
+               " display_label = excluded.display_label,"
+               " reason = excluded.reason,"
+               " source = excluded.source,"
+               " created_by = excluded.created_by,"
+               " created_at = excluded.created_at,"
+               " expires_at = excluded.expires_at");
+        s.bindText(1, row.banId);
+        s.bindText(2, row.targetType);
+        s.bindText(3, row.targetValue);
+        s.bindText(4, row.displayLabel);
+        s.bindText(5, row.reason);
+        s.bindText(6, row.source);
+        s.bindText(7, row.createdBy);
+        s.bindInt(8, row.createdAt);
+        s.bindInt(9, row.expiresAt);
+        if (s.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    if (row.targetType == "account") {
+        Stmt upd(_db, "UPDATE players SET banned = 1 WHERE uuid = ?1");
+        upd.bindText(1, row.targetValue);
+        if (upd.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    if (!tx.commit()) {
+        return false;
+    }
+    bumpMutationRev();
+    return true;
+}
+
+bool AccountStore::deleteTempBanById(const std::string &banId,
+                                     TempBanRow *removedOut)
+{
+    if (banId.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    TempBanRow found;
+    {
+        Stmt sel(_db,
+                 "SELECT ban_id, target_type, target_value, display_label,"
+                 " reason, source, created_by, created_at, expires_at"
+                 " FROM temp_bans WHERE ban_id = ?1");
+        sel.bindText(1, banId);
+        if (sel.step() != SQLITE_ROW) {
+            return false;
+        }
+        found.banId = sel.colText(0);
+        found.targetType = sel.colText(1);
+        found.targetValue = sel.colText(2);
+        found.displayLabel = sel.colText(3);
+        found.reason = sel.colText(4);
+        found.source = sel.colText(5);
+        found.createdBy = sel.colText(6);
+        found.createdAt = sel.colInt(7);
+        found.expiresAt = sel.colInt(8);
+    }
+    {
+        Stmt del(_db, "DELETE FROM temp_bans WHERE ban_id = ?1");
+        del.bindText(1, banId);
+        if (del.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    if (!tx.commit()) {
+        return false;
+    }
+    if (removedOut != nullptr) {
+        *removedOut = std::move(found);
+    }
+    bumpMutationRev();
+    return true;
+}
+
+bool AccountStore::deleteTempBanByTarget(const std::string &targetType,
+                                         const std::string &targetValue,
+                                         TempBanRow *removedOut)
+{
+    if (targetType.empty() || targetValue.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return false;
+    }
+    TempBanRow found;
+    {
+        Stmt sel(_db,
+                 "SELECT ban_id, target_type, target_value, display_label,"
+                 " reason, source, created_by, created_at, expires_at"
+                 " FROM temp_bans"
+                 " WHERE target_type = ?1 AND target_value = ?2");
+        sel.bindText(1, targetType);
+        sel.bindText(2, targetValue);
+        if (sel.step() != SQLITE_ROW) {
+            return false;
+        }
+        found.banId = sel.colText(0);
+        found.targetType = sel.colText(1);
+        found.targetValue = sel.colText(2);
+        found.displayLabel = sel.colText(3);
+        found.reason = sel.colText(4);
+        found.source = sel.colText(5);
+        found.createdBy = sel.colText(6);
+        found.createdAt = sel.colInt(7);
+        found.expiresAt = sel.colInt(8);
+    }
+    {
+        Stmt del(_db,
+                 "DELETE FROM temp_bans"
+                 " WHERE target_type = ?1 AND target_value = ?2");
+        del.bindText(1, targetType);
+        del.bindText(2, targetValue);
+        if (del.step() != SQLITE_DONE) {
+            return false;
+        }
+    }
+    if (!tx.commit()) {
+        return false;
+    }
+    if (removedOut != nullptr) {
+        *removedOut = std::move(found);
+    }
+    bumpMutationRev();
+    return true;
+}
+
+bool AccountStore::listTempBans(std::vector<TempBanRow> &out)
+{
+    out.clear();
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db,
+           "SELECT ban_id, target_type, target_value, display_label,"
+           " reason, source, created_by, created_at, expires_at"
+           " FROM temp_bans ORDER BY created_at DESC, ban_id ASC");
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        TempBanRow r;
+        r.banId = s.colText(0);
+        r.targetType = s.colText(1);
+        r.targetValue = s.colText(2);
+        r.displayLabel = s.colText(3);
+        r.reason = s.colText(4);
+        r.source = s.colText(5);
+        r.createdBy = s.colText(6);
+        r.createdAt = s.colInt(7);
+        r.expiresAt = s.colInt(8);
+        out.push_back(std::move(r));
+    }
+    return rc == SQLITE_DONE;
+}
+
+int AccountStore::purgeExpiredTempBans(
+    int64_t nowSecVal,
+    const std::vector<std::string> &permanentAccountUuids)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return -1;
+    }
+    Tx tx(_db);
+    if (!tx.begun()) {
+        return -1;
+    }
+    std::vector<std::string> expiredAccountUuids;
+    {
+        Stmt sel(_db,
+                 "SELECT target_value FROM temp_bans"
+                 " WHERE expires_at <= ?1 AND target_type = 'account'");
+        sel.bindInt(1, nowSecVal);
+        int rc;
+        while ((rc = sel.step()) == SQLITE_ROW) {
+            expiredAccountUuids.push_back(sel.colText(0));
+        }
+        if (rc != SQLITE_DONE) {
+            return -1;
+        }
+    }
+    int deleted = 0;
+    {
+        Stmt del(_db, "DELETE FROM temp_bans WHERE expires_at <= ?1");
+        del.bindInt(1, nowSecVal);
+        if (del.step() != SQLITE_DONE) {
+            return -1;
+        }
+        deleted = static_cast<int>(sqlite3_changes(_db));
+    }
+    for (size_t i = 0; i < expiredAccountUuids.size(); ++i) {
+        const std::string &uuid = expiredAccountUuids[i];
+        if (std::find(permanentAccountUuids.begin(),
+                      permanentAccountUuids.end(),
+                      uuid) != permanentAccountUuids.end()) {
+            continue;
+        }
+        Stmt chk(_db,
+                 "SELECT 1 FROM temp_bans"
+                 " WHERE target_type = 'account' AND target_value = ?1"
+                 " AND expires_at > ?2 LIMIT 1");
+        chk.bindText(1, uuid);
+        chk.bindInt(2, nowSecVal);
+        if (chk.step() == SQLITE_ROW) {
+            continue;
+        }
+        Stmt clr(_db, "UPDATE players SET banned = 0 WHERE uuid = ?1");
+        clr.bindText(1, uuid);
+        if (clr.step() != SQLITE_DONE) {
+            return -1;
+        }
+    }
+    if (!tx.commit()) {
+        return -1;
+    }
+    if (deleted > 0) {
+        bumpMutationRev();
+    }
+    return deleted;
+}
+
+bool AccountStore::appendBanAuditLog(int64_t createdAt,
+                                     const std::string &actorLabel,
+                                     const std::string &action,
+                                     const std::string &targetType,
+                                     const std::string &targetValue,
+                                     const std::string &reason)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db,
+           "INSERT INTO ban_audit_log("
+           " created_at, actor_label, action, target_type, target_value, reason)"
+           " VALUES(?1, ?2, ?3, ?4, ?5, ?6)");
+    s.bindInt(1, createdAt);
+    s.bindText(2, actorLabel);
+    s.bindText(3, action);
+    s.bindText(4, targetType);
+    s.bindText(5, targetValue);
+    s.bindText(6, reason);
+    return s.step() == SQLITE_DONE;
+}
+
+bool AccountStore::listBanAuditLogs(std::vector<BanAuditLogRow> &out,
+                                    int limit)
+{
+    out.clear();
+    if (limit <= 0) {
+        return true;
+    }
+    if (limit > 1000) {
+        limit = 1000;
+    }
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (!_db) {
+        return false;
+    }
+    Stmt s(_db,
+           "SELECT audit_id, created_at, actor_label, action, target_type,"
+           " target_value, reason"
+           " FROM ban_audit_log ORDER BY audit_id DESC LIMIT ?1");
+    s.bindInt(1, limit);
+    int rc;
+    while ((rc = s.step()) == SQLITE_ROW) {
+        BanAuditLogRow row;
+        row.auditId = s.colInt(0);
+        row.createdAt = s.colInt(1);
+        row.actorLabel = s.colText(2);
+        row.action = s.colText(3);
+        row.targetType = s.colText(4);
+        row.targetValue = s.colText(5);
+        row.reason = s.colText(6);
         out.push_back(std::move(row));
     }
     return rc == SQLITE_DONE;

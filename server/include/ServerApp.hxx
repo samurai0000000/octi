@@ -48,6 +48,12 @@ struct ServerConfig {
     std::string dbPath;                 // required to serve (--db)
     std::string oidcConfigPath;         // optional (--oidc-config)
     std::string avatarDir;              // optional (--avatar-dir)
+    std::string banConfigPath;          // optional (--ban-config)
+    std::vector<std::string> trustedProxies = {
+        "127.0.0.1", "::1", "::ffff:127.0.0.1"
+    };
+    std::string publicBaseUrl;          // optional (--public-base-url)
+    bool behindTls = false;             // optional (--behind-tls)
     bool showHelp = false;
     bool showVersion = false;
 };

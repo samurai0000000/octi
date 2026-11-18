@@ -10,6 +10,7 @@
 #include "OctiDefs.hxx"
 #include "OidcVerifier.hxx"
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -237,13 +238,22 @@ struct LinkedIdentity {
     std::string provider;
     std::string providerSub;
     std::string providerEmail;
+    bool emailVerified = false;
     std::string displayHint;
     int64_t linkedAt = 0;
     int64_t lastLoginAt = 0;
 };
 
+enum class InstallDeleteAuthStatus {
+    AUTHORIZED = 0,
+    UNAUTHORIZED,
+    FORBIDDEN,
+    INVALID
+};
+
 struct LoginResult {
     bool ok = false;
+    bool banned = false;
     std::string error;
     bool created = false;               // true when a new player was provisioned
     PlayerProfile profile;
@@ -282,9 +292,10 @@ enum class UnlinkStatus {
 
 struct SessionValidation {
     bool valid = false;
+    bool banned = false;
     int64_t playerId = 0;
     int64_t expiresAt = 0;
-    std::string reason;                 // 'unknown' | 'revoked' | 'expired' | 'malformed'
+    std::string reason;                 // 'unknown' | 'revoked' | 'expired' | 'malformed' | 'banned'
 };
 
 struct ProfileUpdate {
@@ -418,6 +429,9 @@ struct ArchiveFilter {
     bool sortAsc = false;               // default false = descending
     int maxLimit = 100;                 // default kMaxArchiveLimit; up to kMaxExportLimit
     bool includeTranscript = false;     // true for bulk export NDJSON
+    bool hasCursor = false;             // keyset cursor pagination on (ended_at, game_id)
+    int64_t afterEndedAt = 0;
+    std::string afterGameId;
 };
 
 struct AiDifficultyStats {
@@ -598,8 +612,31 @@ struct CreateRobotResult {
 
 struct RobotTokenValidation {
     bool valid = false;
+    bool banned = false;
     RobotRecord robot;
     PlayerProfile owner;
+};
+
+struct TempBanRow {
+    std::string banId;
+    std::string targetType;             // 'ip' | 'account' | 'robot'
+    std::string targetValue;            // canonical CIDR, player_uuid, or robot_uuid
+    std::string displayLabel;
+    std::string reason;
+    std::string source = "auto";        // 'auto' | 'admin'
+    std::string createdBy = "system";
+    int64_t createdAt = 0;
+    int64_t expiresAt = 0;
+};
+
+struct BanAuditLogRow {
+    int64_t auditId = 0;
+    int64_t createdAt = 0;
+    std::string actorLabel;
+    std::string action;                 // 'auto_ban_24h' | 'add_24h' | 'add_perm' | 'move_to_perm' | 'move_to_24h' | 'remove'
+    std::string targetType;
+    std::string targetValue;
+    std::string reason;
 };
 
 struct LobbyChatLogRow {
@@ -624,9 +661,11 @@ public:
     static constexpr int kMaxHandleLength = 24;
     static constexpr int64_t kHandleChangeCooldownSec = 24LL * 3600;
     static constexpr size_t kMaxAvatarDataUriBytes = 262144;
+    static constexpr int kMaxAvatarDimension = 1024;
     static constexpr int kMaxLeaderboardLimit = 100;
     static constexpr int kMaxArchiveLimit = 100;
     static constexpr int kMaxExportLimit = 5000;
+    static constexpr int kMaxActiveSessionsPerPlayer = 32;
     static constexpr int64_t kDefaultSessionTtlSec = 30LL * 24 * 3600;
 
     AccountStore();
@@ -644,8 +683,11 @@ public:
     bool openOrCreate(const std::string &path, std::string &error);
     void close();
     bool isOpen() const;
+    std::string dbPath() const;
 
     void setClock(std::function<int64_t()> clock);
+    int64_t currentEpochSec() const;
+    uint64_t mutationRevision() const;
     void setSessionTtlSec(int64_t seconds);
     void setAvatarDir(const std::string &dir);
     std::string avatarDir() const;
@@ -656,6 +698,8 @@ public:
 
     static bool transcodeWebpToPng(const std::string &webpBytes,
                                    std::string &outPngBytes);
+    static bool validateRasterAvatarBytes(const std::string &ext,
+                                          const std::string &bytes);
 
     static bool isValidHandle(const std::string &handle);
     static std::string sha256Hex(const std::string &data);
@@ -697,6 +741,14 @@ public:
     bool bindInstallToPlayer(const std::string &installId, int64_t playerId,
                              int *reconciledCount = nullptr);
     bool getPlayerByInstallId(const std::string &installId, PlayerProfile &out);
+    static bool isValidInstallToken(const std::string &rawToken);
+    bool hasInstallToken(const std::string &installId);
+    bool registerOrVerifyInstallToken(const std::string &installId,
+                                      const std::string &rawToken);
+    InstallDeleteAuthStatus verifyInstallDeleteAuth(
+        const std::string &installId,
+        const std::string &rawInstallToken,
+        int64_t authedPlayerId = 0);
     int reconcileAnonymousGames();
     UpdateStatus updateProfile(int64_t playerId, const ProfileUpdate &update,
                                PlayerProfile *updated = nullptr);
@@ -791,6 +843,7 @@ public:
     bool listCrashReports(const CrashReportFilter &filter,
                           std::vector<CrashReportRecord> &out,
                           int64_t *total = nullptr);
+    int purgeOldCrashReports(int64_t cutoffSec, int maxRows = 5000);
 
     /* Live room and lobby meta persistence. */
     bool upsertLiveRoom(const std::string &roomId, const std::string &stateJson,
@@ -806,20 +859,45 @@ public:
     bool appendLobbyChatLog(uint64_t seq, const std::string &senderUuid,
                             const std::string &senderHandle,
                             const std::string &text, int64_t createdAtMs);
-    bool purgeLobbyChatLogsBefore(int64_t cutoffEpochMs);
+    bool purgeLobbyChatLogsBefore(int64_t cutoffEpochMs, int maxRows = 5000);
     bool listLobbyChatLogs(std::vector<LobbyChatLogRow> &out,
                            int limit = 100);
+
+    /* Temporary 24-hour bans and ban audit log persistence. */
+    bool upsertTempBan(const TempBanRow &row);
+    bool deleteTempBanById(const std::string &banId,
+                           TempBanRow *removedOut = nullptr);
+    bool deleteTempBanByTarget(const std::string &targetType,
+                               const std::string &targetValue,
+                               TempBanRow *removedOut = nullptr);
+    bool listTempBans(std::vector<TempBanRow> &out);
+    int purgeExpiredTempBans(
+        int64_t nowSec,
+        const std::vector<std::string> &permanentAccountUuids = {});
+    bool appendBanAuditLog(int64_t createdAt,
+                           const std::string &actorLabel,
+                           const std::string &action,
+                           const std::string &targetType,
+                           const std::string &targetValue,
+                           const std::string &reason);
+    bool listBanAuditLogs(std::vector<BanAuditLogRow> &out, int limit = 100);
 
 private:
     int64_t nowSec() const;
     bool isPlayerAdminLocked(int64_t playerId) const;
+    void bumpMutationRev()
+    {
+        _mutationRev.fetch_add(1, std::memory_order_release);
+    }
 
     mutable std::mutex _mutex;
     sqlite3 *_db;
+    std::string _dbPath;
     std::function<int64_t()> _clock;
     int64_t _sessionTtlSec;
     std::string _avatarDir;
     std::vector<std::string> _adminGoogleIds;
+    std::atomic<uint64_t> _mutationRev{1};
 };
 
 } // namespace octi

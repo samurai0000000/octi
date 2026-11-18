@@ -571,7 +571,8 @@ std::string OctiCrashReporter::recordHandledException(
     const std::string &exceptionType,
     const std::string &exceptionMessage,
     const std::string &contextJson,
-    const std::string &installId)
+    const std::string &installId,
+    const std::string &installDeleteToken)
 {
     std::string dir = crashesDir();
     std::int64_t epoch = std::chrono::duration_cast<std::chrono::seconds>(
@@ -600,6 +601,9 @@ std::string OctiCrashReporter::recordHandledException(
         root["context"] = Json::parse(getGameContextJson(), nullptr, false);
     }
     root["install_id"] = installId;
+    if (!installDeleteToken.empty()) {
+        root["install_delete_token"] = installDeleteToken;
+    }
 
     try {
         std::ofstream ofs(filePath, std::ios::out | std::ios::trunc);
@@ -617,7 +621,8 @@ std::string OctiCrashReporter::recordHandledException(
 std::string OctiCrashReporter::spoolTrainingTranscript(
     const std::string &gameId,
     const std::string &transcriptJson,
-    const std::string &clientId)
+    const std::string &clientId,
+    const std::string &installDeleteToken)
 {
     std::string dir = pendingUploadsDir();
     std::int64_t epoch = std::chrono::duration_cast<std::chrono::seconds>(
@@ -636,6 +641,9 @@ std::string OctiCrashReporter::spoolTrainingTranscript(
     }
     if (!clientId.empty()) {
         root["client_id"] = clientId;
+    }
+    if (!installDeleteToken.empty()) {
+        root["install_delete_token"] = installDeleteToken;
     }
 
     try {
@@ -689,7 +697,8 @@ std::vector<std::string> OctiCrashReporter::listPendingTranscriptFiles()
 
 int OctiCrashReporter::flushPendingCrashReports(
     OctiNetworkClient &client,
-    const std::string &installId)
+    const std::string &installId,
+    const std::string &installDeleteToken)
 {
     int flushedCount = 0;
     std::vector<std::string> files = listPendingCrashFiles();
@@ -736,9 +745,15 @@ int OctiCrashReporter::flushPendingCrashReports(
             if (req.installId.empty() && !installId.empty()) {
                 req.installId = installId;
             }
+            req.installDeleteToken =
+                j.value("install_delete_token", installDeleteToken);
+            if (req.installDeleteToken.empty() && !installDeleteToken.empty()) {
+                req.installDeleteToken = installDeleteToken;
+            }
 
             CrashReportResponse res = client.uploadCrashReport(req);
-            if (res.ok || res.httpStatus == 400 || res.httpStatus == 413) {
+            if (res.ok || res.httpStatus == 400 || res.httpStatus == 403 ||
+                res.httpStatus == 413) {
                 std::filesystem::remove(file, ec);
                 ++flushedCount;
             } else if (res.httpStatus == 0 || res.httpStatus >= 500) {
@@ -754,7 +769,8 @@ int OctiCrashReporter::flushPendingCrashReports(
 
 int OctiCrashReporter::flushPendingTranscripts(
     OctiNetworkClient &client,
-    const std::string &overrideInstallId)
+    const std::string &overrideInstallId,
+    const std::string &installDeleteToken)
 {
     int flushedCount = 0;
     std::vector<std::string> files = listPendingTranscriptFiles();
@@ -797,8 +813,16 @@ int OctiCrashReporter::flushPendingTranscripts(
                 req.clientId = overrideInstallId;
             }
 
+            if (j.contains("install_delete_token") &&
+                j["install_delete_token"].is_string()) {
+                req.installDeleteToken =
+                    j["install_delete_token"].get<std::string>();
+            } else if (!installDeleteToken.empty()) {
+                req.installDeleteToken = installDeleteToken;
+            }
+
             auto res = client.uploadTrainingTranscript(req);
-            if (res.ok || res.httpStatus == 400) {
+            if (res.ok || res.httpStatus == 400 || res.httpStatus == 403) {
                 std::filesystem::remove(file, ec);
                 ++flushedCount;
             } else if (res.httpStatus == 0 || res.httpStatus >= 500) {

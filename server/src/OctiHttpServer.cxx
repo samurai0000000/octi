@@ -9,6 +9,7 @@
 #ifndef CPPHTTPLIB_OPENSSL_SUPPORT
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #endif
+#include "BanManager.hxx"
 #include "OctiCore.hxx"
 #include "OctiBoard.hxx"
 #include "OctiCrypto.hxx"
@@ -20,10 +21,13 @@
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#include <zlib.h>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -34,21 +38,28 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <list>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace octi {
 
@@ -162,253 +173,726 @@ bool isSafeId(const std::string &s)
     return true;
 }
 
-bool isPrivateOrLoopbackIp(const struct sockaddr *sa, socklen_t /*saLen*/, std::string &errReason)
+} // anonymous namespace
+
+bool OctiHttpServer::isDisallowedProbeAddress(const struct sockaddr *sa,
+                                              size_t saLen,
+                                              std::string &errReason,
+                                              bool allowLoopbackForTest)
 {
-    const char *allowLoopbackEnv = std::getenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
-    bool loopbackAllowed = (allowLoopbackEnv && std::string(allowLoopbackEnv) == "1");
+    if (sa == nullptr) {
+        errReason = "null socket address is not permitted";
+        return true;
+    }
 
     if (sa->sa_family == AF_INET) {
+        if (saLen < sizeof(struct sockaddr_in)) {
+            errReason = "truncated IPv4 socket address is not permitted";
+            return true;
+        }
         const auto *sin = reinterpret_cast<const struct sockaddr_in *>(sa);
         uint32_t ip = ntohl(sin->sin_addr.s_addr);
 
-        // Loopback: 127.0.0.0/8
-        if ((ip >> 24) == 127) {
-            if (!loopbackAllowed) {
+        /* Loopback: 127.0.0.0/8 */
+        if ((ip >> 24) == 127u) {
+            if (!allowLoopbackForTest) {
                 errReason = "loopback IP addresses are not permitted";
                 return true;
             }
             return false;
         }
-        // Private RFC1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-        if ((ip >> 24) == 10 ||
-            (ip >= 0xAC100000 && ip <= 0xAC1FFFFF) ||
-            ((ip >> 16) == 0xC0A8)) {
+        /* Unspecified ("this network"): 0.0.0.0/8 */
+        if ((ip >> 24) == 0u) {
+            errReason = "unspecified IPv4 address is not permitted";
+            return true;
+        }
+        /* Private RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 */
+        if ((ip >> 24) == 10u ||
+            (ip & 0xFFF00000u) == 0xAC100000u ||
+            (ip & 0xFFFF0000u) == 0xC0A80000u) {
             errReason = "private network IP addresses are not permitted";
             return true;
         }
-        // Link-local / Cloud metadata: 169.254.0.0/16
-        if ((ip >> 16) == 0xA9FE) {
+        /* CGNAT shared address space RFC 6598: 100.64.0.0/10 */
+        if ((ip & 0xFFC00000u) == 0x64400000u) {
+            errReason = "CGNAT shared address space (100.64.0.0/10) is not permitted";
+            return true;
+        }
+        /* Link-local / cloud metadata RFC 3927: 169.254.0.0/16 */
+        if ((ip & 0xFFFF0000u) == 0xA9FE0000u) {
             errReason = "link-local / cloud metadata IP addresses are not permitted";
             return true;
         }
-        // Unspecified / broadcast: 0.0.0.0/8, 255.255.255.255
-        if ((ip >> 24) == 0 || ip == 0xFFFFFFFF) {
-            errReason = "unspecified or broadcast IP addresses are not permitted";
+        /* IETF protocol, documentation, 6to4 relay, benchmarking RFC 6890 */
+        if ((ip & 0xFFFFFF00u) == 0xC0000000u ||
+            (ip & 0xFFFFFF00u) == 0xC0000200u ||
+            (ip & 0xFFFFFF00u) == 0xC0586300u ||
+            (ip & 0xFFFE0000u) == 0xC6120000u ||
+            (ip & 0xFFFFFF00u) == 0xC6336400u ||
+            (ip & 0xFFFFFF00u) == 0xCB007100u) {
+            errReason = "special-purpose / documentation IPv4 address is not permitted";
             return true;
         }
-    } else if (sa->sa_family == AF_INET6) {
+        /* Multicast (224.0.0.0/4), reserved Class E (240.0.0.0/4) & broadcast */
+        if (ip >= 0xE0000000u) {
+            errReason = "multicast, reserved, or broadcast IPv4 address is not permitted";
+            return true;
+        }
+        return false;
+    }
+
+    if (sa->sa_family == AF_INET6) {
+        if (saLen < sizeof(struct sockaddr_in6)) {
+            errReason = "truncated IPv6 socket address is not permitted";
+            return true;
+        }
         const auto *sin6 = reinterpret_cast<const struct sockaddr_in6 *>(sa);
         const unsigned char *b = sin6->sin6_addr.s6_addr;
-        // ::1 loopback
-        bool isLoopback6 = true;
+
+        bool first15Zero = true;
         for (int i = 0; i < 15; ++i) {
-            if (b[i] != 0) { isLoopback6 = false; break; }
+            if (b[i] != 0) {
+                first15Zero = false;
+                break;
+            }
         }
-        if (isLoopback6 && b[15] == 1) {
-            if (!loopbackAllowed) {
+        /* ::/128 unspecified */
+        if (first15Zero && b[15] == 0) {
+            errReason = "IPv6 unspecified address is not permitted";
+            return true;
+        }
+        /* ::1/128 loopback */
+        if (first15Zero && b[15] == 1) {
+            if (!allowLoopbackForTest) {
                 errReason = "IPv6 loopback address is not permitted";
                 return true;
             }
             return false;
         }
-        // fe80::/10 link local
-        if (b[0] == 0xFE && (b[1] & 0xC0) == 0x80) {
-            errReason = "IPv6 link-local address is not permitted";
+        if (sin6->sin6_scope_id != 0) {
+            errReason = "scoped IPv6 address is not permitted";
             return true;
         }
-        // fc00::/7 unique local
+
+        /* ::ffff:0:0/96 IPv4-mapped IPv6 */
+        bool first10Zero = true;
+        for (int i = 0; i < 10; ++i) {
+            if (b[i] != 0) {
+                first10Zero = false;
+                break;
+            }
+        }
+        if (first10Zero && b[10] == 0xFF && b[11] == 0xFF) {
+            errReason = "IPv4-mapped IPv6 address (::ffff:0:0/96) is not permitted";
+            return true;
+        }
+        /* ::/96 deprecated IPv4-compatible IPv6 */
+        if (first10Zero && b[10] == 0 && b[11] == 0) {
+            errReason = "IPv4-compatible IPv6 address (::/96) is not permitted";
+            return true;
+        }
+        /* ::ffff:0:0:0/96 SIIT IPv4-translated IPv6 */
+        bool first8Zero = true;
+        for (int i = 0; i < 8; ++i) {
+            if (b[i] != 0) {
+                first8Zero = false;
+                break;
+            }
+        }
+        if (first8Zero && b[8] == 0xFF && b[9] == 0xFF &&
+            b[10] == 0x00 && b[11] == 0x00) {
+            errReason = "IPv4-translated IPv6 address (::ffff:0:0:0/96) is not permitted";
+            return true;
+        }
+        /* NAT64 well-known 64:ff9b::/96 & local-use 64:ff9b:1::/48 */
+        if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B) {
+            bool nat64WellKnown = true;
+            for (int i = 4; i < 12; ++i) {
+                if (b[i] != 0) {
+                    nat64WellKnown = false;
+                    break;
+                }
+            }
+            if (nat64WellKnown || (b[4] == 0x00 && b[5] == 0x01)) {
+                errReason = "NAT64 embedded-IPv4 address is not permitted";
+                return true;
+            }
+        }
+        /* Discard-only 100::/64 (RFC 6666) */
+        if (b[0] == 0x01 && b[1] == 0x00 &&
+            b[2] == 0x00 && b[3] == 0x00 && b[4] == 0x00 &&
+            b[5] == 0x00 && b[6] == 0x00 && b[7] == 0x00) {
+            errReason = "discard-only IPv6 prefix (100::/64) is not permitted";
+            return true;
+        }
+        /* 2001:: special prefixes: Teredo 2001::/32, BMWG 2001:2::/48, ORCHID 2001:10::/28, Doc 2001:db8::/32 */
+        if (b[0] == 0x20 && b[1] == 0x01) {
+            if (b[2] == 0x00 && b[3] == 0x00) {
+                errReason = "Teredo IPv6 address (2001::/32) is not permitted";
+                return true;
+            }
+            if (b[2] == 0x00 && b[3] == 0x02 && b[4] == 0x00 && b[5] == 0x00) {
+                errReason = "benchmarking IPv6 address (2001:2::/48) is not permitted";
+                return true;
+            }
+            if (b[2] == 0x00 && (b[3] & 0xF0) == 0x10) {
+                errReason = "ORCHID IPv6 address (2001:10::/28) is not permitted";
+                return true;
+            }
+            if (b[2] == 0x0D && b[3] == 0xB8) {
+                errReason = "documentation IPv6 address (2001:db8::/32) is not permitted";
+                return true;
+            }
+        }
+        /* 6to4 2002::/16 */
+        if (b[0] == 0x20 && b[1] == 0x02) {
+            errReason = "6to4 IPv6 address (2002::/16) is not permitted";
+            return true;
+        }
+        /* Unique local fc00::/7 */
         if ((b[0] & 0xFE) == 0xFC) {
-            errReason = "IPv6 unique local address is not permitted";
+            errReason = "IPv6 unique local address (fc00::/7) is not permitted";
             return true;
         }
-        // :: unspecified
-        bool isZero = true;
-        for (int i = 0; i < 16; ++i) {
-            if (b[i] != 0) { isZero = false; break; }
-        }
-        if (isZero) {
-            errReason = "IPv6 unspecified address is not permitted";
+        /* Link-local fe80::/10 & deprecated site-local fec0::/10 */
+        if (b[0] == 0xFE && ((b[1] & 0xC0) == 0x80 || (b[1] & 0xC0) == 0xC0)) {
+            errReason = "IPv6 link-local or site-local address is not permitted";
             return true;
         }
+        /* Multicast ff00::/8 */
+        if (b[0] == 0xFF) {
+            errReason = "IPv6 multicast address (ff00::/8) is not permitted";
+            return true;
+        }
+        return false;
     }
-    return false;
+
+    errReason = "unsupported address family is not permitted";
+    return true;
 }
 
-bool probeSingleHttpOrHttpsWithMethod(const std::string &url,
-                                      const std::string &method,
-                                      int &statusCodeOut,
-                                      std::string &redirectLocationOut,
-                                      std::string &errReason)
+bool OctiHttpServer::isDisallowedProbeAddress(const std::string &ipLiteral,
+                                              std::string &errReason,
+                                              bool allowLoopbackForTest)
 {
-    std::string lower;
-    lower.reserve(url.size());
-    for (char c : url) {
-        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    size_t start = 0;
+    while (start < ipLiteral.size() &&
+           std::isspace(static_cast<unsigned char>(ipLiteral[start]))) {
+        ++start;
+    }
+    size_t end = ipLiteral.size();
+    while (end > start &&
+           std::isspace(static_cast<unsigned char>(ipLiteral[end - 1]))) {
+        --end;
+    }
+    if (end <= start || (end - start) > 128) {
+        errReason = "malformed IP literal is not permitted";
+        return true;
+    }
+    std::string trimmed = ipLiteral.substr(start, end - start);
+    if (trimmed.front() == '[' && trimmed.back() == ']' && trimmed.size() > 2) {
+        trimmed = trimmed.substr(1, trimmed.size() - 2);
+    }
+    if (trimmed.find('%') != std::string::npos) {
+        errReason = "scoped IP literal is not permitted";
+        return true;
     }
 
-    bool isHttps = (lower.rfind("https://", 0) == 0);
-    bool isHttp = (lower.rfind("http://", 0) == 0);
+    struct sockaddr_in sin;
+    std::memset(&sin, 0, sizeof(sin));
+    if (inet_pton(AF_INET, trimmed.c_str(), &sin.sin_addr) == 1) {
+        sin.sin_family = AF_INET;
+        return isDisallowedProbeAddress(
+            reinterpret_cast<const struct sockaddr *>(&sin),
+            sizeof(sin), errReason, allowLoopbackForTest);
+    }
+
+    struct sockaddr_in6 sin6;
+    std::memset(&sin6, 0, sizeof(sin6));
+    if (inet_pton(AF_INET6, trimmed.c_str(), &sin6.sin6_addr) == 1) {
+        sin6.sin6_family = AF_INET6;
+        return isDisallowedProbeAddress(
+            reinterpret_cast<const struct sockaddr *>(&sin6),
+            sizeof(sin6), errReason, allowLoopbackForTest);
+    }
+
+    errReason = "malformed IP literal is not permitted";
+    return true;
+}
+
+namespace {
+
+static constexpr size_t kMaxProbeHeaderBytes = 8192;
+
+struct ResolvedProbeEndpoint {
+    struct sockaddr_storage storage;
+    socklen_t addrLen = 0;
+    int family = AF_UNSPEC;
+    int sockType = SOCK_STREAM;
+    int protocol = 0;
+};
+
+bool parseProbeUrlParts(const std::string &url,
+                        bool &isHttpsOut,
+                        std::string &hostOut,
+                        int &portOut,
+                        std::string &pathOut,
+                        std::string &errReason)
+{
+    std::string low = lower(url);
+    bool isHttps = (low.rfind("https://", 0) == 0);
+    bool isHttp = (low.rfind("http://", 0) == 0);
     if (!isHttp && !isHttps) {
         errReason = "scheme must be http:// or https://";
         return false;
     }
     size_t schemeEnd = isHttps ? 8 : 7;
     size_t pathStart = url.find('/', schemeEnd);
-    std::string auth = (pathStart == std::string::npos) ? url.substr(schemeEnd) : url.substr(schemeEnd, pathStart - schemeEnd);
-    std::string path = (pathStart == std::string::npos) ? "/" : url.substr(pathStart);
-    if (path.empty()) path = "/";
-
-    size_t colon = auth.find(':');
-    std::string host = (colon == std::string::npos) ? auth : auth.substr(0, colon);
-    int port = isHttps ? 443 : 80;
-    if (colon != std::string::npos) {
-        port = std::atoi(auth.substr(colon + 1).c_str());
+    std::string auth = (pathStart == std::string::npos)
+        ? url.substr(schemeEnd)
+        : url.substr(schemeEnd, pathStart - schemeEnd);
+    std::string path = (pathStart == std::string::npos)
+        ? std::string("/")
+        : url.substr(pathStart);
+    if (path.empty()) {
+        path = "/";
     }
+    if (auth.empty() || hasControlChars(auth) || hasControlChars(path)) {
+        errReason = "malformed URL authority or path";
+        return false;
+    }
+
+    std::string host;
+    int port = isHttps ? 443 : 80;
+    if (auth.front() == '[') {
+        size_t closeBracket = auth.find(']');
+        if (closeBracket == std::string::npos || closeBracket <= 1) {
+            errReason = "malformed IPv6 host literal";
+            return false;
+        }
+        host = auth.substr(1, closeBracket - 1);
+        if (closeBracket + 1 < auth.size()) {
+            if (auth[closeBracket + 1] != ':') {
+                errReason = "malformed port after IPv6 literal";
+                return false;
+            }
+            int64_t parsedPort = 0;
+            if (!parseUnsignedStrict(auth.substr(closeBracket + 2), 65535, parsedPort) ||
+                parsedPort <= 0) {
+                errReason = "invalid URL port";
+                return false;
+            }
+            port = static_cast<int>(parsedPort);
+        }
+    } else {
+        size_t colon = auth.find(':');
+        if (colon != std::string::npos &&
+            auth.find(':', colon + 1) != std::string::npos) {
+            errReason = "unbracketed IPv6 literal in URL";
+            return false;
+        }
+        host = (colon == std::string::npos) ? auth : auth.substr(0, colon);
+        if (colon != std::string::npos) {
+            int64_t parsedPort = 0;
+            if (!parseUnsignedStrict(auth.substr(colon + 1), 65535, parsedPort) ||
+                parsedPort <= 0) {
+                errReason = "invalid URL port";
+                return false;
+            }
+            port = static_cast<int>(parsedPort);
+        }
+    }
+    if (host.empty() || host.size() > 253) {
+        errReason = "invalid URL hostname";
+        return false;
+    }
+
+    isHttpsOut = isHttps;
+    hostOut = std::move(host);
+    portOut = port;
+    pathOut = std::move(path);
+    return true;
+}
+
+bool resolveAndValidateProbeEndpoints(const std::string &host,
+                                      int port,
+                                      bool allowLoopbackForTest,
+                                      std::vector<ResolvedProbeEndpoint> &outEndpoints,
+                                      bool &outDisallowedTarget,
+                                      std::string &errReason)
+{
+    outEndpoints.clear();
+    outDisallowedTarget = false;
 
     struct addrinfo hints;
     std::memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     struct addrinfo *resList = nullptr;
-    std::string portStr = std::to_string(port);
+    const std::string portStr = std::to_string(port);
     int gaErr = getaddrinfo(host.c_str(), portStr.c_str(), &hints, &resList);
-    if (gaErr != 0 || !resList) {
+    if (gaErr != 0 || resList == nullptr) {
         errReason = "hostname could not be resolved: " + host;
         return false;
     }
 
     for (struct addrinfo *p = resList; p != nullptr; p = p->ai_next) {
-        if (isPrivateOrLoopbackIp(p->ai_addr, p->ai_addrlen, errReason)) {
+        if (p->ai_addr == nullptr ||
+            p->ai_addrlen == 0 ||
+            static_cast<size_t>(p->ai_addrlen) > sizeof(struct sockaddr_storage)) {
             freeaddrinfo(resList);
+            errReason = "invalid resolved socket address";
             return false;
         }
+        if (OctiHttpServer::isDisallowedProbeAddress(
+                p->ai_addr, static_cast<size_t>(p->ai_addrlen),
+                errReason, allowLoopbackForTest)) {
+            freeaddrinfo(resList);
+            outDisallowedTarget = true;
+            return false;
+        }
+        ResolvedProbeEndpoint ep;
+        std::memset(&ep.storage, 0, sizeof(ep.storage));
+        std::memcpy(&ep.storage, p->ai_addr, p->ai_addrlen);
+        ep.addrLen = p->ai_addrlen;
+        ep.family = p->ai_family;
+        ep.sockType = p->ai_socktype;
+        ep.protocol = p->ai_protocol;
+        outEndpoints.push_back(ep);
     }
+    freeaddrinfo(resList);
 
+    if (outEndpoints.empty()) {
+        errReason = "no usable network addresses resolved for " + host;
+        return false;
+    }
+    return true;
+}
+
+bool probeResolvedHttpOrHttps(const std::vector<ResolvedProbeEndpoint> &endpoints,
+                              bool isHttps,
+                              const std::string &host,
+                              int port,
+                              const std::string &path,
+                              const std::string &method,
+                              int &statusCodeOut,
+                              std::string &redirectLocationOut,
+                              bool &fatalTlsFailureOut,
+                              std::string &errReason)
+{
+    fatalTlsFailureOut = false;
     int sock = -1;
-    for (struct addrinfo *p = resList; p != nullptr; p = p->ai_next) {
-        sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sock < 0) continue;
+    for (size_t i = 0; i < endpoints.size(); ++i) {
+        const ResolvedProbeEndpoint &ep = endpoints[i];
+        sock = ::socket(ep.family, ep.sockType, ep.protocol);
+        if (sock < 0) {
+            continue;
+        }
+        int flags = ::fcntl(sock, F_GETFL, 0);
+        if (flags >= 0) {
+            (void)::fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+        }
 
-        int flags = fcntl(sock, F_GETFL, 0);
-        fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-
-        int rc = connect(sock, p->ai_addr, p->ai_addrlen);
+        int rc = ::connect(
+            sock, reinterpret_cast<const struct sockaddr *>(&ep.storage),
+            ep.addrLen);
         if (rc < 0 && errno == EINPROGRESS) {
             struct pollfd pfd;
             pfd.fd = sock;
             pfd.events = POLLOUT;
-            int prc = poll(&pfd, 1, 3000);
+            int prc = ::poll(&pfd, 1, 3000);
             if (prc > 0 && (pfd.revents & POLLOUT)) {
                 int sockErr = 0;
                 socklen_t errLen = sizeof(sockErr);
-                getsockopt(sock, SOL_SOCKET, SO_ERROR, &sockErr, &errLen);
-                if (sockErr == 0) {
+                if (::getsockopt(sock, SOL_SOCKET, SO_ERROR, &sockErr, &errLen) == 0 &&
+                    sockErr == 0) {
                     break;
                 }
             }
         } else if (rc == 0) {
             break;
         }
-        close(sock);
+        ::close(sock);
         sock = -1;
     }
-    freeaddrinfo(resList);
 
     if (sock < 0) {
         errReason = "could not connect to target within 3 seconds: " + host;
         return false;
     }
 
-    int flags = fcntl(sock, F_GETFL, 0);
-    fcntl(sock, F_SETFL, flags & ~O_NONBLOCK);
+    int flags = ::fcntl(sock, F_GETFL, 0);
+    if (flags >= 0) {
+        (void)::fcntl(sock, F_SETFL, flags & ~O_NONBLOCK);
+    }
     struct timeval tv;
     tv.tv_sec = 3;
     tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    (void)::setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    (void)::setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
+    std::string hostHeader = host;
+    if (host.find(':') != std::string::npos) {
+        hostHeader = "[" + host + "]";
+    }
+    if ((isHttps && port != 443) || (!isHttps && port != 80)) {
+        hostHeader += ":" + std::to_string(port);
+    }
     std::string req = method + " " + path + " HTTP/1.1\r\n" +
-                      "Host: " + host + "\r\n" +
+                      "Host: " + hostHeader + "\r\n" +
                       "User-Agent: OctiBot-UrlVerifier/1.0\r\n" +
                       "Connection: close\r\n" +
                       "Accept: */*\r\n\r\n";
 
-    char respBuf[4096];
-    int bytesRead = 0;
+    std::string respStr;
+    respStr.reserve(1024);
+    const int64_t readDeadlineMs = steadyMs() + 3000;
 
     if (isHttps) {
         SSL_CTX *sslCtx = SSL_CTX_new(TLS_client_method());
         if (!sslCtx) {
-            close(sock);
+            ::close(sock);
+            fatalTlsFailureOut = true;
             errReason = "failed to initialize TLS context";
             return false;
         }
-        SSL *ssl = SSL_new(sslCtx);
-        SSL_set_tlsext_host_name(ssl, host.c_str());
-        SSL_set_fd(ssl, sock);
-        if (SSL_connect(ssl) <= 0) {
-            SSL_free(ssl);
+        SSL_CTX_set_min_proto_version(sslCtx, TLS1_2_VERSION);
+        if (SSL_CTX_set_default_verify_paths(sslCtx) != 1) {
             SSL_CTX_free(sslCtx);
-            close(sock);
-            errReason = "TLS handshake failed with " + host;
+            ::close(sock);
+            fatalTlsFailureOut = true;
+            errReason = "failed to load system CA bundle for TLS verification";
             return false;
         }
-        SSL_write(ssl, req.data(), static_cast<int>(req.size()));
-        bytesRead = SSL_read(ssl, respBuf, sizeof(respBuf) - 1);
+        SSL_CTX_set_verify(sslCtx, SSL_VERIFY_PEER, nullptr);
+
+        SSL *ssl = SSL_new(sslCtx);
+        if (!ssl) {
+            SSL_CTX_free(sslCtx);
+            ::close(sock);
+            fatalTlsFailureOut = true;
+            errReason = "failed to allocate TLS session";
+            return false;
+        }
+
+        struct in_addr v4Dummy;
+        struct in6_addr v6Dummy;
+        const bool hostIsIp =
+            (inet_pton(AF_INET, host.c_str(), &v4Dummy) == 1) ||
+            (inet_pton(AF_INET6, host.c_str(), &v6Dummy) == 1);
+        bool hostBindOk = false;
+        if (hostIsIp) {
+            X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);
+            hostBindOk = (vpm != nullptr &&
+                          X509_VERIFY_PARAM_set1_ip_asc(vpm, host.c_str()) == 1);
+        } else {
+            SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+            hostBindOk = (SSL_set_tlsext_host_name(ssl, host.c_str()) == 1 &&
+                          SSL_set1_host(ssl, host.c_str()) == 1);
+        }
+        if (!hostBindOk) {
+            SSL_free(ssl);
+            SSL_CTX_free(sslCtx);
+            ::close(sock);
+            fatalTlsFailureOut = true;
+            errReason = "failed to configure TLS hostname verification for " + host;
+            return false;
+        }
+
+        SSL_set_fd(ssl, sock);
+        if (SSL_connect(ssl) != 1 || SSL_get_verify_result(ssl) != X509_V_OK) {
+            SSL_free(ssl);
+            SSL_CTX_free(sslCtx);
+            ::close(sock);
+            fatalTlsFailureOut = true;
+            errReason = "TLS certificate or hostname verification failed for " + host;
+            return false;
+        }
+
+        size_t written = 0;
+        while (written < req.size()) {
+            int chunk = static_cast<int>(
+                std::min<size_t>(req.size() - written, 16384u));
+            int nw = SSL_write(ssl, req.data() + written, chunk);
+            if (nw <= 0) {
+                SSL_free(ssl);
+                SSL_CTX_free(sslCtx);
+                ::close(sock);
+                errReason = "TLS write failed while probing " + host;
+                return false;
+            }
+            written += static_cast<size_t>(nw);
+        }
+
+        char buf[2048];
+        while (respStr.find("\r\n\r\n") == std::string::npos) {
+            if (respStr.size() >= kMaxProbeHeaderBytes) {
+                SSL_shutdown(ssl);
+                SSL_free(ssl);
+                SSL_CTX_free(sslCtx);
+                ::close(sock);
+                errReason = "HTTP response headers exceeded 8 KiB limit";
+                return false;
+            }
+            if (steadyMs() > readDeadlineMs) {
+                SSL_free(ssl);
+                SSL_CTX_free(sslCtx);
+                ::close(sock);
+                errReason = "timed out reading HTTP response headers from " + host;
+                return false;
+            }
+            size_t maxChunk = std::min<size_t>(
+                sizeof(buf), kMaxProbeHeaderBytes + 1 - respStr.size());
+            int nr = SSL_read(ssl, buf, static_cast<int>(maxChunk));
+            if (nr == 0) {
+                break;
+            }
+            if (nr < 0) {
+                SSL_free(ssl);
+                SSL_CTX_free(sslCtx);
+                ::close(sock);
+                errReason = "error reading TLS response from " + host;
+                return false;
+            }
+            respStr.append(buf, static_cast<size_t>(nr));
+        }
+
         SSL_shutdown(ssl);
         SSL_free(ssl);
         SSL_CTX_free(sslCtx);
     } else {
-        send(sock, req.data(), req.size(), 0);
-        bytesRead = recv(sock, respBuf, sizeof(respBuf) - 1, 0);
-    }
-    close(sock);
+        size_t written = 0;
+        while (written < req.size()) {
+            ssize_t nw = ::send(sock, req.data() + written,
+                                req.size() - written, MSG_NOSIGNAL);
+            if (nw < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                ::close(sock);
+                errReason = "socket write failed while probing " + host;
+                return false;
+            }
+            if (nw == 0) {
+                ::close(sock);
+                errReason = "socket closed during write to " + host;
+                return false;
+            }
+            written += static_cast<size_t>(nw);
+        }
 
-    if (bytesRead <= 0) {
+        char buf[2048];
+        while (respStr.find("\r\n\r\n") == std::string::npos) {
+            if (respStr.size() >= kMaxProbeHeaderBytes) {
+                ::close(sock);
+                errReason = "HTTP response headers exceeded 8 KiB limit";
+                return false;
+            }
+            if (steadyMs() > readDeadlineMs) {
+                ::close(sock);
+                errReason = "timed out reading HTTP response headers from " + host;
+                return false;
+            }
+            size_t maxChunk = std::min<size_t>(
+                sizeof(buf), kMaxProbeHeaderBytes + 1 - respStr.size());
+            ssize_t nr = ::recv(sock, buf, maxChunk, 0);
+            if (nr == 0) {
+                break;
+            }
+            if (nr < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                ::close(sock);
+                errReason = "error reading HTTP response from " + host;
+                return false;
+            }
+            respStr.append(buf, static_cast<size_t>(nr));
+        }
+    }
+    ::close(sock);
+
+    if (respStr.empty()) {
         errReason = "no HTTP response received from " + host;
         return false;
     }
-    respBuf[bytesRead] = '\0';
-    std::string respStr(respBuf, bytesRead);
 
+    size_t hdrEnd = respStr.find("\r\n\r\n");
+    if (hdrEnd == std::string::npos) {
+        if (respStr.size() > kMaxProbeHeaderBytes) {
+            errReason = "HTTP response headers exceeded 8 KiB limit";
+            return false;
+        }
+    } else {
+        respStr.resize(hdrEnd + 2);
+    }
+
+    if (respStr.rfind("HTTP/", 0) != 0) {
+        errReason = "malformed HTTP status line";
+        return false;
+    }
     size_t sp1 = respStr.find(' ');
-    if (sp1 == std::string::npos) {
+    size_t crlf = respStr.find("\r\n");
+    if (sp1 == std::string::npos || crlf == std::string::npos || sp1 >= crlf) {
         errReason = "malformed HTTP status line";
         return false;
     }
     size_t sp2 = respStr.find(' ', sp1 + 1);
-    size_t crlf = respStr.find("\r\n");
-    size_t endCode = (sp2 != std::string::npos && (crlf == std::string::npos || sp2 < crlf)) ? sp2 : crlf;
-    if (endCode == std::string::npos) {
-        errReason = "malformed HTTP status line";
-        return false;
-    }
-    std::string codeStr = respStr.substr(sp1 + 1, endCode - (sp1 + 1));
-    int code = std::atoi(codeStr.c_str());
-    if (code <= 0) {
+    size_t endCode = (sp2 != std::string::npos && sp2 < crlf) ? sp2 : crlf;
+    int64_t code64 = 0;
+    if (!parseUnsignedStrict(respStr.substr(sp1 + 1, endCode - (sp1 + 1)),
+                             599, code64) ||
+        code64 < 100) {
         errReason = "invalid HTTP status code";
         return false;
     }
-    statusCodeOut = code;
+    statusCodeOut = static_cast<int>(code64);
 
     redirectLocationOut.clear();
-    if (code >= 300 && code < 400) {
-        size_t locPos = respStr.find("\r\nLocation:");
-        if (locPos == std::string::npos) locPos = respStr.find("\r\nlocation:");
-        if (locPos != std::string::npos) {
-            size_t valStart = locPos + 11;
-            while (valStart < respStr.size() && respStr[valStart] == ' ') valStart++;
-            size_t valEnd = respStr.find("\r\n", valStart);
-            if (valEnd != std::string::npos) {
-                redirectLocationOut = respStr.substr(valStart, valEnd - valStart);
+    if (statusCodeOut >= 300 && statusCodeOut < 400) {
+        size_t lineStart = crlf + 2;
+        while (lineStart < respStr.size()) {
+            size_t lineEnd = respStr.find("\r\n", lineStart);
+            if (lineEnd == std::string::npos) {
+                lineEnd = respStr.size();
             }
+            if (lineEnd - lineStart >= 9) {
+                std::string prefixLower = lower(respStr.substr(lineStart, 9));
+                if (prefixLower == "location:") {
+                    size_t valStart = lineStart + 9;
+                    while (valStart < lineEnd &&
+                           (respStr[valStart] == ' ' || respStr[valStart] == '\t')) {
+                        ++valStart;
+                    }
+                    size_t valEnd = lineEnd;
+                    while (valEnd > valStart &&
+                           (respStr[valEnd - 1] == ' ' || respStr[valEnd - 1] == '\t')) {
+                        --valEnd;
+                    }
+                    redirectLocationOut = respStr.substr(valStart, valEnd - valStart);
+                    break;
+                }
+            }
+            if (lineEnd >= respStr.size()) {
+                break;
+            }
+            lineStart = lineEnd + 2;
         }
     }
     return true;
 }
 
-bool verifyRobotUrlReachable(const std::string &initialUrl, std::string &errReason)
+bool verifyRobotUrlReachable(const std::string &initialUrl,
+                             std::string &errReason,
+                             bool *outDisallowedTarget = nullptr)
 {
+    if (outDisallowedTarget != nullptr) {
+        *outDisallowedTarget = false;
+    }
+    const char *allowLoopbackEnv = std::getenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+    const bool loopbackAllowed =
+        (allowLoopbackEnv != nullptr && std::string(allowLoopbackEnv) == "1");
+
     std::string currentUrl = initialUrl;
     for (int hop = 0; hop < 4; ++hop) {
         if (!AccountStore::validRobotUrlSyntax(currentUrl)) {
@@ -416,11 +900,35 @@ bool verifyRobotUrlReachable(const std::string &initialUrl, std::string &errReas
             return false;
         }
 
+        bool isHttps = false;
+        std::string host;
+        int port = 0;
+        std::string path;
+        if (!parseProbeUrlParts(currentUrl, isHttps, host, port, path, errReason)) {
+            return false;
+        }
+
+        std::vector<ResolvedProbeEndpoint> endpoints;
+        bool disallowedTarget = false;
+        if (!resolveAndValidateProbeEndpoints(
+                host, port, loopbackAllowed, endpoints, disallowedTarget, errReason)) {
+            if (disallowedTarget && outDisallowedTarget != nullptr) {
+                *outDisallowedTarget = true;
+            }
+            return false;
+        }
+
         int statusCode = 0;
         std::string redirectLoc;
-        bool ok = probeSingleHttpOrHttpsWithMethod(currentUrl, "HEAD", statusCode, redirectLoc, errReason);
-        if (!ok || statusCode == 405 || statusCode == 403 || statusCode == 501) {
-            ok = probeSingleHttpOrHttpsWithMethod(currentUrl, "GET", statusCode, redirectLoc, errReason);
+        bool fatalTls = false;
+        bool ok = probeResolvedHttpOrHttps(
+            endpoints, isHttps, host, port, path, "HEAD",
+            statusCode, redirectLoc, fatalTls, errReason);
+        if (!fatalTls &&
+            (!ok || statusCode == 405 || statusCode == 403 || statusCode == 501)) {
+            ok = probeResolvedHttpOrHttps(
+                endpoints, isHttps, host, port, path, "GET",
+                statusCode, redirectLoc, fatalTls, errReason);
         }
         if (!ok) {
             return false;
@@ -431,13 +939,17 @@ bool verifyRobotUrlReachable(const std::string &initialUrl, std::string &errReas
         }
 
         if (statusCode >= 300 && statusCode < 400 && !redirectLoc.empty()) {
-            if (redirectLoc.rfind("http://", 0) != 0 && redirectLoc.rfind("https://", 0) != 0) {
+            std::string redirLow = lower(redirectLoc);
+            if (redirLow.rfind("http://", 0) != 0 &&
+                redirLow.rfind("https://", 0) != 0) {
                 size_t schemeEnd = currentUrl.find("://");
                 if (schemeEnd != std::string::npos) {
                     schemeEnd += 3;
                     size_t slash = currentUrl.find('/', schemeEnd);
                     std::string origin = currentUrl.substr(0, slash);
-                    if (redirectLoc.front() != '/') redirectLoc = "/" + redirectLoc;
+                    if (redirectLoc.front() != '/') {
+                        redirectLoc = "/" + redirectLoc;
+                    }
                     currentUrl = origin + redirectLoc;
                 } else {
                     errReason = "invalid redirect location";
@@ -456,16 +968,154 @@ bool verifyRobotUrlReachable(const std::string &initialUrl, std::string &errReas
     return false;
 }
 
-const std::string kOauthStateSecret = "octi_oauth_state_hmac_secret_2026";
-
-std::string hmacSha256(const std::string &data, const std::string &key)
+std::string hmacSha256(const std::string &data, const uint8_t *key,
+                       size_t keyLen)
 {
     unsigned char md[EVP_MAX_MD_SIZE];
     unsigned int mdLen = 0;
-    HMAC(EVP_sha256(), key.data(), key.size(),
-         reinterpret_cast<const unsigned char *>(data.data()), data.size(),
-         md, &mdLen);
+    if (HMAC(EVP_sha256(), key, static_cast<int>(keyLen),
+             reinterpret_cast<const unsigned char *>(data.data()), data.size(),
+             md, &mdLen) == nullptr) {
+        return std::string();
+    }
     return std::string(reinterpret_cast<const char *>(md), mdLen);
+}
+
+bool randomTokenB64Url(size_t numBytes, std::string &out)
+{
+    std::vector<unsigned char> buf(numBytes);
+    if (numBytes == 0 ||
+        RAND_bytes(buf.data(), static_cast<int>(buf.size())) != 1) {
+        return false;
+    }
+    out = base64UrlEncode(buf.data(), buf.size());
+    return !out.empty();
+}
+
+bool isValidOauthRedirectUri(const std::string &redirectUri,
+                             bool &isNativeOut)
+{
+    isNativeOut = false;
+    if (redirectUri.empty() || redirectUri.size() > 512) {
+        return false;
+    }
+    for (size_t i = 0; i < redirectUri.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(redirectUri[i]);
+        if (c <= 0x20 || c >= 0x7F) {
+            return false;
+        }
+    }
+    if (redirectUri[0] == '/' &&
+        (redirectUri.size() == 1 ||
+         (redirectUri[1] != '/' && redirectUri[1] != '\\'))) {
+        return true;
+    }
+    if (redirectUri == "octi://auth/callback" ||
+        redirectUri == "octi://callback") {
+        isNativeOut = true;
+        return true;
+    }
+    if (redirectUri.rfind("http://127.0.0.1:", 0) == 0 ||
+        redirectUri.rfind("http://localhost:", 0) == 0) {
+        size_t colon = redirectUri.find(':', 7);
+        if (colon != std::string::npos) {
+            size_t slash = redirectUri.find('/', colon);
+            if (slash != std::string::npos) {
+                std::string portStr =
+                    redirectUri.substr(colon + 1, slash - (colon + 1));
+                int64_t portNum = 0;
+                if (portStr.size() >= 1 && portStr.size() <= 5) {
+                    bool allDigits = true;
+                    for (size_t i = 0; i < portStr.size(); ++i) {
+                        if (portStr[i] < '0' || portStr[i] > '9') {
+                            allDigits = false;
+                            break;
+                        }
+                    }
+                    if (allDigits) {
+                        portNum = std::strtoll(portStr.c_str(), nullptr, 10);
+                    }
+                }
+                if (portNum >= 1 && portNum <= 65535) {
+                    std::string pathPart = redirectUri.substr(slash);
+                    if (pathPart == "/callback" ||
+                        pathPart == "/oauth/callback") {
+                        isNativeOut = true;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool splitAuthorityHostOnly(const std::string &rawAuth, std::string &hostOut)
+{
+    hostOut.clear();
+    std::string s = rawAuth;
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
+        s.erase(s.begin());
+    }
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+        s.pop_back();
+    }
+    if (s.empty() || s.size() > 260) {
+        return false;
+    }
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c <= 0x20 || c >= 0x7F || c == '/' || c == '\\' || c == '@' ||
+            c == '?' || c == '#') {
+            return false;
+        }
+    }
+    if (s[0] == '[') {
+        size_t closeBracket = s.find(']');
+        if (closeBracket == std::string::npos || closeBracket <= 1) {
+            return false;
+        }
+        hostOut = lower(s.substr(0, closeBracket + 1));
+        if (closeBracket + 1 < s.size()) {
+            if (s[closeBracket + 1] != ':') {
+                return false;
+            }
+            std::string portStr = s.substr(closeBracket + 2);
+            if (portStr.empty() || portStr.size() > 5) {
+                return false;
+            }
+            for (size_t i = 0; i < portStr.size(); ++i) {
+                if (portStr[i] < '0' || portStr[i] > '9') {
+                    return false;
+                }
+            }
+            long p = std::strtol(portStr.c_str(), nullptr, 10);
+            if (p < 1 || p > 65535) {
+                return false;
+            }
+        }
+        return true;
+    }
+    size_t colon = s.find(':');
+    if (colon == std::string::npos) {
+        hostOut = lower(s);
+        return !hostOut.empty();
+    }
+    if (s.find(':', colon + 1) != std::string::npos) {
+        return false;
+    }
+    hostOut = lower(s.substr(0, colon));
+    std::string portStr = s.substr(colon + 1);
+    if (hostOut.empty() || portStr.empty() || portStr.size() > 5) {
+        return false;
+    }
+    for (size_t i = 0; i < portStr.size(); ++i) {
+        if (portStr[i] < '0' || portStr[i] > '9') {
+            return false;
+        }
+    }
+    long p = std::strtol(portStr.c_str(), nullptr, 10);
+    return p >= 1 && p <= 65535;
 }
 
 std::string urlEncode(const std::string &value)
@@ -553,35 +1203,22 @@ std::string detectClientType(const Request &req)
     return "";
 }
 
-std::string clientRemoteIp(const Request &req)
+bool isDisallowedCrawlerUserAgent(const std::string &ua)
 {
-    if (req.has_header("X-Forwarded-For")) {
-        std::string xff = req.get_header_value("X-Forwarded-For");
-        size_t comma = xff.find(',');
-        if (comma != std::string::npos) {
-            xff = xff.substr(0, comma);
-        }
-        size_t first = xff.find_first_not_of(" \t\r\n");
-        if (first != std::string::npos) {
-            size_t last = xff.find_last_not_of(" \t\r\n");
-            std::string ip = xff.substr(first, (last - first + 1));
-            if (!ip.empty()) {
-                return ip;
-            }
+    if (ua.empty()) {
+        return false;
+    }
+    std::string l = lower(ua);
+    static const char *const kTokens[] = {
+        "gptbot", "claudebot", "ccbot", "bytespider", "petalbot",
+        "ahrefsbot", "semrushbot", "mj12bot", "dotbot", "scrapy"
+    };
+    for (size_t i = 0; i < sizeof(kTokens) / sizeof(kTokens[0]); ++i) {
+        if (l.find(kTokens[i]) != std::string::npos) {
+            return true;
         }
     }
-    if (req.has_header("X-Real-IP")) {
-        std::string xri = req.get_header_value("X-Real-IP");
-        size_t first = xri.find_first_not_of(" \t\r\n");
-        if (first != std::string::npos) {
-            size_t last = xri.find_last_not_of(" \t\r\n");
-            std::string ip = xri.substr(first, (last - first + 1));
-            if (!ip.empty()) {
-                return ip;
-            }
-        }
-    }
-    return req.remote_addr;
+    return false;
 }
 
 bool isLoopbackIp(const std::string &ip)
@@ -593,6 +1230,258 @@ bool isLoopbackIp(const std::string &ip)
            ip == "localhost" ||
            ip == "unknown";
 }
+
+/* ------------------------------------------------------------------ */
+/* Bounded Rate Limiters (Token Bucket & Fixed Window)                 */
+/* ------------------------------------------------------------------ */
+
+class TokenBucketLimiter {
+public:
+    static const size_t kMaxKeys = 16384;
+
+    struct BucketEntry {
+        double tokens = 0.0;
+        int64_t lastRefillSteadyMs = 0;
+    };
+
+    bool tryAcquire(const std::string &key, double refillPerSec, double burst,
+                    int64_t &retryAfterSec)
+    {
+        if (burst <= 0.0 || refillPerSec <= 0.0 || key.empty()) {
+            return true;
+        }
+        const int64_t now = steadyMs();
+        std::lock_guard<std::mutex> lock(_mutex);
+        BucketEntry &b = getOrCreateLocked(key, refillPerSec, burst, now);
+        if (b.tokens >= 1.0) {
+            b.tokens -= 1.0;
+            return true;
+        }
+        double deficit = std::max(0.0, 1.0 - b.tokens);
+        retryAfterSec = std::max<int64_t>(
+            1, static_cast<int64_t>(std::ceil(deficit / refillPerSec)));
+        return false;
+    }
+
+    bool tryAcquireDual(const std::string &actorKey, double actorRefill,
+                        double actorBurst, const std::string &ipKey,
+                        double ipRefill, double ipBurst,
+                        int64_t &retryAfterSec)
+    {
+        const bool checkActor =
+            !actorKey.empty() && actorBurst > 0.0 && actorRefill > 0.0;
+        const bool checkIp =
+            !ipKey.empty() && ipBurst > 0.0 && ipRefill > 0.0;
+        if (!checkActor && !checkIp) {
+            return true;
+        }
+        const int64_t now = steadyMs();
+        std::lock_guard<std::mutex> lock(_mutex);
+        BucketEntry *actorEntry = checkActor
+            ? &getOrCreateLocked(actorKey, actorRefill, actorBurst, now)
+            : nullptr;
+        BucketEntry *ipEntry = checkIp
+            ? &getOrCreateLocked(ipKey, ipRefill, ipBurst, now)
+            : nullptr;
+
+        int64_t waitSec = 0;
+        if (actorEntry != nullptr && actorEntry->tokens < 1.0) {
+            double deficit = std::max(0.0, 1.0 - actorEntry->tokens);
+            waitSec = std::max<int64_t>(
+                waitSec,
+                std::max<int64_t>(1, static_cast<int64_t>(
+                                         std::ceil(deficit / actorRefill))));
+        }
+        if (ipEntry != nullptr && ipEntry->tokens < 1.0) {
+            double deficit = std::max(0.0, 1.0 - ipEntry->tokens);
+            waitSec = std::max<int64_t>(
+                waitSec,
+                std::max<int64_t>(1, static_cast<int64_t>(
+                                         std::ceil(deficit / ipRefill))));
+        }
+        if (waitSec > 0) {
+            retryAfterSec = waitSec;
+            return false;
+        }
+        if (actorEntry != nullptr) {
+            actorEntry->tokens -= 1.0;
+        }
+        if (ipEntry != nullptr) {
+            ipEntry->tokens -= 1.0;
+        }
+        return true;
+    }
+
+    size_t size() const
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _entries.size();
+    }
+
+private:
+    BucketEntry &getOrCreateLocked(const std::string &key, double refillPerSec,
+                                   double burst, int64_t now)
+    {
+        auto it = _entries.find(key);
+        if (it == _entries.end()) {
+            if (_entries.size() >= kMaxKeys) {
+                auto oldest = _entries.begin();
+                for (auto scan = _entries.begin(); scan != _entries.end();
+                     ++scan) {
+                    if (scan->second.lastRefillSteadyMs <
+                        oldest->second.lastRefillSteadyMs) {
+                        oldest = scan;
+                    }
+                }
+                _entries.erase(oldest);
+            }
+            BucketEntry fresh;
+            fresh.tokens = burst;
+            fresh.lastRefillSteadyMs = now;
+            it = _entries.emplace(key, fresh).first;
+            return it->second;
+        }
+        int64_t elapsedMs = std::max<int64_t>(0, now - it->second.lastRefillSteadyMs);
+        double refilled = it->second.tokens +
+                          (static_cast<double>(elapsedMs) / 1000.0) * refillPerSec;
+        it->second.tokens = std::min(burst, refilled);
+        it->second.lastRefillSteadyMs = now;
+        return it->second;
+    }
+
+    mutable std::mutex _mutex;
+    std::unordered_map<std::string, BucketEntry> _entries;
+};
+
+class IpRateLimiter {
+public:
+    static const size_t kMaxKeys = 16384;
+
+    struct WindowEntry {
+        int64_t startMs = 0;
+        int count = 0;
+    };
+
+    bool tryAcquire(const std::string &key, int maxCount, int64_t windowMs,
+                    int64_t &retryAfterSec)
+    {
+        if (maxCount <= 0 || windowMs <= 0 || key.empty()) {
+            return true;
+        }
+        const int64_t now = steadyMs();
+        std::lock_guard<std::mutex> lock(_mutex);
+        WindowEntry &w = getOrCreateLocked(key, windowMs, now);
+        if (w.count < maxCount) {
+            ++w.count;
+            return true;
+        }
+        int64_t remMs = windowMs - (now - w.startMs);
+        retryAfterSec = std::max<int64_t>(1, (remMs + 999) / 1000);
+        return false;
+    }
+
+    bool tryAcquireDual(const std::string &k1, int max1,
+                        const std::string &k2, int max2,
+                        int64_t windowMs, int64_t &retryAfterSec)
+    {
+        if (windowMs <= 0) {
+            return true;
+        }
+        const bool c1 = !k1.empty() && max1 > 0;
+        const bool c2 = !k2.empty() && max2 > 0 && k2 != k1;
+        if (!c1 && !c2) {
+            return true;
+        }
+        const int64_t now = steadyMs();
+        std::lock_guard<std::mutex> lock(_mutex);
+        WindowEntry *w1 = c1 ? &getOrCreateLocked(k1, windowMs, now) : nullptr;
+        WindowEntry *w2 = c2 ? &getOrCreateLocked(k2, windowMs, now) : nullptr;
+        int64_t waitSec = 0;
+        if (w1 != nullptr && w1->count >= max1) {
+            int64_t remMs = windowMs - (now - w1->startMs);
+            waitSec = std::max<int64_t>(waitSec,
+                                        std::max<int64_t>(1, (remMs + 999) / 1000));
+        }
+        if (w2 != nullptr && w2->count >= max2) {
+            int64_t remMs = windowMs - (now - w2->startMs);
+            waitSec = std::max<int64_t>(waitSec,
+                                        std::max<int64_t>(1, (remMs + 999) / 1000));
+        }
+        if (waitSec > 0) {
+            retryAfterSec = waitSec;
+            return false;
+        }
+        if (w1 != nullptr) {
+            ++w1->count;
+        }
+        if (w2 != nullptr) {
+            ++w2->count;
+        }
+        return true;
+    }
+
+    bool isBlocked(const std::string &key, int maxCount, int64_t windowMs,
+                   int64_t &retryAfterSec) const
+    {
+        if (maxCount <= 0 || windowMs <= 0 || key.empty()) {
+            return false;
+        }
+        const int64_t now = steadyMs();
+        std::lock_guard<std::mutex> lock(_mutex);
+        auto it = _entries.find(key);
+        if (it == _entries.end()) {
+            return false;
+        }
+        if (it->second.count < maxCount ||
+            now - it->second.startMs >= windowMs) {
+            return false;
+        }
+        int64_t remMs = windowMs - (now - it->second.startMs);
+        retryAfterSec = std::max<int64_t>(1, (remMs + 999) / 1000);
+        return true;
+    }
+
+private:
+    WindowEntry &getOrCreateLocked(const std::string &key, int64_t windowMs,
+                                   int64_t now)
+    {
+        auto it = _entries.find(key);
+        if (it == _entries.end()) {
+            if (_entries.size() >= kMaxKeys) {
+                for (auto scan = _entries.begin(); scan != _entries.end();) {
+                    if (now - scan->second.startMs >= windowMs) {
+                        scan = _entries.erase(scan);
+                    } else {
+                        ++scan;
+                    }
+                }
+                if (_entries.size() >= kMaxKeys) {
+                    auto oldest = _entries.begin();
+                    for (auto scan = _entries.begin(); scan != _entries.end();
+                         ++scan) {
+                        if (scan->second.startMs < oldest->second.startMs) {
+                            oldest = scan;
+                        }
+                    }
+                    _entries.erase(oldest);
+                }
+            }
+            WindowEntry fresh;
+            fresh.startMs = now;
+            fresh.count = 0;
+            it = _entries.emplace(key, fresh).first;
+            return it->second;
+        }
+        if (it->second.count == 0 || now - it->second.startMs >= windowMs) {
+            it->second.startMs = now;
+            it->second.count = 0;
+        }
+        return it->second;
+    }
+
+    mutable std::mutex _mutex;
+    std::unordered_map<std::string, WindowEntry> _entries;
+};
 
 const char *modeName(OctiGameMode m)
 {
@@ -703,6 +1592,324 @@ bool fieldPresent(const Json &b, const char *key)
 {
     Json::const_iterator it = b.find(key);
     return it != b.end() && !it->is_null();
+}
+
+/* ------------------------------------------------------------------ */
+/* Compression, ETag & Snapshot Cache Helpers                          */
+/* ------------------------------------------------------------------ */
+
+static constexpr size_t kMinDynamicGzipBytes = 1024;
+
+std::string trimHttpToken(const std::string &s)
+{
+    size_t b = 0;
+    size_t e = s.size();
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n')) {
+        ++b;
+    }
+    while (e > b &&
+           (s[e - 1] == ' ' || s[e - 1] == '\t' ||
+            s[e - 1] == '\r' || s[e - 1] == '\n')) {
+        --e;
+    }
+    return s.substr(b, e - b);
+}
+
+bool compressGzipWithLevel(const char *data, size_t len, int level,
+                           std::string &out)
+{
+    out.clear();
+    z_stream zs;
+    std::memset(&zs, 0, sizeof(zs));
+    if (deflateInit2(&zs, level, Z_DEFLATED, 15 + 16, 8,
+                     Z_DEFAULT_STRATEGY) != Z_OK) {
+        return false;
+    }
+    struct DeflateGuard {
+        z_stream *s;
+        ~DeflateGuard() { deflateEnd(s); }
+    } guard{&zs};
+
+    zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(data));
+    zs.avail_in = static_cast<uInt>(len);
+
+    char buf[16384];
+    int ret = Z_OK;
+    while (ret == Z_OK) {
+        zs.next_out = reinterpret_cast<Bytef *>(buf);
+        zs.avail_out = sizeof(buf);
+        ret = deflate(&zs, Z_FINISH);
+        if (ret != Z_OK && ret != Z_STREAM_END) {
+            out.clear();
+            return false;
+        }
+        size_t have = sizeof(buf) - zs.avail_out;
+        out.append(buf, have);
+    }
+    return ret == Z_STREAM_END;
+}
+
+std::string compressGzipFast(const std::string &raw)
+{
+    if (raw.size() < kMinDynamicGzipBytes) {
+        return std::string();
+    }
+    std::string gz;
+    if (!compressGzipWithLevel(raw.data(), raw.size(), Z_BEST_SPEED, gz)) {
+        return std::string();
+    }
+    return gz;
+}
+
+bool clientAcceptsGzip(const Request &req)
+{
+    if (!req.has_header("Accept-Encoding")) {
+        return false;
+    }
+    const std::string hdr = req.get_header_value("Accept-Encoding");
+    if (hdr.empty() || hdr.size() > 1024) {
+        return false;
+    }
+    size_t pos = 0;
+    while (pos <= hdr.size()) {
+        size_t comma = hdr.find(',', pos);
+        std::string item = (comma == std::string::npos)
+                               ? hdr.substr(pos)
+                               : hdr.substr(pos, comma - pos);
+        size_t semi = item.find(';');
+        std::string coding = lower(trimHttpToken(
+            semi == std::string::npos ? item : item.substr(0, semi)));
+        if (coding == "gzip") {
+            if (semi == std::string::npos) {
+                return true;
+            }
+            std::string params = lower(trimHttpToken(item.substr(semi + 1)));
+            size_t qpos = params.find("q=");
+            if (qpos == std::string::npos) {
+                return true;
+            }
+            std::string qval = trimHttpToken(params.substr(qpos + 2));
+            size_t qsemi = qval.find(';');
+            if (qsemi != std::string::npos) {
+                qval = trimHttpToken(qval.substr(0, qsemi));
+            }
+            if (qval == "0" || qval == "0.0" || qval == "0.00" ||
+                qval == "0.000") {
+                return false;
+            }
+            return true;
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        pos = comma + 1;
+    }
+    return false;
+}
+
+bool ifNoneMatchMatches(const Request &req, const std::string &etag)
+{
+    if (etag.empty() || !req.has_header("If-None-Match")) {
+        return false;
+    }
+    const std::string hdr = req.get_header_value("If-None-Match");
+    if (hdr.empty() || hdr.size() > 2048 || hasControlChars(hdr)) {
+        return false;
+    }
+    auto stripWeak = [](const std::string &t) -> std::string {
+        if (t.size() >= 2 && (t[0] == 'W' || t[0] == 'w') && t[1] == '/') {
+            return trimHttpToken(t.substr(2));
+        }
+        return t;
+    };
+    const std::string normTarget = stripWeak(trimHttpToken(etag));
+    if (normTarget.size() < 2 || normTarget.front() != '"' ||
+        normTarget.back() != '"') {
+        return false;
+    }
+    size_t pos = 0;
+    while (pos <= hdr.size()) {
+        size_t comma = hdr.find(',', pos);
+        std::string cand = trimHttpToken(
+            (comma == std::string::npos) ? hdr.substr(pos)
+                                         : hdr.substr(pos, comma - pos));
+        if (cand == "*") {
+            return true;
+        }
+        std::string normCand = stripWeak(cand);
+        if (normCand.size() >= 2 && normCand.front() == '"' &&
+            normCand.back() == '"' && normCand == normTarget) {
+            return true;
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        pos = comma + 1;
+    }
+    return false;
+}
+
+std::string makePayloadEtag(const char *prefix, const std::string &payload)
+{
+    return std::string("\"") + prefix +
+           AccountStore::sha256Hex(payload).substr(0, 24) + "\"";
+}
+
+/*
+ * Fast O(N) zero-parse single-line guard for any pre-existing legacy DB row
+ * that was stored with pretty-printed newlines before Envelope 4.
+ */
+void appendSingleLineNdjsonRow(const std::string &transcript, std::string &out)
+{
+    if (transcript.find_first_of("\r\n") == std::string::npos) {
+        out.append(transcript);
+        out.push_back('\n');
+        return;
+    }
+    bool inStr = false;
+    bool escaped = false;
+    bool skipIndent = false;
+    for (size_t i = 0; i < transcript.size(); ++i) {
+        char c = transcript[i];
+        if (inStr) {
+            if (escaped) {
+                out.push_back(c);
+                escaped = false;
+            } else if (c == '\\') {
+                out.push_back(c);
+                escaped = true;
+            } else if (c == '"') {
+                out.push_back(c);
+                inStr = false;
+            } else if (c == '\r') {
+                out += "\\r";
+            } else if (c == '\n') {
+                out += "\\n";
+            } else {
+                out.push_back(c);
+            }
+        } else {
+            if (c == '\r' || c == '\n') {
+                skipIndent = true;
+                continue;
+            }
+            if (skipIndent && (c == ' ' || c == '\t')) {
+                continue;
+            }
+            skipIndent = false;
+            if (c == '"') {
+                inStr = true;
+            }
+            out.push_back(c);
+        }
+    }
+    out.push_back('\n');
+}
+
+struct CachedPayload {
+    std::string jsonBytes;
+    std::string gzipBytes;
+    std::string etag;
+    uint64_t rev = 0;
+    int64_t expiresMs = 0;
+};
+
+class SnapshotLruCache {
+public:
+    explicit SnapshotLruCache(size_t maxEntries = 64)
+        : _maxEntries(std::max<size_t>(1, maxEntries)), _rev(0)
+    {
+    }
+
+    bool get(const std::string &key, uint64_t curRev, int64_t nowMs,
+             CachedPayload &out)
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (curRev != _rev) {
+            _entries.clear();
+            _lru.clear();
+            _rev = curRev;
+            return false;
+        }
+        auto it = _entries.find(key);
+        if (it == _entries.end()) {
+            return false;
+        }
+        const CachedPayload &entry = it->second.first;
+        if (entry.expiresMs > 0 &&
+            (nowMs >= entry.expiresMs || nowMs + 60000 < entry.expiresMs)) {
+            _lru.erase(it->second.second);
+            _entries.erase(it);
+            return false;
+        }
+        _lru.erase(it->second.second);
+        _lru.push_front(key);
+        it->second.second = _lru.begin();
+        out = entry;
+        return true;
+    }
+
+    CachedPayload put(const std::string &key, uint64_t curRev, int64_t ttlMs,
+                      int64_t nowMs, const char *etagPrefix,
+                      std::string &&jsonBytes)
+    {
+        CachedPayload entry;
+        entry.jsonBytes = std::move(jsonBytes);
+        entry.etag = makePayloadEtag(etagPrefix, entry.jsonBytes);
+        entry.gzipBytes = compressGzipFast(entry.jsonBytes);
+        entry.rev = curRev;
+        entry.expiresMs = (ttlMs > 0) ? (nowMs + ttlMs) : 0;
+
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (curRev != _rev) {
+            _entries.clear();
+            _lru.clear();
+            _rev = curRev;
+        }
+        auto existing = _entries.find(key);
+        if (existing != _entries.end()) {
+            _lru.erase(existing->second.second);
+            _entries.erase(existing);
+        }
+        while (_entries.size() >= _maxEntries && !_lru.empty()) {
+            const std::string &oldestKey = _lru.back();
+            _entries.erase(oldestKey);
+            _lru.pop_back();
+        }
+        _lru.push_front(key);
+        _entries.emplace(key, std::make_pair(entry, _lru.begin()));
+        return entry;
+    }
+
+private:
+    size_t _maxEntries;
+    uint64_t _rev;
+    mutable std::mutex _mutex;
+    std::list<std::string> _lru;
+    std::unordered_map<std::string,
+                       std::pair<CachedPayload, std::list<std::string>::iterator>>
+        _entries;
+};
+
+void sendCachedSnapshot(const Request &req, Response &res,
+                        const CachedPayload &snap, const char *cacheControl)
+{
+    res.set_header("Cache-Control", cacheControl);
+    res.set_header("ETag", snap.etag);
+    res.set_header("Vary", "Accept-Encoding");
+    if (ifNoneMatchMatches(req, snap.etag)) {
+        res.status = 304;
+        return;
+    }
+    res.status = 200;
+    if (!snap.gzipBytes.empty() &&
+        snap.jsonBytes.size() >= kMinDynamicGzipBytes &&
+        clientAcceptsGzip(req)) {
+        res.set_header("Content-Encoding", "gzip");
+        res.set_content(snap.gzipBytes, "application/json");
+    } else {
+        res.set_content(snap.jsonBytes, "application/json");
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -888,6 +2095,17 @@ bool isJsonContentType(const std::string &contentType)
            ct[want.size()] == ' ';
 }
 
+bool isFormUrlEncodedContentType(const std::string &contentType)
+{
+    std::string ct = lower(contentType);
+    const std::string want = "application/x-www-form-urlencoded";
+    if (ct.compare(0, want.size(), want) != 0) {
+        return false;
+    }
+    return ct.size() == want.size() || ct[want.size()] == ';' ||
+           ct[want.size()] == ' ';
+}
+
 bool parseTimeControl(const Json &b, TimeControlConfig &tc, std::string &err)
 {
     tc = TimeControlConfig();
@@ -1006,13 +2224,48 @@ struct PollBatch {
 typedef std::function<int(int64_t since, size_t limit, PollBatch &out)>
     PollFn;
 
-/* Holds one SSE slot for as long as the response (and its copies) live. */
-struct SlotGuard {
-    explicit SlotGuard(std::atomic<int> &counter) : _counter(counter) {}
-    ~SlotGuard() { --_counter; }
-    SlotGuard(const SlotGuard &) = delete;
-    SlotGuard &operator=(const SlotGuard &) = delete;
-    std::atomic<int> &_counter;
+/* Holds one SSE slot (global, per-IP, and per-player) via RAII. */
+struct SseStreamSlotGuard {
+    std::atomic<int> &active;
+    std::mutex &mutex;
+    std::map<std::string, int> &byIp;
+    std::map<int64_t, int> &byPlayer;
+    std::string ip;
+    int64_t playerId;
+
+    SseStreamSlotGuard(std::atomic<int> &act, std::mutex &m,
+                       std::map<std::string, int> &ipMap,
+                       std::map<int64_t, int> &plMap,
+                       const std::string &ipKey, int64_t pid)
+        : active(act), mutex(m), byIp(ipMap), byPlayer(plMap),
+          ip(ipKey), playerId(pid)
+    {
+    }
+
+    ~SseStreamSlotGuard()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!ip.empty()) {
+            auto it = byIp.find(ip);
+            if (it != byIp.end()) {
+                if (--it->second <= 0) {
+                    byIp.erase(it);
+                }
+            }
+        }
+        if (playerId != 0) {
+            auto it = byPlayer.find(playerId);
+            if (it != byPlayer.end()) {
+                if (--it->second <= 0) {
+                    byPlayer.erase(it);
+                }
+            }
+        }
+        --active;
+    }
+
+    SseStreamSlotGuard(const SseStreamSlotGuard &) = delete;
+    SseStreamSlotGuard &operator=(const SseStreamSlotGuard &) = delete;
 };
 
 std::string generateLeaseId()
@@ -1032,11 +2285,13 @@ std::string generateLeaseId()
 }
 
 struct StreamState {
-    std::shared_ptr<SlotGuard> slot;
+    std::shared_ptr<SseStreamSlotGuard> slot;
     PollFn fetch;
     int64_t cursor = 0;
     std::string token;          // empty for anonymous streams
     int64_t playerId = 0;
+    std::string playerUuid;
+    std::string remoteIp;
     std::string clientType;
     int64_t startedMs = 0;
     int64_t lastWriteMs = 0;
@@ -1045,6 +2300,8 @@ struct StreamState {
     bool gapSent = false;
     bool isRobot = false;
     int64_t robotId = 0;
+    std::string robotUuid;
+    std::string ownerUuid;
     std::string leaseId;
     std::shared_ptr<void> robotStreamGuard;
 };
@@ -1099,6 +2356,38 @@ struct OctiHttpServer::Impl {
         }
     };
 
+    struct UrlProbeSlotGuard {
+        std::atomic<int> &counter;
+        bool unlimited;
+        bool acquired;
+        UrlProbeSlotGuard(std::atomic<int> &c, int maxConcurrent)
+            : counter(c), unlimited(maxConcurrent <= 0), acquired(false)
+        {
+            if (unlimited) {
+                return;
+            }
+            int cur = counter.load(std::memory_order_relaxed);
+            while (cur < maxConcurrent) {
+                if (counter.compare_exchange_weak(
+                        cur, cur + 1,
+                        std::memory_order_acquire,
+                        std::memory_order_relaxed)) {
+                    acquired = true;
+                    return;
+                }
+            }
+        }
+        ~UrlProbeSlotGuard()
+        {
+            if (acquired) {
+                counter.fetch_sub(1, std::memory_order_release);
+            }
+        }
+        UrlProbeSlotGuard(const UrlProbeSlotGuard &) = delete;
+        UrlProbeSlotGuard &operator=(const UrlProbeSlotGuard &) = delete;
+        bool allowed() const { return unlimited || acquired; }
+    };
+
     struct Auth {
         int64_t playerId = 0;
         std::string token;
@@ -1123,20 +2412,55 @@ struct OctiHttpServer::Impl {
                        int64_t &playerId);
 
     /* auth + parsing */
+    std::string clientRemoteIp(const Request &req) const;
+    bool isHttpsRequest(const Request &req) const;
+    size_t routeMaxBodyBytes(const std::string &method,
+                             const std::string &path) const;
+    bool hasValidBearerAuth(const Request &req);
     static bool extractBearer(const Request &req, std::string &token);
     void maybeBindClientInstallId(const Request &req, int64_t playerId,
                                   const std::string &bodyInstallId = "");
+    void sendAuthUnauthorized(const Request &req, Response &res,
+                              const char *wwwAuth, const std::string &message,
+                              bool tokenAttempted);
     bool requireAuth(const Request &req, Response &res, Auth &auth);
     bool optionalAuth(const Request &req, Response &res, Auth &auth);
     bool readJsonBody(const Request &req, Response &res, Json &out,
                       bool allowEmpty);
     bool pathId(const Request &req, const char *name, Response &res,
                 std::string &out);
-    bool verifyCredential(const Json &body, Response &res,
+    bool verifyCredential(const Request &req, const Json &body, Response &res,
                           VerifiedClaims &claims);
+    void sendIpBanned(Response &res, const BanMatch &m, int64_t nowSec);
+    void sendAccountBanned(Response &res, const BanMatch *m, int64_t nowSec);
+    AbuseActorContext buildAbuseContext(const Request &req,
+                                        int64_t actorId = 0);
+    void applyBanSideEffects(const BanSideEffects &fx);
+    void noteRateLimit429(const Request &req, int64_t actorId = 0);
+    bool requireAdminAuth(const Request &req, Response &res, Auth &auth,
+                          std::string &actorLabelOut);
+    Json buildBansPayloadJson(int64_t nowSec);
     bool allowCredentialAttempt(const Request &req, Response &res);
     bool allowUploadAttempt(const Request &req, Response &res);
-    bool allowExportAttempt(const Request &req, Response &res);
+    bool allowExportAttempt(const Request &req, Response &res,
+                            int64_t actorId = 0);
+    bool allowRobotExportConfAttempt(const Request &req, Response &res,
+                                     int64_t actorId);
+    bool allowPliesAttempt(const Request &req, Response &res);
+    bool allowProbeAttempt(const Request &req, Response &res, int64_t actorId);
+    bool allowMutationAttempt(const Request &req, Response &res,
+                              int64_t actorId);
+    bool checkPasscodeBlocked(const Request &req, Response &res,
+                              int64_t actorId);
+    void recordPasscodeFailure(const Request &req, Response &res,
+                               int64_t actorId, const RoomResult &r);
+    bool allowLivePoll(const Request &req, Response &res, const Auth &auth);
+    bool allowLobbySnap(const Request &req, Response &res, const Auth &auth);
+    bool allowBrowseRead(const Request &req, Response &res, const Auth &auth);
+    bool tryAcquireSseSlot(const std::string &ip, int64_t playerId,
+                           std::shared_ptr<SseStreamSlotGuard> &outSlot,
+                           int &outStatus, std::string &outCode,
+                           std::string &outMsg);
 
     /* json views needing the cache */
     static void populateHumanEntitySummaryJson(Json &target,
@@ -1163,8 +2487,11 @@ struct OctiHttpServer::Impl {
                        PollFn fetch);
     bool streamStep(StreamState &st, httplib::DataSink &sink);
     void waitWake(int ms);
+    uint64_t currentEventWakeGen();
+    void waitEventOrStop(uint64_t &seenGen, int64_t ms);
 
     /* handlers */
+    void handleRobotsTxt(const Request &req, Response &res);
     void handleHealth(const Request &req, Response &res);
     void handleAvatarGet(const Request &req, Response &res);
     void handleSoundAssetGet(const Request &req, Response &res);
@@ -1173,6 +2500,8 @@ struct OctiHttpServer::Impl {
     void handleDataDeletion(const Request &req, Response &res);
     void handleAuthAuthorize(const Request &req, Response &res);
     void handleAuthCallback(const Request &req, Response &res);
+    bool validateOauthHostAndCallbackUrl(const Request &req,
+                                         std::string &outCallbackUrl) const;
     void handleProviders(const Request &req, Response &res);
     void handleSso(const Request &req, Response &res);
     void handleLink(const Request &req, Response &res);
@@ -1222,6 +2551,12 @@ struct OctiHttpServer::Impl {
     void handleArchiveDeleteInstall(const Request &req, Response &res);
     void handleArchivePurgeGame(const Request &req, Response &res);
     void handleAdminRecomputeRatings(const Request &req, Response &res);
+    void handleAdminBansList(const Request &req, Response &res);
+    void handleAdminBanAdd(const Request &req, Response &res);
+    void handleAdminBansMove(const Request &req, Response &res);
+    void handleAdminBansRemove(const Request &req, Response &res);
+    void handleAdminBanPatch(const Request &req, Response &res);
+    void handleAdminBanDelete(const Request &req, Response &res);
     void handleArchiveList(const Request &req, Response &res);
     void handleArchiveGet(const Request &req, Response &res);
     void handleArchiveTranscript(const Request &req, Response &res);
@@ -1236,12 +2571,15 @@ struct OctiHttpServer::Impl {
     void handleFavicon(const Request &req, Response &res);
     void handleIndex(const Request &req, Response &res);
 
+    void finishRoom(const Request &req, int64_t actorId, Response &res,
+                    const RoomResult &r, Json body);
     void finishRoom(Response &res, const RoomResult &r, Json body);
 
     AccountStore &store;
     OidcVerifier &verifier;
     GameRoomManager &rooms;
     HttpServerConfig cfg;
+    BanManager banManager;
     httplib::Server server;
 
     std::thread listenThread;
@@ -1253,19 +2591,55 @@ struct OctiHttpServer::Impl {
     std::atomic<int> boundPort;
     std::atomic<uint64_t> ticks;
     std::atomic<int> sseActive;
+    std::atomic<int> activeUrlProbes;
+    std::atomic<int> activeExportsCount;
     int64_t startedAtSec = 0;
+
+    std::string indexGzipBytes;
+    std::string indexEtag;
 
     std::mutex wakeMutex;
     std::condition_variable wakeCv;
+    uint64_t eventWakeGen = 0;
 
-    struct RateWindow {
-        int64_t startMs = 0;
-        int count = 0;
+    std::vector<std::string> normalizedTrustedProxies;
+    std::vector<std::string> normalizedAllowedHosts;
+    std::array<uint8_t, 32> oauthSecret;
+
+    struct PendingOauthState {
+        int64_t expiresAtSec = 0;
+        uint64_t seq = 0;
+        std::string oidcNonce;
     };
-    std::mutex rateMutex;
-    std::map<std::string, RateWindow> credentialAttempts;
-    std::map<std::string, RateWindow> uploadAttempts;
-    std::map<std::string, RateWindow> exportAttempts;
+    std::mutex oauthStateMutex;
+    uint64_t oauthStateSeq = 0;
+    std::unordered_map<std::string, PendingOauthState> pendingOauthStates;
+    std::deque<std::pair<uint64_t, std::string> > oauthStateOrder;
+
+    std::mutex sseQuotaMutex;
+    std::map<std::string, int> sseByIp;
+    std::map<int64_t, int> sseByPlayer;
+
+    TokenBucketLimiter livePollLimiter;
+    TokenBucketLimiter lobbySnapLimiter;
+    TokenBucketLimiter browseLimiter;
+
+    IpRateLimiter credentialLimiter;
+    IpRateLimiter authFailureLimiter;
+    IpRateLimiter passcodeFailureLimiter;
+    IpRateLimiter uploadLimiter;
+    IpRateLimiter exportLimiter;
+    IpRateLimiter robotExportConfLimiter;
+    IpRateLimiter pliesLimiter;
+    IpRateLimiter probeLimiter;
+    IpRateLimiter mutationLimiter;
+
+    SnapshotLruCache lobbyStateCache{1};
+    SnapshotLruCache tablesCache{4};
+    SnapshotLruCache robotsDirCache{64};
+    SnapshotLruCache leaderboardCache{64};
+    SnapshotLruCache pliesCache{128};
+    SnapshotLruCache archiveStatsCache{1};
 
     std::mutex cacheMutex;
     std::map<int64_t, std::string> uuidById;
@@ -1278,8 +2652,100 @@ struct OctiHttpServer::Impl {
 OctiHttpServer::Impl::Impl(AccountStore &s, OidcVerifier &v,
                            GameRoomManager &r, const HttpServerConfig &c)
     : store(s), verifier(v), rooms(r), cfg(c), stopping(false), boundPort(0),
-      ticks(0), sseActive(0)
+      ticks(0), sseActive(0), activeUrlProbes(0), activeExportsCount(0)
 {
+    const char *rawHtml = webUiHtml();
+    const size_t rawHtmlLen = rawHtml ? std::strlen(rawHtml) : 0;
+    const std::string htmlSlice(rawHtml ? rawHtml : "", rawHtmlLen);
+    indexEtag = makePayloadEtag("ui-", htmlSlice);
+    if (!compressGzipWithLevel(htmlSlice.data(), htmlSlice.size(),
+                               Z_DEFAULT_COMPRESSION, indexGzipBytes)) {
+        throw std::runtime_error("zlib startup compression failed for WebUI");
+    }
+
+    rooms.setAnonymizeObserverHandles(cfg.anonymizeObserverHandles);
+    rooms.setEventWakeCallback([this]() {
+        {
+            std::lock_guard<std::mutex> wake(wakeMutex);
+            ++eventWakeGen;
+        }
+        wakeCv.notify_all();
+    });
+
+    oauthSecret.fill(0);
+    if (!cfg.oauthStateSecret.empty()) {
+        unsigned int mdLen = 0;
+        if (EVP_Digest(cfg.oauthStateSecret.data(),
+                       cfg.oauthStateSecret.size(), oauthSecret.data(),
+                       &mdLen, EVP_sha256(), nullptr) != 1 ||
+            mdLen != oauthSecret.size()) {
+            throw std::runtime_error("EVP_Digest failed for OAuth state secret");
+        }
+    } else {
+        if (RAND_bytes(oauthSecret.data(),
+                       static_cast<int>(oauthSecret.size())) != 1) {
+            throw std::runtime_error("RAND_bytes failed for OAuth state secret");
+        }
+    }
+
+    auto addAllowedHost = [this](const std::string &h) {
+        std::string hostOnly;
+        if (splitAuthorityHostOnly(h, hostOnly) && !hostOnly.empty() &&
+            std::find(normalizedAllowedHosts.begin(),
+                      normalizedAllowedHosts.end(),
+                      hostOnly) == normalizedAllowedHosts.end()) {
+            normalizedAllowedHosts.push_back(hostOnly);
+        }
+    };
+    for (size_t i = 0; i < cfg.allowedHosts.size(); ++i) {
+        addAllowedHost(cfg.allowedHosts[i]);
+    }
+    if (!cfg.bindAddress.empty() && cfg.bindAddress != "0.0.0.0" &&
+        cfg.bindAddress != "::") {
+        if (cfg.bindAddress.find(':') != std::string::npos &&
+            cfg.bindAddress[0] != '[') {
+            addAllowedHost("[" + cfg.bindAddress + "]");
+        } else {
+            addAllowedHost(cfg.bindAddress);
+        }
+    }
+    if (!cfg.publicBaseUrl.empty()) {
+        std::string pb = cfg.publicBaseUrl;
+        size_t schemePos = pb.find("://");
+        if (schemePos != std::string::npos) {
+            size_t authStart = schemePos + 3;
+            size_t slashPos = pb.find('/', authStart);
+            std::string authPart = (slashPos == std::string::npos)
+                ? pb.substr(authStart)
+                : pb.substr(authStart, slashPos - authStart);
+            addAllowedHost(authPart);
+        }
+    }
+
+    for (size_t i = 0; i < cfg.trustedProxies.size(); ++i) {
+        std::string norm = OctiHttpServer::normalizeIpLiteral(
+            cfg.trustedProxies[i]);
+        if (!norm.empty() &&
+            std::find(normalizedTrustedProxies.begin(),
+                      normalizedTrustedProxies.end(),
+                      norm) == normalizedTrustedProxies.end()) {
+            normalizedTrustedProxies.push_back(norm);
+        }
+    }
+    std::string effectiveBanPath = cfg.banConfigPath;
+    if (effectiveBanPath.empty()) {
+        const std::string storePath = store.dbPath();
+        if (!storePath.empty()) {
+            std::filesystem::path parent =
+                std::filesystem::path(storePath).parent_path();
+            if (parent.empty()) {
+                parent = ".";
+            }
+            effectiveBanPath = (parent / "bans.json").string();
+        }
+    }
+    banManager.configure(effectiveBanPath, cfg.bindAddress,
+                         normalizedTrustedProxies);
     if (cfg.maxWorkerThreads < 4) {
         cfg.maxWorkerThreads = 4;
     }
@@ -1329,6 +2795,9 @@ bool OctiHttpServer::Impl::start(std::string &error)
         error = "empty bind address";
         return false;
     }
+    if (!banManager.loadFromStorage(store, store.currentEpochSec(), error)) {
+        return false;
+    }
 
     /*
      * httplib defaults to SO_REUSEPORT on Linux, which lets a second
@@ -1339,6 +2808,9 @@ bool OctiHttpServer::Impl::start(std::string &error)
         httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
     });
     server.set_payload_max_length(cfg.maxBodyBytes);
+    server.set_keep_alive_max_count(
+        static_cast<size_t>(std::max(1, cfg.keepAliveMaxCount)));
+    server.set_keep_alive_timeout(std::max(1, cfg.keepAliveTimeoutSec));
     server.set_read_timeout(cfg.readTimeoutSec, 0);
     server.set_write_timeout(cfg.writeTimeoutSec, 0);
     const size_t baseThreads = cfg.workerThreads;
@@ -1385,16 +2857,24 @@ bool OctiHttpServer::Impl::start(std::string &error)
 void OctiHttpServer::Impl::stop()
 {
     std::lock_guard<std::mutex> lock(lifecycleMutex);
-    if (!started || stopped) {
+    if (stopped) {
+        return;
+    }
+    rooms.setEventWakeCallback(nullptr);
+    if (!started) {
+        stopped = true;
         return;
     }
     stopped = true;
     {
         std::lock_guard<std::mutex> wake(wakeMutex);
         stopping = true;
+        ++eventWakeGen;
     }
     wakeCv.notify_all();
-    for (int i = 0; i < 250 && sseActive.load() > 0; ++i) {
+    for (int i = 0; i < 250 &&
+                    (sseActive.load() > 0 || activeExportsCount.load() > 0);
+         ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     server.stop();
@@ -1404,6 +2884,7 @@ void OctiHttpServer::Impl::stop()
     if (tickThread.joinable()) {
         tickThread.join();
     }
+    rooms.checkpointToStore();
 }
 
 void OctiHttpServer::Impl::waitWake(int ms)
@@ -1413,9 +2894,30 @@ void OctiHttpServer::Impl::waitWake(int ms)
                     [this]() { return stopping.load(); });
 }
 
+uint64_t OctiHttpServer::Impl::currentEventWakeGen()
+{
+    std::lock_guard<std::mutex> lock(wakeMutex);
+    return eventWakeGen;
+}
+
+void OctiHttpServer::Impl::waitEventOrStop(uint64_t &seenGen, int64_t ms)
+{
+    if (ms <= 0) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(wakeMutex);
+    wakeCv.wait_for(lock, std::chrono::milliseconds(ms),
+                    [this, &seenGen]() {
+                        return stopping.load() || eventWakeGen != seenGen;
+                    });
+    seenGen = eventWakeGen;
+}
+
 void OctiHttpServer::Impl::tickLoop()
 {
+    int64_t lastBanPurge = 0;
     int64_t lastPurge = 0;
+    int64_t lastRetentionPurge = 0;
     int64_t lastReconcile = 0;
     while (!stopping.load()) {
         waitWake(cfg.tickIntervalMs);
@@ -1424,10 +2926,27 @@ void OctiHttpServer::Impl::tickLoop()
         }
         try {
             rooms.tick();
-            int64_t now = epochSec();
+            int64_t now = store.currentEpochSec();
+            if (cfg.tempBanPurgeIntervalSec > 0 &&
+                (lastBanPurge == 0 ||
+                 now - lastBanPurge >= cfg.tempBanPurgeIntervalSec)) {
+                banManager.purgeExpired(store, now);
+                lastBanPurge = now;
+            }
             if (now - lastPurge >= cfg.sessionPurgeIntervalSec) {
                 store.purgeExpiredSessions(now);
                 lastPurge = now;
+            }
+            if (cfg.retentionPurgeIntervalSec > 0 &&
+                (lastRetentionPurge == 0 ||
+                 now - lastRetentionPurge >= cfg.retentionPurgeIntervalSec)) {
+                store.purgeExpiredSessions(now);
+                store.purgeOldCrashReports(now - cfg.crashRetentionAgeSec,
+                                           cfg.retentionMaxRows);
+                store.purgeLobbyChatLogsBefore(
+                    now * 1000LL - cfg.lobbyChatRetentionAgeMs,
+                    cfg.retentionMaxRows);
+                lastRetentionPurge = now;
             }
             if (lastReconcile == 0 || (now - lastReconcile >= cfg.reconcileIntervalSec)) {
                 store.reconcileAnonymousGames();
@@ -1562,6 +3081,97 @@ bool OctiHttpServer::Impl::resolveTarget(const Json &body, const char *key,
 /* Auth and request parsing                                            */
 /* ------------------------------------------------------------------ */
 
+std::string OctiHttpServer::Impl::clientRemoteIp(const Request &req) const
+{
+    std::string combinedXff;
+    size_t xffCount = req.get_header_value_count("X-Forwarded-For");
+    for (size_t i = 0; i < xffCount; ++i) {
+        if (i > 0) {
+            combinedXff += ", ";
+        }
+        combinedXff += req.get_header_value("X-Forwarded-For", "", i);
+    }
+    std::string xri;
+    size_t xriCount = req.get_header_value_count("X-Real-IP");
+    if (xriCount == 1) {
+        xri = req.get_header_value("X-Real-IP", "", 0);
+    } else if (xriCount > 1) {
+        xri = "invalid";
+    }
+    return OctiHttpServer::resolveClientIp(req.remote_addr, combinedXff, xri,
+                                           normalizedTrustedProxies);
+}
+
+bool OctiHttpServer::Impl::isHttpsRequest(const Request &req) const
+{
+    if (cfg.behindTls) {
+        return true;
+    }
+    const std::string peer = OctiHttpServer::normalizeIpLiteral(req.remote_addr);
+    if (peer.empty()) {
+        return false;
+    }
+    const bool trustedPeer =
+        std::find(normalizedTrustedProxies.begin(),
+                  normalizedTrustedProxies.end(),
+                  peer) != normalizedTrustedProxies.end();
+    if (!trustedPeer || !req.has_header("X-Forwarded-Proto")) {
+        return false;
+    }
+    std::string proto = lower(trimHttpToken(
+        req.get_header_value("X-Forwarded-Proto")));
+    size_t comma = proto.find(',');
+    if (comma != std::string::npos) {
+        proto = trimHttpToken(proto.substr(0, comma));
+    }
+    return proto == "https";
+}
+
+size_t OctiHttpServer::Impl::routeMaxBodyBytes(const std::string &method,
+                                               const std::string &path) const
+{
+    size_t routeCap = 16384;
+    if (method == "PATCH" &&
+        (path == "/api/v1/profile" || path == "/api/v1/profile/me")) {
+        routeCap = 524288;
+    } else if (method == "POST" && path == "/api/v1/archive/upload") {
+        routeCap = 131072;
+    } else if (method == "POST" && path == "/api/v1/telemetry/crash") {
+        routeCap = 65536;
+    }
+    return std::min(cfg.maxBodyBytes, routeCap);
+}
+
+bool OctiHttpServer::Impl::hasValidBearerAuth(const Request &req)
+{
+    std::string token;
+    if (!extractBearer(req, token)) {
+        return false;
+    }
+    const int64_t nowSec = store.currentEpochSec();
+    BanMatch bm;
+    if (token.rfind("octi_bot_", 0) == 0) {
+        RobotTokenValidation val = store.validateRobotToken(token);
+        if (!val.valid || val.banned || val.robot.revoked) {
+            return false;
+        }
+        if (banManager.matchRobot(val.robot.robotUuid, nowSec, bm) ||
+            banManager.matchAccount(val.owner.uuid, nowSec, bm)) {
+            return false;
+        }
+        return true;
+    }
+    SessionValidation sv = store.validateSession(token, nowSec);
+    if (!sv.valid || sv.banned) {
+        return false;
+    }
+    const std::string u = uuidOf(sv.playerId);
+    if (!u.empty() && banManager.matchAccount(u, nowSec, bm)) {
+        return false;
+    }
+    return true;
+}
+
 bool OctiHttpServer::Impl::extractBearer(const Request &req,
                                          std::string &token)
 {
@@ -1599,6 +3209,10 @@ void OctiHttpServer::Impl::maybeBindClientInstallId(const Request &req,
     if (playerId <= 0) {
         return;
     }
+    if (req.method == "DELETE" &&
+        req.path.rfind("/api/v1/archive/install/", 0) == 0) {
+        return;
+    }
     std::string candidateId;
     if (req.has_header("X-Octi-Install-Id")) {
         std::string h = req.get_header_value("X-Octi-Install-Id");
@@ -1610,8 +3224,165 @@ void OctiHttpServer::Impl::maybeBindClientInstallId(const Request &req,
         candidateId = bodyInstallId;
     }
     if (!candidateId.empty()) {
+        if (req.has_header("X-Octi-Install-Token")) {
+            std::string tok = req.get_header_value("X-Octi-Install-Token");
+            if (!store.registerOrVerifyInstallToken(candidateId, tok)) {
+                return;
+            }
+        } else if (store.hasInstallToken(candidateId)) {
+            return;
+        }
         store.bindInstallToPlayer(candidateId, playerId);
     }
+}
+
+void OctiHttpServer::Impl::sendIpBanned(Response &res, const BanMatch &m,
+                                        int64_t nowSec)
+{
+    Json j;
+    j["error"] = "IP_BANNED";
+    j["message"] = "IP address is banned";
+    j["ban_type"] =
+        (m.duration == BanDuration::PERMANENT) ? "permanent" : "24h";
+    if (m.duration == BanDuration::TEMP_24H) {
+        j["expires_at"] = m.expiresAt;
+        const int64_t rem = std::max<int64_t>(1, m.expiresAt - nowSec);
+        res.set_header("Retry-After", std::to_string(rem));
+    } else {
+        j["expires_at"] = 0;
+    }
+    sendJson(res, 403, j);
+}
+
+void OctiHttpServer::Impl::sendAccountBanned(Response &res, const BanMatch *m,
+                                             int64_t nowSec)
+{
+    Json j;
+    j["error"] = "ACCOUNT_BANNED";
+    j["message"] = "Account or robot is banned";
+    if (m != nullptr) {
+        j["ban_type"] =
+            (m->duration == BanDuration::PERMANENT) ? "permanent" : "24h";
+        if (m->duration == BanDuration::TEMP_24H) {
+            j["expires_at"] = m->expiresAt;
+            const int64_t rem = std::max<int64_t>(1, m->expiresAt - nowSec);
+            res.set_header("Retry-After", std::to_string(rem));
+        } else {
+            j["expires_at"] = 0;
+        }
+    }
+    sendJson(res, 403, j);
+}
+
+AbuseActorContext OctiHttpServer::Impl::buildAbuseContext(const Request &req,
+                                                          int64_t actorId)
+{
+    AbuseActorContext ctx;
+    ctx.remoteIp = clientRemoteIp(req);
+    if (actorId == 0) {
+        return ctx;
+    }
+    if (isRobotActorId(actorId)) {
+        const int64_t rId = robotIdFromActorId(actorId);
+        RobotRecord rRec;
+        if (rId > 0 && store.getRobotById(rId, rRec)) {
+            ctx.robotId = rRec.robotId;
+            ctx.robotUuid = rRec.robotUuid;
+            ctx.robotName = rRec.robotName;
+            ctx.ownerPlayerId = rRec.ownerPlayerId;
+            ctx.isAdmin = store.isPlayerAdmin(rRec.ownerPlayerId);
+        }
+        return ctx;
+    }
+    if (actorId > 0) {
+        PlayerProfile prof;
+        if (store.getProfileById(actorId, prof)) {
+            ctx.playerId = prof.playerId;
+            ctx.playerUuid = prof.uuid;
+            ctx.playerHandle = prof.handle;
+            ctx.isAdmin = prof.isAdmin;
+        }
+    }
+    return ctx;
+}
+
+void OctiHttpServer::Impl::applyBanSideEffects(const BanSideEffects &fx)
+{
+    if (!fx.changed) {
+        return;
+    }
+
+    std::vector<int64_t> allRobotIds = fx.bannedRobotIds;
+    for (size_t i = 0; i < fx.bannedPlayerIds.size(); ++i) {
+        const int64_t pid = fx.bannedPlayerIds[i];
+        std::vector<RobotRecord> owned;
+        if (store.listRobots(pid, owned)) {
+            for (size_t k = 0; k < owned.size(); ++k) {
+                allRobotIds.push_back(owned[k].robotId);
+            }
+        }
+    }
+
+    if (!allRobotIds.empty()) {
+        std::lock_guard<std::mutex> lock(_robotLeaseMutex);
+        for (size_t i = 0; i < allRobotIds.size(); ++i) {
+            _activeRobotLeases.erase(allRobotIds[i]);
+        }
+    }
+
+    for (size_t i = 0; i < fx.bannedPlayerIds.size(); ++i) {
+        const int64_t pid = fx.bannedPlayerIds[i];
+        rooms.dequeueMatchmaking(pid);
+        rooms.leaveLobby(pid);
+    }
+    for (size_t i = 0; i < allRobotIds.size(); ++i) {
+        const int64_t botActorId = makeRobotActorId(allRobotIds[i]);
+        rooms.dequeueMatchmaking(botActorId);
+        rooms.leaveLobby(botActorId);
+    }
+
+    {
+        std::lock_guard<std::mutex> wake(wakeMutex);
+        ++eventWakeGen;
+    }
+    wakeCv.notify_all();
+}
+
+void OctiHttpServer::Impl::noteRateLimit429(const Request &req, int64_t actorId)
+{
+    applyBanSideEffects(banManager.recordRateLimit429(
+        store, buildAbuseContext(req, actorId), store.currentEpochSec()));
+}
+
+void OctiHttpServer::Impl::sendAuthUnauthorized(const Request &req,
+                                                Response &res,
+                                                const char *wwwAuth,
+                                                const std::string &message,
+                                                bool tokenAttempted)
+{
+    if (tokenAttempted) {
+        applyBanSideEffects(banManager.recordAuthFailure(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
+    }
+    if (tokenAttempted && cfg.authFailureRateLimitMax > 0 &&
+        cfg.authFailureRateLimitWindowMs > 0) {
+        int64_t retrySec = 1;
+        std::string ip = clientRemoteIp(req);
+        if (!authFailureLimiter.tryAcquire("auth401:" + ip,
+                                           cfg.authFailureRateLimitMax,
+                                           cfg.authFailureRateLimitWindowMs,
+                                           retrySec)) {
+            noteRateLimit429(req, 0);
+            res.set_header("Retry-After", std::to_string(retrySec));
+            sendError(res, 429, "RATE_LIMITED",
+                      "too many failed authentication attempts; retry later");
+            return;
+        }
+    }
+    if (wwwAuth != nullptr && wwwAuth[0] != '\0') {
+        res.set_header("WWW-Authenticate", wwwAuth);
+    }
+    sendError(res, 401, "UNAUTHORIZED", message);
 }
 
 bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
@@ -1619,17 +3390,38 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
 {
     std::string token;
     if (!extractBearer(req, token)) {
-        res.set_header("WWW-Authenticate", "Bearer");
-        sendError(res, 401, "UNAUTHORIZED",
-                  "missing or malformed Authorization: Bearer header");
+        sendAuthUnauthorized(req, res, "Bearer",
+                             "missing or malformed Authorization: Bearer header",
+                             req.has_header("Authorization"));
         return false;
     }
+    const int64_t nowSec = store.currentEpochSec();
     if (token.rfind("octi_bot_", 0) == 0) {
         RobotTokenValidation val = store.validateRobotToken(token);
-        if (!val.valid || val.robot.revoked) {
-            res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
-            sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+        if (val.banned) {
+            BanMatch bm;
+            const BanMatch *bmp =
+                (!val.owner.uuid.empty() &&
+                 banManager.matchAccount(val.owner.uuid, nowSec, bm))
+                    ? &bm
+                    : nullptr;
+            sendAccountBanned(res, bmp, nowSec);
             return false;
+        }
+        if (!val.valid || val.robot.revoked) {
+            sendAuthUnauthorized(req, res, "Bearer error=\"invalid_token\"",
+                                 "invalid or revoked robot token", true);
+            return false;
+        }
+        BanMatch bm;
+        if (banManager.matchRobot(val.robot.robotUuid, nowSec, bm) ||
+            (!val.owner.uuid.empty() &&
+             banManager.matchAccount(val.owner.uuid, nowSec, bm))) {
+            sendAccountBanned(res, &bm, nowSec);
+            return false;
+        }
+        if (val.owner.isAdmin) {
+            banManager.noteVerifiedAdminIp(clientRemoteIp(req), nowSec);
         }
         RobotRecord robot = val.robot;
         if (req.has_header("X-Octi-Robot-Lease")) {
@@ -1683,11 +3475,28 @@ bool OctiHttpServer::Impl::requireAuth(const Request &req, Response &res,
         return true;
     }
 
-    SessionValidation sv = store.validateSession(token);
-    if (!sv.valid) {
-        res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
-        sendError(res, 401, "UNAUTHORIZED", "invalid or expired session");
+    SessionValidation sv = store.validateSession(token, nowSec);
+    if (sv.banned) {
+        const std::string u = uuidOf(sv.playerId);
+        BanMatch bm;
+        const BanMatch *bmp =
+            (!u.empty() && banManager.matchAccount(u, nowSec, bm)) ? &bm : nullptr;
+        sendAccountBanned(res, bmp, nowSec);
         return false;
+    }
+    if (!sv.valid) {
+        sendAuthUnauthorized(req, res, "Bearer error=\"invalid_token\"",
+                             "invalid or expired session", true);
+        return false;
+    }
+    const std::string u = uuidOf(sv.playerId);
+    BanMatch bm;
+    if (!u.empty() && banManager.matchAccount(u, nowSec, bm)) {
+        sendAccountBanned(res, &bm, nowSec);
+        return false;
+    }
+    if (store.isPlayerAdmin(sv.playerId)) {
+        banManager.noteVerifiedAdminIp(clientRemoteIp(req), nowSec);
     }
     auth.isRobot = false;
     auth.playerId = sv.playerId;
@@ -1712,6 +3521,11 @@ bool OctiHttpServer::Impl::optionalAuth(const Request &req, Response &res,
 bool OctiHttpServer::Impl::readJsonBody(const Request &req, Response &res,
                                         Json &out, bool allowEmpty)
 {
+    const size_t maxBytes = routeMaxBodyBytes(req.method, req.path);
+    if (req.body.size() > maxBytes) {
+        sendError(res, 413, "PAYLOAD_TOO_LARGE", "request body is too large");
+        return false;
+    }
     if (req.body.empty()) {
         if (allowEmpty) {
             out = Json::object();
@@ -1748,7 +3562,8 @@ bool OctiHttpServer::Impl::pathId(const Request &req, const char *name,
 }
 
 /* Verifies the SSO credential in body; on failure the response is written. */
-bool OctiHttpServer::Impl::verifyCredential(const Json &body, Response &res,
+bool OctiHttpServer::Impl::verifyCredential(const Request &req,
+                                            const Json &body, Response &res,
                                             VerifiedClaims &claims)
 {
     std::string provider;
@@ -1797,8 +3612,12 @@ bool OctiHttpServer::Impl::verifyCredential(const Json &body, Response &res,
         return false;
     }
     if (!vr.ok()) {
-        sendError(res, statusForVerify(vr.status),
-                  verifyStatusName(vr.status), vr.detail);
+        const int stCode = statusForVerify(vr.status);
+        if (stCode == 401) {
+            applyBanSideEffects(banManager.recordAuthFailure(
+                store, buildAbuseContext(req, 0), store.currentEpochSec()));
+        }
+        sendError(res, stCode, verifyStatusName(vr.status), vr.detail);
         return false;
     }
     claims = vr.claims;
@@ -2316,6 +4135,26 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
         sink.done();
         return true;
     }
+    {
+        const int64_t nowSec = store.currentEpochSec();
+        BanMatch bm;
+        if (!st.remoteIp.empty() &&
+            banManager.matchIp(st.remoteIp, nowSec, bm)) {
+            putText(sink, "event: closed\ndata: {\"error\":\"IP_BANNED\"}\n\n");
+            sink.done();
+            return true;
+        }
+        if ((!st.robotUuid.empty() &&
+             banManager.matchRobot(st.robotUuid, nowSec, bm)) ||
+            (!st.ownerUuid.empty() &&
+             banManager.matchAccount(st.ownerUuid, nowSec, bm)) ||
+            (!st.playerUuid.empty() &&
+             banManager.matchAccount(st.playerUuid, nowSec, bm))) {
+            putText(sink, "event: closed\ndata: {\"error\":\"ACCOUNT_BANNED\"}\n\n");
+            sink.done();
+            return true;
+        }
+    }
     if (st.first) {
         st.first = false;
         st.startedMs = now;
@@ -2325,7 +4164,11 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
             return false;
         }
     }
-    if (now - st.startedMs >= cfg.sseMaxDurationMs) {
+    const int64_t maxDurationMs =
+        (st.playerId == 0 && cfg.sseAnonMaxDurationMs > 0)
+            ? std::min(cfg.sseMaxDurationMs, cfg.sseAnonMaxDurationMs)
+            : cfg.sseMaxDurationMs;
+    if (now - st.startedMs >= maxDurationMs) {
         putText(sink, "event: reconnect\ndata: {}\n\n");
         sink.done();
         return true;
@@ -2334,6 +4177,11 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
         st.lastAuthMs = now;
         if (st.isRobot) {
             RobotTokenValidation val = store.validateRobotToken(st.token);
+            if (val.banned) {
+                putText(sink, "event: closed\ndata: {\"error\":\"ACCOUNT_BANNED\"}\n\n");
+                sink.done();
+                return true;
+            }
             if (!val.valid || val.robot.revoked) {
                 putText(sink, "event: closed\ndata: {\"error\":\"UNAUTHORIZED\"}\n\n");
                 sink.done();
@@ -2353,7 +4201,13 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
                 }
             }
         } else {
-            SessionValidation sv = store.validateSession(st.token);
+            SessionValidation sv = store.validateSession(
+                st.token, store.currentEpochSec());
+            if (sv.banned) {
+                putText(sink, "event: closed\ndata: {\"error\":\"ACCOUNT_BANNED\"}\n\n");
+                sink.done();
+                return true;
+            }
             if (!sv.valid || sv.playerId != st.playerId) {
                 putText(sink, "event: closed\ndata: {\"error\":\"UNAUTHORIZED\"}\n\n");
                 sink.done();
@@ -2407,6 +4261,51 @@ bool OctiHttpServer::Impl::streamStep(StreamState &st,
     return true;
 }
 
+bool OctiHttpServer::Impl::tryAcquireSseSlot(
+    const std::string &ip, int64_t playerId,
+    std::shared_ptr<SseStreamSlotGuard> &outSlot,
+    int &outStatus, std::string &outCode, std::string &outMsg)
+{
+    std::lock_guard<std::mutex> lock(sseQuotaMutex);
+    if (sseActive.load() >= cfg.maxSseStreams) {
+        outStatus = 503;
+        outCode = "TOO_MANY_STREAMS";
+        outMsg = "too many open event streams; use polling";
+        return false;
+    }
+    if (cfg.maxSsePerIp > 0 && !ip.empty()) {
+        auto ipIt = sseByIp.find(ip);
+        int curIp = (ipIt != sseByIp.end()) ? ipIt->second : 0;
+        if (curIp >= cfg.maxSsePerIp) {
+            outStatus = 429;
+            outCode = "TOO_MANY_STREAMS";
+            outMsg = "too many open event streams from this IP; use polling";
+            return false;
+        }
+    }
+    if (cfg.maxSsePerPlayer > 0 && playerId != 0) {
+        auto plIt = sseByPlayer.find(playerId);
+        int curPl = (plIt != sseByPlayer.end()) ? plIt->second : 0;
+        if (curPl >= cfg.maxSsePerPlayer) {
+            outStatus = 429;
+            outCode = "TOO_MANY_STREAMS";
+            outMsg = "too many open event streams for this player; use polling";
+            return false;
+        }
+    }
+
+    ++sseActive;
+    if (!ip.empty()) {
+        ++sseByIp[ip];
+    }
+    if (playerId != 0) {
+        ++sseByPlayer[playerId];
+    }
+    outSlot = std::make_shared<SseStreamSlotGuard>(
+        sseActive, sseQuotaMutex, sseByIp, sseByPlayer, ip, playerId);
+    return true;
+}
+
 void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
                                          const Auth &auth, PollFn fetch)
 {
@@ -2437,12 +4336,76 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
     }
 
     if (!stream) {
+        int64_t waitMs = 0;
+        if (req.has_param("wait_ms")) {
+            if (!parseUnsignedClamped(req.get_param_value("wait_ms"),
+                                      INT64_MAX / 2, waitMs)) {
+                sendError(res, 400, "INVALID_ARGUMENT",
+                          "wait_ms must be a non-negative integer");
+                return;
+            }
+            int64_t maxWait = std::max<int64_t>(0, cfg.maxEventPollWaitMs);
+            if (waitMs > maxWait) {
+                waitMs = maxWait;
+            }
+        }
+
+        uint64_t seenGen = currentEventWakeGen();
         PollBatch batch;
         int status = fetch(since, static_cast<size_t>(limit), batch);
         if (status != 200) {
             sendError(res, status, batch.errorCode, batch.message);
             return;
         }
+
+        if (waitMs > 0 && batch.frames.empty() && !batch.gap &&
+            !stopping.load()) {
+            const std::string remoteIp = clientRemoteIp(req);
+            std::shared_ptr<SseStreamSlotGuard> slotGuard;
+            int slotStatus = 503;
+            std::string slotCode;
+            std::string slotMsg;
+            if (!tryAcquireSseSlot(remoteIp, auth.playerId, slotGuard,
+                                   slotStatus, slotCode, slotMsg)) {
+                if (slotStatus == 429) {
+                    noteRateLimit429(req, auth.playerId);
+                }
+                res.set_header("Retry-After", "5");
+                sendError(res, slotStatus, slotCode, slotMsg);
+                return;
+            }
+            const int64_t deadlineMs = steadyMs() + waitMs;
+            while (!stopping.load()) {
+                int64_t remMs = deadlineMs - steadyMs();
+                if (remMs <= 0) {
+                    break;
+                }
+                waitEventOrStop(seenGen, remMs);
+                if (stopping.load()) {
+                    break;
+                }
+                batch = PollBatch{};
+                status = fetch(since, static_cast<size_t>(limit), batch);
+                if (status != 200) {
+                    sendError(res, status, batch.errorCode, batch.message);
+                    return;
+                }
+                if (!batch.frames.empty() || batch.gap) {
+                    break;
+                }
+            }
+        }
+
+        const std::string evEtag =
+            "\"ev-" + std::to_string(batch.latestSeq) + "\"";
+        res.set_header("ETag", evEtag);
+        if (batch.frames.empty() && !batch.gap &&
+            ifNoneMatchMatches(req, evEtag)) {
+            res.set_header("Cache-Control", "no-store");
+            res.status = 304;
+            return;
+        }
+
         Json j;
         Json events = Json::array();
         for (size_t i = 0; i < batch.frames.size(); ++i) {
@@ -2466,23 +4429,33 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
             return;
         }
     }
-    if (sseActive.fetch_add(1) >= cfg.maxSseStreams) {
-        --sseActive;
+    const std::string remoteIp = clientRemoteIp(req);
+    std::shared_ptr<SseStreamSlotGuard> slotGuard;
+    int slotStatus = 503;
+    std::string slotCode;
+    std::string slotMsg;
+    if (!tryAcquireSseSlot(remoteIp, auth.playerId, slotGuard,
+                           slotStatus, slotCode, slotMsg)) {
+        if (slotStatus == 429) {
+            noteRateLimit429(req, auth.playerId);
+        }
         res.set_header("Retry-After", "5");
-        sendError(res, 503, "TOO_MANY_STREAMS",
-                  "too many open event streams; use polling");
+        sendError(res, slotStatus, slotCode, slotMsg);
         return;
     }
     std::shared_ptr<StreamState> st(new StreamState());
-    st->slot.reset(new SlotGuard(sseActive));
+    st->slot = slotGuard;
     st->fetch = fetch;
     st->cursor = since;
     st->token = auth.token;
     st->playerId = auth.playerId;
+    st->remoteIp = remoteIp;
     st->clientType = auth.clientType;
     if (auth.isRobot) {
         st->isRobot = true;
         st->robotId = auth.robotRecord.robotId;
+        st->robotUuid = auth.robotRecord.robotUuid;
+        st->ownerUuid = auth.robotRecord.ownerUuid;
         if (req.has_header("X-Octi-Robot-Lease")) {
             st->leaseId = req.get_header_value("X-Octi-Robot-Lease");
         } else {
@@ -2494,6 +4467,8 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
         }
         st->robotStreamGuard = std::make_shared<RobotStreamGuard>(
             _robotLeaseMutex, _activeRobotLeases, st->robotId);
+    } else if (auth.playerId > 0) {
+        st->playerUuid = uuidOf(auth.playerId);
     }
     if (auth.playerId != 0) {
         rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
@@ -2511,6 +4486,19 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
 /* ------------------------------------------------------------------ */
 /* Handlers: service, auth, profile                                    */
 /* ------------------------------------------------------------------ */
+
+void OctiHttpServer::Impl::handleRobotsTxt(const Request &, Response &res)
+{
+    res.status = 200;
+    res.set_header("Cache-Control", "public, max-age=86400");
+    if (cfg.disallowRobotsTxt) {
+        res.set_content("User-agent: *\nDisallow: /\n",
+                        "text/plain; charset=utf-8");
+    } else {
+        res.set_content("User-agent: *\nAllow: /\n",
+                        "text/plain; charset=utf-8");
+    }
+}
 
 void OctiHttpServer::Impl::handleHealth(const Request &, Response &res)
 {
@@ -2540,6 +4528,14 @@ void OctiHttpServer::Impl::handleAvatarGet(const Request &req, Response &res)
     }
     res.status = 200;
     res.set_header("Cache-Control", "public, max-age=86400");
+    res.set_header("Content-Security-Policy", "sandbox; default-src 'none'");
+    res.set_header("X-Content-Type-Options", "nosniff");
+    const std::string lowerFile = lower(it->second);
+    if (mime == "image/svg+xml" ||
+        (lowerFile.size() >= 4 &&
+         lowerFile.substr(lowerFile.size() - 4) == ".svg")) {
+        res.set_header("Content-Disposition", "attachment");
+    }
     res.set_content(bytes, mime.c_str());
 }
 
@@ -2620,6 +4616,14 @@ void OctiHttpServer::Impl::handlePrivacy(const Request &, Response &res)
 
 void OctiHttpServer::Impl::handleDataDeletion(const Request &req, Response &res)
 {
+    const size_t maxBytes = routeMaxBodyBytes(req.method, req.path);
+    if (req.body.size() > maxBytes) {
+        sendError(res, 413, "PAYLOAD_TOO_LARGE", "request body is too large");
+        return;
+    }
+    if (!allowMutationAttempt(req, res, 0)) {
+        return;
+    }
     std::string code = AccountStore::sha256Hex(std::to_string(epochSec()) + ":" + req.body).substr(0, 12);
     Json j;
     j["url"] = "https://octi.selfso.com/privacy/?confirmation_code=" + code;
@@ -2627,8 +4631,111 @@ void OctiHttpServer::Impl::handleDataDeletion(const Request &req, Response &res)
     sendJson(res, 200, j);
 }
 
+bool OctiHttpServer::Impl::validateOauthHostAndCallbackUrl(
+    const Request &req, std::string &outCallbackUrl) const
+{
+    outCallbackUrl.clear();
+    size_t hostCount = req.get_header_value_count("Host");
+    if (hostCount > 1) {
+        return false;
+    }
+    std::string validatedAuthority;
+    std::string hostOnly;
+    if (hostCount == 1) {
+        std::string rawHost = req.get_header_value("Host");
+        if (!splitAuthorityHostOnly(rawHost, hostOnly)) {
+            return false;
+        }
+        if (!normalizedAllowedHosts.empty() &&
+            std::find(normalizedAllowedHosts.begin(),
+                      normalizedAllowedHosts.end(),
+                      hostOnly) == normalizedAllowedHosts.end()) {
+            return false;
+        }
+        validatedAuthority = rawHost;
+        while (!validatedAuthority.empty() &&
+               std::isspace(static_cast<unsigned char>(validatedAuthority.front()))) {
+            validatedAuthority.erase(validatedAuthority.begin());
+        }
+        while (!validatedAuthority.empty() &&
+               std::isspace(static_cast<unsigned char>(validatedAuthority.back()))) {
+            validatedAuthority.pop_back();
+        }
+    } else {
+        std::string bindHost = cfg.bindAddress;
+        if (bindHost.empty() || bindHost == "0.0.0.0") {
+            bindHost = "127.0.0.1";
+        } else if (bindHost == "::") {
+            bindHost = "[::1]";
+        } else if (bindHost.find(':') != std::string::npos && bindHost[0] != '[') {
+            bindHost = "[" + bindHost + "]";
+        }
+        hostOnly = lower(bindHost);
+        validatedAuthority = bindHost + ":" + std::to_string(boundPort.load());
+    }
+
+    if (!cfg.publicBaseUrl.empty()) {
+        std::string base = cfg.publicBaseUrl;
+        while (!base.empty() && base.back() == '/') {
+            base.pop_back();
+        }
+        outCallbackUrl = base + "/api/v1/auth/callback";
+        return true;
+    }
+
+    std::string proto;
+    if (cfg.behindTls) {
+        proto = "https";
+    } else {
+        std::string peer = OctiHttpServer::normalizeIpLiteral(req.remote_addr);
+        bool peerTrusted = !peer.empty() &&
+            std::find(normalizedTrustedProxies.begin(),
+                      normalizedTrustedProxies.end(),
+                      peer) != normalizedTrustedProxies.end();
+        if (peerTrusted && req.has_header("X-Forwarded-Proto")) {
+            std::string xfp = lower(req.get_header_value("X-Forwarded-Proto"));
+            size_t comma = xfp.find(',');
+            if (comma != std::string::npos) {
+                xfp = xfp.substr(comma + 1);
+            }
+            while (!xfp.empty() &&
+                   std::isspace(static_cast<unsigned char>(xfp.front()))) {
+                xfp.erase(xfp.begin());
+            }
+            while (!xfp.empty() &&
+                   std::isspace(static_cast<unsigned char>(xfp.back()))) {
+                xfp.pop_back();
+            }
+            if (xfp == "https" || xfp == "http") {
+                proto = xfp;
+            } else if (!xfp.empty()) {
+                return false;
+            }
+        }
+        if (proto.empty()) {
+            proto = (hostOnly == "octi.selfso.com" ||
+                     hostOnly == "trumpet.selfso.com")
+                ? "https"
+                : "http";
+        }
+    }
+    outCallbackUrl = proto + "://" + validatedAuthority + "/api/v1/auth/callback";
+    return true;
+}
+
 void OctiHttpServer::Impl::handleAuthAuthorize(const Request &req, Response &res)
 {
+    if (!allowCredentialAttempt(req, res)) {
+        return;
+    }
+    std::string callbackUrl;
+    if (!validateOauthHostAndCallbackUrl(req, callbackUrl)) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
+        sendError(res, 400, "INVALID_HOST", "untrusted or malformed Host header");
+        return;
+    }
+
     std::string provider = req.get_param_value("provider");
     if (provider != "google" && provider != "facebook") {
         sendError(res, 400, "UNSUPPORTED_PROVIDER", "unsupported provider");
@@ -2653,53 +4760,73 @@ void OctiHttpServer::Impl::handleAuthAuthorize(const Request &req, Response &res
         redirectUri = req.get_param_value("redirect_uri");
     }
 
-    bool redirectValid = false;
-    if (!redirectUri.empty() && redirectUri[0] == '/' && (redirectUri.size() == 1 || redirectUri[1] != '/')) {
-        redirectValid = true;
-    } else if (redirectUri == "octi://auth/callback" || redirectUri == "octi://callback") {
-        redirectValid = true;
-    } else if (redirectUri.rfind("http://127.0.0.1:", 0) == 0 || redirectUri.rfind("http://localhost:", 0) == 0) {
-        size_t colon = redirectUri.find(':', 7);
-        if (colon != std::string::npos) {
-            size_t slash = redirectUri.find('/', colon);
-            if (slash != std::string::npos) {
-                std::string portStr = redirectUri.substr(colon + 1, slash - (colon + 1));
-                int64_t portNum = 0;
-                if (parseUnsignedStrict(portStr, 65535, portNum) && portNum >= 1) {
-                    std::string pathPart = redirectUri.substr(slash);
-                    if (pathPart == "/callback" || pathPart == "/oauth/callback") {
-                        redirectValid = true;
-                    }
-                }
-            }
-        }
-    }
-    if (!redirectValid) {
+    bool isNativeRedirect = false;
+    if (!isValidOauthRedirectUri(redirectUri, isNativeRedirect)) {
         sendError(res, 400, "INVALID_REDIRECT_URI", "invalid redirect_uri");
         return;
     }
 
-    int64_t now = epochSec();
-    std::string host = req.get_header_value("Host");
-    if (host.empty()) {
-        host = cfg.bindAddress + ":" + std::to_string(boundPort.load());
+    std::string jti;
+    std::string oidcNonce;
+    if (!randomTokenB64Url(16, jti) || !randomTokenB64Url(16, oidcNonce)) {
+        sendError(res, 500, "INTERNAL_ERROR", "failed to generate OAuth nonce");
+        return;
     }
-    std::string proto = req.get_header_value("X-Forwarded-Proto");
-    if (proto.empty()) {
-        proto = (host.find("selfso.com") != std::string::npos) ? "https" : "http";
+
+    const int64_t now = epochSec();
+    const int64_t exp = now + 600;
+    const size_t maxPending = cfg.maxPendingOauthStates > 0
+        ? cfg.maxPendingOauthStates
+        : static_cast<size_t>(16384);
+    {
+        std::lock_guard<std::mutex> lock(oauthStateMutex);
+        while (!oauthStateOrder.empty()) {
+            const uint64_t frontSeq = oauthStateOrder.front().first;
+            const std::string &frontJti = oauthStateOrder.front().second;
+            auto fit = pendingOauthStates.find(frontJti);
+            if (fit == pendingOauthStates.end() || fit->second.seq != frontSeq) {
+                oauthStateOrder.pop_front();
+                continue;
+            }
+            if (fit->second.expiresAtSec < now) {
+                pendingOauthStates.erase(fit);
+                oauthStateOrder.pop_front();
+                continue;
+            }
+            break;
+        }
+        while (pendingOauthStates.size() >= maxPending && !oauthStateOrder.empty()) {
+            const uint64_t frontSeq = oauthStateOrder.front().first;
+            const std::string frontJti = oauthStateOrder.front().second;
+            oauthStateOrder.pop_front();
+            auto fit = pendingOauthStates.find(frontJti);
+            if (fit != pendingOauthStates.end() && fit->second.seq == frontSeq) {
+                pendingOauthStates.erase(fit);
+            }
+        }
+        if (pendingOauthStates.size() >= maxPending) {
+            pendingOauthStates.clear();
+            oauthStateOrder.clear();
+        }
+        PendingOauthState st;
+        st.expiresAtSec = exp;
+        st.seq = ++oauthStateSeq;
+        st.oidcNonce = oidcNonce;
+        pendingOauthStates[jti] = st;
+        oauthStateOrder.push_back(std::make_pair(st.seq, jti));
     }
-    std::string callbackUrl = proto + "://" + host + "/api/v1/auth/callback";
 
     Json stateObj;
     stateObj["provider"] = provider;
     stateObj["redirect_uri"] = redirectUri;
     stateObj["callback_url"] = callbackUrl;
-    stateObj["nonce"] = AccountStore::sha256Hex(std::to_string(steadyMs()) + ":" + redirectUri);
-    stateObj["exp"] = now + 600;
+    stateObj["jti"] = jti;
+    stateObj["oidc_nonce"] = oidcNonce;
+    stateObj["exp"] = exp;
 
     std::string statePayload = stateObj.dump();
     std::string stateB64 = base64UrlEncode(statePayload);
-    std::string sig = hmacSha256(stateB64, kOauthStateSecret);
+    std::string sig = hmacSha256(stateB64, oauthSecret.data(), oauthSecret.size());
     std::string sigB64 = base64UrlEncode(sig);
     std::string stateParam = stateB64 + "." + sigB64;
 
@@ -2708,7 +4835,8 @@ void OctiHttpServer::Impl::handleAuthAuthorize(const Request &req, Response &res
         authUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=" +
                   urlEncode(clientId) +
                   "&response_type=code&scope=openid%20email%20profile&redirect_uri=" +
-                  urlEncode(callbackUrl) + "&state=" + urlEncode(stateParam);
+                  urlEncode(callbackUrl) + "&state=" + urlEncode(stateParam) +
+                  "&nonce=" + urlEncode(oidcNonce);
     } else {
         authUrl = "https://www.facebook.com/v19.0/dialog/oauth?client_id=" +
                   urlEncode(clientId) +
@@ -2723,9 +4851,23 @@ void OctiHttpServer::Impl::handleAuthAuthorize(const Request &req, Response &res
 
 void OctiHttpServer::Impl::handleAuthCallback(const Request &req, Response &res)
 {
+    if (!allowCredentialAttempt(req, res)) {
+        return;
+    }
+    std::string dummyCallbackUrl;
+    if (!validateOauthHostAndCallbackUrl(req, dummyCallbackUrl)) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
+        sendError(res, 400, "INVALID_HOST", "untrusted or malformed Host header");
+        return;
+    }
+
     std::string stateParam = req.get_param_value("state");
     size_t dot = stateParam.find('.');
-    if (dot == std::string::npos) {
+    if (dot == std::string::npos || dot == 0 || dot + 1 >= stateParam.size() ||
+        stateParam.find('.', dot + 1) != std::string::npos) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
         sendError(res, 400, "INVALID_OAUTH_STATE", "invalid state parameter");
         return;
     }
@@ -2734,111 +4876,213 @@ void OctiHttpServer::Impl::handleAuthCallback(const Request &req, Response &res)
     std::string sigB64 = stateParam.substr(dot + 1);
     std::string sig;
     if (!base64UrlDecode(sigB64, sig)) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
         sendError(res, 400, "INVALID_OAUTH_STATE", "malformed state signature");
         return;
     }
-    std::string expectedSig = hmacSha256(stateB64, kOauthStateSecret);
-    if (sig != expectedSig) {
+    std::string expectedSig = hmacSha256(stateB64, oauthSecret.data(),
+                                         oauthSecret.size());
+    if (expectedSig.empty() || sig.size() != expectedSig.size() ||
+        CRYPTO_memcmp(sig.data(), expectedSig.data(), expectedSig.size()) != 0) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
         sendError(res, 400, "INVALID_OAUTH_STATE", "state signature mismatch");
         return;
     }
 
     std::string payloadJson;
     if (!base64UrlDecode(stateB64, payloadJson)) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
         sendError(res, 400, "INVALID_OAUTH_STATE", "malformed state payload");
         return;
     }
     Json stateObj = Json::parse(payloadJson, nullptr, false);
     if (stateObj.is_discarded() || !stateObj.is_object()) {
+        applyBanSideEffects(banManager.recordExploitProbe(
+            store, buildAbuseContext(req, 0), store.currentEpochSec()));
         sendError(res, 400, "INVALID_OAUTH_STATE", "invalid state JSON");
         return;
     }
 
+    const int64_t now = epochSec();
     int64_t exp = stateObj.value("exp", 0LL);
-    if (exp < epochSec()) {
+    if (exp < now) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "state has expired");
+        return;
+    }
+
+    std::string jti = stateObj.value("jti", "");
+    if (jti.empty()) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "missing state jti");
+        return;
+    }
+    PendingOauthState consumedState;
+    {
+        std::lock_guard<std::mutex> lock(oauthStateMutex);
+        auto it = pendingOauthStates.find(jti);
+        if (it == pendingOauthStates.end()) {
+            sendError(res, 400, "INVALID_OAUTH_STATE",
+                      "state has already been used or expired");
+            return;
+        }
+        consumedState = it->second;
+        pendingOauthStates.erase(it);
+    }
+    if (consumedState.expiresAtSec < now) {
         sendError(res, 400, "INVALID_OAUTH_STATE", "state has expired");
         return;
     }
 
     std::string provider = stateObj.value("provider", "");
+    if (provider != "google" && provider != "facebook") {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "unsupported provider in state");
+        return;
+    }
     std::string redirectUri = stateObj.value("redirect_uri", "/#account");
-    std::string callbackUrl = stateObj.value("callback_url", "https://octi.selfso.com/api/v1/auth/callback");
-
-    std::string idToken = req.get_param_value("id_token");
-    std::string accessToken = req.get_param_value("access_token");
-    std::string code = req.get_param_value("code");
-
-    if (!code.empty() && idToken.empty() && accessToken.empty()) {
-        int dots = 0;
-        for (size_t i = 0; i < code.size(); ++i) {
-            if (code[i] == '.') {
-                ++dots;
-            }
-        }
-        if (dots >= 2) {
-            idToken = code;
-        } else {
-            std::string clientId;
-            std::map<std::string, std::vector<std::string>>::const_iterator cit =
-                cfg.providerClientIds.find(provider);
-            if (cit != cfg.providerClientIds.end() && !cit->second.empty()) {
-                clientId = cit->second[0];
-            }
-            std::string clientSecret;
-            std::map<std::string, std::string>::const_iterator sit =
-                cfg.providerClientSecrets.find(provider);
-            if (sit != cfg.providerClientSecrets.end()) {
-                clientSecret = sit->second;
-            }
-            if (!clientId.empty() && !clientSecret.empty()) {
-                if (provider == "google") {
-                    httplib::SSLClient gcli("oauth2.googleapis.com", 443);
-                    gcli.enable_server_certificate_verification(true);
-                    gcli.set_connection_timeout(5, 0);
-                    gcli.set_read_timeout(5, 0);
-                    httplib::Params params{
-                        {"code", code},
-                        {"client_id", clientId},
-                        {"client_secret", clientSecret},
-                        {"redirect_uri", callbackUrl},
-                        {"grant_type", "authorization_code"}
-                    };
-                    if (auto gres = gcli.Post("/token", params)) {
-                        Json tj = Json::parse(gres->body, nullptr, false);
-                        if (tj.is_object() && tj.contains("id_token") && tj["id_token"].is_string()) {
-                            idToken = tj["id_token"].get<std::string>();
-                        }
-                    }
-                } else if (provider == "facebook") {
-                    httplib::SSLClient fbcli("graph.facebook.com", 443);
-                    fbcli.enable_server_certificate_verification(true);
-                    fbcli.set_connection_timeout(5, 0);
-                    fbcli.set_read_timeout(5, 0);
-                    std::string fbPath = "/v19.0/oauth/access_token?client_id=" + urlEncode(clientId) +
-                                         "&redirect_uri=" + urlEncode(callbackUrl) +
-                                         "&client_secret=" + urlEncode(clientSecret) +
-                                         "&code=" + urlEncode(code);
-                    if (auto fbres = fbcli.Get(fbPath.c_str())) {
-                        Json tj = Json::parse(fbres->body, nullptr, false);
-                        if (tj.is_object() && tj.contains("access_token") && tj["access_token"].is_string()) {
-                            accessToken = tj["access_token"].get<std::string>();
-                        }
-                    }
-                }
-            }
-        }
+    bool isNativeRedirect = false;
+    if (!isValidOauthRedirectUri(redirectUri, isNativeRedirect)) {
+        sendError(res, 400, "INVALID_REDIRECT_URI", "invalid redirect_uri in state");
+        return;
+    }
+    std::string callbackUrl = stateObj.value("callback_url", "");
+    if (callbackUrl.empty()) {
+        sendError(res, 400, "INVALID_OAUTH_STATE", "missing callback_url in state");
+        return;
     }
 
-    if (provider == "facebook" && accessToken.empty() && !idToken.empty()) {
-        int dots = 0;
-        for (size_t i = 0; i < idToken.size(); ++i) {
-            if (idToken[i] == '.') {
-                ++dots;
+    std::string clientId;
+    std::map<std::string, std::vector<std::string>>::const_iterator cit =
+        cfg.providerClientIds.find(provider);
+    if (cit != cfg.providerClientIds.end() && !cit->second.empty()) {
+        clientId = cit->second[0];
+    }
+    std::string clientSecret;
+    std::map<std::string, std::string>::const_iterator sit =
+        cfg.providerClientSecrets.find(provider);
+    if (sit != cfg.providerClientSecrets.end()) {
+        clientSecret = sit->second;
+    }
+
+    const std::string rawIdTokenParam = req.get_param_value("id_token");
+    const std::string rawAccessTokenParam = req.get_param_value("access_token");
+    const std::string code = req.get_param_value("code");
+
+    const bool strictCodeExchange =
+        !clientSecret.empty() || !cfg.allowSyntheticOauthCallbackForTesting;
+
+    std::string idToken;
+    std::string accessToken;
+
+    if (strictCodeExchange) {
+        if (!rawIdTokenParam.empty() || !rawAccessTokenParam.empty()) {
+            applyBanSideEffects(banManager.recordExploitProbe(
+                store, buildAbuseContext(req, 0), store.currentEpochSec()));
+            sendError(res, 400, "INVALID_OAUTH_CALLBACK",
+                      "direct token parameters are not accepted");
+            return;
+        }
+        if (code.empty() || code.size() > 2048 || hasControlChars(code)) {
+            sendError(res, 400, "INVALID_OAUTH_CALLBACK",
+                      "missing or invalid authorization code");
+            return;
+        }
+        int codeDots = 0;
+        for (size_t i = 0; i < code.size(); ++i) {
+            if (code[i] == '.') {
+                ++codeDots;
             }
         }
-        if (dots < 2) {
-            accessToken = idToken;
-            idToken.clear();
+        if (codeDots >= 2) {
+            applyBanSideEffects(banManager.recordExploitProbe(
+                store, buildAbuseContext(req, 0), store.currentEpochSec()));
+            sendError(res, 400, "INVALID_OAUTH_CALLBACK",
+                      "authorization code must not be a JWT");
+            return;
+        }
+        if (clientId.empty() || clientSecret.empty()) {
+            sendError(res, 503, "SSO_PROVIDER_NOT_CONFIGURED",
+                      "SSO provider client_secret not configured");
+            return;
+        }
+
+        if (provider == "google") {
+            httplib::SSLClient gcli("oauth2.googleapis.com", 443);
+            gcli.enable_server_certificate_verification(true);
+            gcli.set_connection_timeout(5, 0);
+            gcli.set_read_timeout(5, 0);
+            gcli.set_write_timeout(5, 0);
+            httplib::Params params{
+                {"code", code},
+                {"client_id", clientId},
+                {"client_secret", clientSecret},
+                {"redirect_uri", callbackUrl},
+                {"grant_type", "authorization_code"}
+            };
+            httplib::Result gres = gcli.Post("/token", params);
+            if (!gres || gres->status != 200 || gres->body.size() > 65536) {
+                int stCode = (gres && gres->status >= 400 && gres->status < 500)
+                    ? 401
+                    : 502;
+                sendError(res, stCode, "OAUTH_TOKEN_EXCHANGE_FAILED",
+                          "failed to exchange authorization code");
+                return;
+            }
+            Json tj = Json::parse(gres->body, nullptr, false);
+            if (!tj.is_object() || !tj.contains("id_token") ||
+                !tj["id_token"].is_string()) {
+                sendError(res, 401, "OAUTH_TOKEN_EXCHANGE_FAILED",
+                          "token endpoint response missing id_token");
+                return;
+            }
+            idToken = tj["id_token"].get<std::string>();
+        } else {
+            httplib::SSLClient fbcli("graph.facebook.com", 443);
+            fbcli.enable_server_certificate_verification(true);
+            fbcli.set_connection_timeout(5, 0);
+            fbcli.set_read_timeout(5, 0);
+            fbcli.set_write_timeout(5, 0);
+            std::string fbPath = "/v19.0/oauth/access_token?client_id=" +
+                                 urlEncode(clientId) +
+                                 "&redirect_uri=" + urlEncode(callbackUrl) +
+                                 "&client_secret=" + urlEncode(clientSecret) +
+                                 "&code=" + urlEncode(code);
+            httplib::Result fbres = fbcli.Get(fbPath.c_str());
+            if (!fbres || fbres->status != 200 || fbres->body.size() > 65536) {
+                int stCode = (fbres && fbres->status >= 400 && fbres->status < 500)
+                    ? 401
+                    : 502;
+                sendError(res, stCode, "OAUTH_TOKEN_EXCHANGE_FAILED",
+                          "failed to exchange authorization code");
+                return;
+            }
+            Json tj = Json::parse(fbres->body, nullptr, false);
+            if (!tj.is_object() || !tj.contains("access_token") ||
+                !tj["access_token"].is_string()) {
+                sendError(res, 401, "OAUTH_TOKEN_EXCHANGE_FAILED",
+                          "token endpoint response missing access_token");
+                return;
+            }
+            accessToken = tj["access_token"].get<std::string>();
+        }
+    } else {
+        idToken = rawIdTokenParam;
+        accessToken = rawAccessTokenParam;
+        if (idToken.empty() && accessToken.empty() && !code.empty()) {
+            idToken = code;
+        }
+        if (provider == "facebook" && accessToken.empty() && !idToken.empty()) {
+            int dots = 0;
+            for (size_t i = 0; i < idToken.size(); ++i) {
+                if (idToken[i] == '.') {
+                    ++dots;
+                }
+            }
+            if (dots < 2) {
+                accessToken = idToken;
+                idToken.clear();
+            }
         }
     }
 
@@ -2851,32 +5095,66 @@ void OctiHttpServer::Impl::handleAuthCallback(const Request &req, Response &res)
         vr = verifier.verifyFacebookAccessToken(accessToken);
     } else if (!idToken.empty()) {
         vr = verifier.verifyIdToken(provider, idToken);
-    } else if (!code.empty()) {
-        vr = verifier.verifyIdToken(provider, code);
     } else {
         sendError(res, 400, "INVALID_ARGUMENT", "missing id_token or access_token");
         return;
     }
 
     if (!vr.ok()) {
-        sendError(res, statusForVerify(vr.status), verifyStatusName(vr.status), vr.detail);
+        const int stCode = statusForVerify(vr.status);
+        if (stCode == 401) {
+            applyBanSideEffects(banManager.recordAuthFailure(
+                store, buildAbuseContext(req, 0), store.currentEpochSec()));
+        }
+        sendError(res, stCode, verifyStatusName(vr.status), vr.detail);
         return;
     }
 
+    if (provider == "google") {
+        const std::string &expectedNonce = consumedState.oidcNonce;
+        if (expectedNonce.empty() ||
+            vr.claims.nonce.size() != expectedNonce.size() ||
+            CRYPTO_memcmp(vr.claims.nonce.data(), expectedNonce.data(),
+                          expectedNonce.size()) != 0) {
+            applyBanSideEffects(banManager.recordAuthFailure(
+                store, buildAbuseContext(req, 0), store.currentEpochSec()));
+            sendError(res, 401, "TOKEN_REJECTED", "OIDC nonce mismatch");
+            return;
+        }
+    }
+
     LoginResult lr = store.loginWithSso(vr.claims, "octi-oauth-broker/1.0");
+    const int64_t cbNowSec = store.currentEpochSec();
+    if (lr.banned) {
+        BanMatch bm;
+        const BanMatch *bmp =
+            (!lr.profile.uuid.empty() &&
+             banManager.matchAccount(lr.profile.uuid, cbNowSec, bm))
+                ? &bm
+                : nullptr;
+        sendAccountBanned(res, bmp, cbNowSec);
+        return;
+    }
     if (!lr.ok) {
         sendError(res, 500, "INTERNAL_ERROR", "sign-in failed");
         return;
+    }
+    BanMatch cbBm;
+    if (banManager.matchAccount(lr.profile.uuid, cbNowSec, cbBm)) {
+        store.revokeAllSessions(lr.profile.playerId);
+        sendAccountBanned(res, &cbBm, cbNowSec);
+        return;
+    }
+    if (lr.profile.isAdmin) {
+        banManager.noteVerifiedAdminIp(clientRemoteIp(req), cbNowSec);
     }
     rooms.enterLobby(lr.profile.playerId);
     rooms.recordClientHeartbeat(lr.profile.playerId, "web", true);
 
     std::string targetLoc;
     std::string isNewStr = lr.created ? "true" : "false";
-    if (redirectUri.rfind("http://127.0.0.1:", 0) == 0 ||
-        redirectUri.rfind("http://localhost:", 0) == 0 ||
-        redirectUri.rfind("octi://", 0) == 0) {
-        std::string rawTok = !idToken.empty() ? idToken : (!accessToken.empty() ? accessToken : code);
+    if (isNativeRedirect) {
+        const std::string &rawTok = !idToken.empty() ? idToken : accessToken;
         targetLoc = redirectUri + (redirectUri.find('?') != std::string::npos ? "&" : "?") +
                     "id_token=" + urlEncode(rawTok) +
                     "&auth_token=" + urlEncode(lr.sessionToken) +
@@ -2924,155 +5202,298 @@ void OctiHttpServer::Impl::handleProviders(const Request &, Response &res)
 }
 
 /*
- * Fixed-window throttle per remote address for the two endpoints that make
- * the server verify a provider credential. The table is bounded: when it is
- * full, expired windows go first, then the oldest one.
+ * Fixed-window and token-bucket rate limiters keyed per canonical client IP
+ * (and per authenticated actor where applicable).
  */
 bool OctiHttpServer::Impl::allowCredentialAttempt(const Request &req,
                                                   Response &res)
 {
-    if (cfg.ssoRateLimitMax <= 0 || cfg.ssoRateLimitWindowMs <= 0) {
+    int64_t retrySec = 1;
+    if (credentialLimiter.tryAcquire("cred:" + clientRemoteIp(req),
+                                     cfg.ssoRateLimitMax,
+                                     cfg.ssoRateLimitWindowMs, retrySec)) {
         return true;
     }
-    const size_t kMaxTrackedAddresses = 4096;
-    const int64_t now = steadyMs();
-    int64_t retryAfterMs = 0;
-    {
-        std::lock_guard<std::mutex> lock(rateMutex);
-        if (credentialAttempts.size() >= kMaxTrackedAddresses &&
-            credentialAttempts.find(req.remote_addr) ==
-                credentialAttempts.end()) {
-            for (std::map<std::string, RateWindow>::iterator it =
-                     credentialAttempts.begin();
-                 it != credentialAttempts.end();) {
-                if (now - it->second.startMs >= cfg.ssoRateLimitWindowMs) {
-                    it = credentialAttempts.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-            if (credentialAttempts.size() >= kMaxTrackedAddresses) {
-                std::map<std::string, RateWindow>::iterator oldest =
-                    credentialAttempts.begin();
-                for (std::map<std::string, RateWindow>::iterator it =
-                         credentialAttempts.begin();
-                     it != credentialAttempts.end(); ++it) {
-                    if (it->second.startMs < oldest->second.startMs) {
-                        oldest = it;
-                    }
-                }
-                credentialAttempts.erase(oldest);
-            }
-        }
-        RateWindow &w = credentialAttempts[req.remote_addr];
-        if (w.count == 0 || now - w.startMs >= cfg.ssoRateLimitWindowMs) {
-            w.startMs = now;
-            w.count = 0;
-        }
-        if (w.count < cfg.ssoRateLimitMax) {
-            ++w.count;
-            return true;
-        }
-        retryAfterMs = cfg.ssoRateLimitWindowMs - (now - w.startMs);
-    }
+    noteRateLimit429(req, 0);
     sendError(res, 429, "RATE_LIMITED",
               "too many sign-in attempts; retry later");
-    res.set_header("Retry-After",
-                   std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
+    res.set_header("Retry-After", std::to_string(retrySec));
     return false;
 }
 
 bool OctiHttpServer::Impl::allowUploadAttempt(const Request &req, Response &res)
 {
-    if (cfg.uploadRateLimitMax <= 0 || cfg.uploadRateLimitWindowMs <= 0) {
+    int64_t retrySec = 1;
+    if (uploadLimiter.tryAcquire("upload:" + clientRemoteIp(req),
+                                 cfg.uploadRateLimitMax,
+                                 cfg.uploadRateLimitWindowMs, retrySec)) {
         return true;
     }
-    const size_t kMaxTrackedAddresses = 4096;
-    const int64_t now = steadyMs();
-    int64_t retryAfterMs = 0;
-    {
-        std::lock_guard<std::mutex> lock(rateMutex);
-        if (uploadAttempts.size() >= kMaxTrackedAddresses &&
-            uploadAttempts.find(req.remote_addr) == uploadAttempts.end()) {
-            for (auto it = uploadAttempts.begin(); it != uploadAttempts.end();) {
-                if (now - it->second.startMs >= cfg.uploadRateLimitWindowMs) {
-                    it = uploadAttempts.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-            if (uploadAttempts.size() >= kMaxTrackedAddresses) {
-                auto oldest = uploadAttempts.begin();
-                for (auto it = uploadAttempts.begin(); it != uploadAttempts.end(); ++it) {
-                    if (it->second.startMs < oldest->second.startMs) {
-                        oldest = it;
-                    }
-                }
-                uploadAttempts.erase(oldest);
-            }
-        }
-        RateWindow &w = uploadAttempts[req.remote_addr];
-        if (w.count == 0 || now - w.startMs >= cfg.uploadRateLimitWindowMs) {
-            w.startMs = now;
-            w.count = 0;
-        }
-        if (w.count < cfg.uploadRateLimitMax) {
-            ++w.count;
-            return true;
-        }
-        retryAfterMs = cfg.uploadRateLimitWindowMs - (now - w.startMs);
-    }
+    noteRateLimit429(req, 0);
     sendError(res, 429, "RATE_LIMITED",
               "too many upload attempts; retry later");
-    res.set_header("Retry-After",
-                   std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
+    res.set_header("Retry-After", std::to_string(retrySec));
     return false;
 }
 
-bool OctiHttpServer::Impl::allowExportAttempt(const Request &req, Response &res)
+bool OctiHttpServer::Impl::allowExportAttempt(const Request &req, Response &res,
+                                              int64_t actorId)
 {
-    if (cfg.exportRateLimitMax <= 0 || cfg.exportRateLimitWindowMs <= 0) {
+    int64_t retrySec = 1;
+    const std::string ipKey = "export_ip:" + clientRemoteIp(req);
+    const std::string actorKey =
+        actorId != 0 ? ("export_actor:" + std::to_string(actorId))
+                     : std::string();
+    if (exportLimiter.tryAcquireDual(actorKey, cfg.exportRateLimitMax,
+                                     ipKey, cfg.exportRateLimitMax,
+                                     cfg.exportRateLimitWindowMs, retrySec)) {
         return true;
     }
-    const size_t kMaxTrackedAddresses = 4096;
-    const int64_t now = steadyMs();
-    int64_t retryAfterMs = 0;
-    {
-        std::lock_guard<std::mutex> lock(rateMutex);
-        if (exportAttempts.size() >= kMaxTrackedAddresses &&
-            exportAttempts.find(req.remote_addr) == exportAttempts.end()) {
-            for (auto it = exportAttempts.begin(); it != exportAttempts.end();) {
-                if (now - it->second.startMs >= cfg.exportRateLimitWindowMs) {
-                    it = exportAttempts.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-            if (exportAttempts.size() >= kMaxTrackedAddresses) {
-                auto oldest = exportAttempts.begin();
-                for (auto it = exportAttempts.begin(); it != exportAttempts.end(); ++it) {
-                    if (it->second.startMs < oldest->second.startMs) {
-                        oldest = it;
-                    }
-                }
-                exportAttempts.erase(oldest);
-            }
-        }
-        RateWindow &w = exportAttempts[req.remote_addr];
-        if (w.count == 0 || now - w.startMs >= cfg.exportRateLimitWindowMs) {
-            w.startMs = now;
-            w.count = 0;
-        }
-        if (w.count < cfg.exportRateLimitMax) {
-            ++w.count;
-            return true;
-        }
-        retryAfterMs = cfg.exportRateLimitWindowMs - (now - w.startMs);
-    }
+    noteRateLimit429(req, actorId);
     sendError(res, 429, "RATE_LIMITED",
               "too many export attempts; retry later");
-    res.set_header("Retry-After",
-                   std::to_string(std::max<int64_t>(1, (retryAfterMs + 999) / 1000)));
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowRobotExportConfAttempt(const Request &req,
+                                                       Response &res,
+                                                       int64_t actorId)
+{
+    int64_t retrySec = 1;
+    const std::string ipKey = "botconf_ip:" + clientRemoteIp(req);
+    const std::string actorKey =
+        actorId != 0 ? ("botconf_actor:" + std::to_string(actorId))
+                     : std::string();
+    if (robotExportConfLimiter.tryAcquireDual(
+            actorKey, cfg.robotExportConfRateLimitMax,
+            ipKey, cfg.robotExportConfRateLimitMax,
+            cfg.robotExportConfRateLimitWindowMs, retrySec)) {
+        return true;
+    }
+    noteRateLimit429(req, actorId);
+    sendError(res, 429, "RATE_LIMITED",
+              "too many robot config export attempts; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowPliesAttempt(const Request &req, Response &res)
+{
+    int64_t retrySec = 1;
+    if (pliesLimiter.tryAcquire("plies:" + clientRemoteIp(req),
+                                cfg.pliesRateLimitMax,
+                                cfg.pliesRateLimitWindowMs, retrySec)) {
+        return true;
+    }
+    noteRateLimit429(req, 0);
+    if (!hasValidBearerAuth(req)) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, clientRemoteIp(req), req.path, 429,
+            store.currentEpochSec()));
+    }
+    sendError(res, 429, "RATE_LIMITED",
+              "too many ply replay requests; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowProbeAttempt(const Request &req, Response &res,
+                                             int64_t actorId)
+{
+    int64_t retrySec = 1;
+    const std::string ipKey = "probe_ip:" + clientRemoteIp(req);
+    const std::string actorKey =
+        actorId != 0 ? ("probe_actor:" + std::to_string(actorId))
+                     : std::string();
+    if (probeLimiter.tryAcquireDual(actorKey, cfg.probeRateLimitMax,
+                                    ipKey, cfg.probeRateLimitMax,
+                                    cfg.probeRateLimitWindowMs, retrySec)) {
+        return true;
+    }
+    noteRateLimit429(req, actorId);
+    sendError(res, 429, "RATE_LIMITED",
+              "too many robot URL verification probes; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowMutationAttempt(const Request &req,
+                                                Response &res,
+                                                int64_t actorId)
+{
+    if (cfg.mutationRateLimitMax <= 0 || cfg.mutationRateLimitWindowMs <= 0) {
+        return true;
+    }
+    int64_t retrySec = 1;
+    const std::string ip = clientRemoteIp(req);
+    bool ok = false;
+    if (actorId != 0) {
+        const int sharedNatCap = std::max(cfg.mutationRateLimitMax,
+                                          cfg.mutationRateLimitMax * 4);
+        ok = mutationLimiter.tryAcquireDual(
+            "mut_actor:" + std::to_string(actorId), cfg.mutationRateLimitMax,
+            "mut_authed_ip:" + ip, sharedNatCap,
+            cfg.mutationRateLimitWindowMs, retrySec);
+    } else {
+        ok = mutationLimiter.tryAcquire(
+            "mut_anon_ip:" + ip, cfg.mutationRateLimitMax,
+            cfg.mutationRateLimitWindowMs, retrySec);
+    }
+    if (ok) {
+        return true;
+    }
+    noteRateLimit429(req, actorId);
+    sendError(res, 429, "RATE_LIMITED",
+              "too many write requests; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::checkPasscodeBlocked(const Request &req,
+                                                Response &res,
+                                                int64_t actorId)
+{
+    int64_t retrySec = 1;
+    const std::string ipKey = "pass_ip:" + clientRemoteIp(req);
+    const std::string actorKey =
+        actorId != 0 ? ("pass_actor:" + std::to_string(actorId))
+                     : std::string();
+    if (passcodeFailureLimiter.isBlocked(ipKey, cfg.passcodeFailureRateLimitMax,
+                                         cfg.passcodeFailureRateLimitWindowMs,
+                                         retrySec) ||
+        (!actorKey.empty() &&
+         passcodeFailureLimiter.isBlocked(actorKey,
+                                          cfg.passcodeFailureRateLimitMax,
+                                          cfg.passcodeFailureRateLimitWindowMs,
+                                          retrySec))) {
+        noteRateLimit429(req, actorId);
+        sendError(res, 429, "RATE_LIMITED",
+                  "too many failed passcode attempts; retry later");
+        res.set_header("Retry-After", std::to_string(retrySec));
+        return true;
+    }
+    return false;
+}
+
+void OctiHttpServer::Impl::recordPasscodeFailure(const Request &req,
+                                                 Response &res,
+                                                 int64_t actorId,
+                                                 const RoomResult &r)
+{
+    if (r.code != RoomCode::FORBIDDEN_PASSCODE) {
+        return;
+    }
+    applyBanSideEffects(banManager.recordPasscodeFailure(
+        store, buildAbuseContext(req, actorId), store.currentEpochSec()));
+    int64_t retrySec = 1;
+    const std::string ipKey = "pass_ip:" + clientRemoteIp(req);
+    const std::string actorKey =
+        actorId != 0 ? ("pass_actor:" + std::to_string(actorId))
+                     : std::string();
+    if (!passcodeFailureLimiter.tryAcquireDual(
+            actorKey, cfg.passcodeFailureRateLimitMax,
+            ipKey, cfg.passcodeFailureRateLimitMax,
+            cfg.passcodeFailureRateLimitWindowMs, retrySec)) {
+        noteRateLimit429(req, actorId);
+        sendError(res, 429, "RATE_LIMITED",
+                  "too many failed passcode attempts; retry later");
+        res.set_header("Retry-After", std::to_string(retrySec));
+    }
+}
+
+bool OctiHttpServer::Impl::allowLivePoll(const Request &req, Response &res,
+                                         const Auth &auth)
+{
+    int64_t retrySec = 1;
+    const std::string ip = clientRemoteIp(req);
+    bool ok = false;
+    if (auth.playerId != 0) {
+        ok = livePollLimiter.tryAcquireDual(
+            "actor:" + std::to_string(auth.playerId),
+            cfg.livePollActorRefillPerSec, cfg.livePollActorBurst,
+            "authed_ip:" + ip,
+            cfg.livePollAuthedIpRefillPerSec, cfg.livePollAuthedIpBurst,
+            retrySec);
+    } else {
+        ok = livePollLimiter.tryAcquire(
+            "anon_ip:" + ip,
+            cfg.livePollAnonIpRefillPerSec, cfg.livePollAnonIpBurst,
+            retrySec);
+    }
+    if (ok) {
+        return true;
+    }
+    noteRateLimit429(req, auth.playerId);
+    sendError(res, 429, "RATE_LIMITED",
+              "too many poll requests; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowLobbySnap(const Request &req, Response &res,
+                                          const Auth &auth)
+{
+    int64_t retrySec = 1;
+    const std::string ip = clientRemoteIp(req);
+    bool ok = false;
+    if (auth.playerId != 0) {
+        ok = lobbySnapLimiter.tryAcquireDual(
+            "actor:" + std::to_string(auth.playerId),
+            cfg.lobbySnapActorRefillPerSec, cfg.lobbySnapActorBurst,
+            "authed_ip:" + ip,
+            cfg.lobbySnapAuthedIpRefillPerSec, cfg.lobbySnapAuthedIpBurst,
+            retrySec);
+    } else {
+        ok = lobbySnapLimiter.tryAcquire(
+            "anon_ip:" + ip,
+            cfg.lobbySnapAnonIpRefillPerSec, cfg.lobbySnapAnonIpBurst,
+            retrySec);
+    }
+    if (ok) {
+        return true;
+    }
+    noteRateLimit429(req, auth.playerId);
+    sendError(res, 429, "RATE_LIMITED",
+              "too many lobby snapshot requests; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
+    return false;
+}
+
+bool OctiHttpServer::Impl::allowBrowseRead(const Request &req, Response &res,
+                                           const Auth &auth)
+{
+    int64_t retrySec = 1;
+    const std::string ip = clientRemoteIp(req);
+    bool ok = false;
+    if (auth.playerId != 0) {
+        ok = browseLimiter.tryAcquireDual(
+            "actor:" + std::to_string(auth.playerId),
+            cfg.browseActorRefillPerSec, cfg.browseActorBurst,
+            "authed_ip:" + ip,
+            cfg.browseAuthedIpRefillPerSec, cfg.browseAuthedIpBurst,
+            retrySec);
+    } else {
+        ok = browseLimiter.tryAcquire(
+            "anon_ip:" + ip,
+            cfg.browseAnonIpRefillPerSec, cfg.browseAnonIpBurst,
+            retrySec);
+    }
+    if (ok) {
+        return true;
+    }
+    noteRateLimit429(req, auth.playerId);
+    if (auth.playerId == 0 &&
+        (req.path.rfind("/api/v1/archive/games/", 0) == 0 ||
+         req.path.rfind("/api/v1/users/", 0) == 0 ||
+         req.path.rfind("/api/v1/profile/", 0) == 0 ||
+         req.path.rfind("/api/v1/players/", 0) == 0)) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, ip, req.path, 429, store.currentEpochSec()));
+    }
+    sendError(res, 429, "RATE_LIMITED",
+              "too many directory or archive read requests; retry later");
+    res.set_header("Retry-After", std::to_string(retrySec));
     return false;
 }
 
@@ -3092,13 +5513,34 @@ void OctiHttpServer::Impl::handleSso(const Request &req, Response &res)
         return;
     }
     VerifiedClaims claims;
-    if (!verifyCredential(body, res, claims)) {
+    if (!verifyCredential(req, body, res, claims)) {
         return;
     }
+    const int64_t nowSec = store.currentEpochSec();
     LoginResult lr = store.loginWithSso(claims, cleanAgent(agent));
+    if (lr.banned) {
+        BanMatch bm;
+        const BanMatch *bmp =
+            (!lr.profile.uuid.empty() &&
+             banManager.matchAccount(lr.profile.uuid, nowSec, bm))
+                ? &bm
+                : nullptr;
+        sendAccountBanned(res, bmp, nowSec);
+        return;
+    }
     if (!lr.ok) {
         sendError(res, 500, "INTERNAL_ERROR", "sign-in failed");
         return;
+    }
+    BanMatch bm;
+    if (!lr.profile.uuid.empty() &&
+        banManager.matchAccount(lr.profile.uuid, nowSec, bm)) {
+        store.revokeAllSessions(lr.profile.playerId);
+        sendAccountBanned(res, &bm, nowSec);
+        return;
+    }
+    if (lr.profile.isAdmin) {
+        banManager.noteVerifiedAdminIp(clientRemoteIp(req), nowSec);
     }
     std::string bodyInstallId;
     if (body.contains("install_id") && body["install_id"].is_string()) {
@@ -3139,7 +5581,7 @@ void OctiHttpServer::Impl::handleLink(const Request &req, Response &res)
         return;
     }
     VerifiedClaims claims;
-    if (!verifyCredential(body, res, claims)) {
+    if (!verifyCredential(req, body, res, claims)) {
         return;
     }
     bool forceRelink = false;
@@ -3193,7 +5635,8 @@ void OctiHttpServer::Impl::handleLink(const Request &req, Response &res)
 void OctiHttpServer::Impl::handleUnlink(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     std::unordered_map<std::string, std::string>::const_iterator it =
@@ -3248,7 +5691,8 @@ void OctiHttpServer::Impl::handleAuthUnlinkProvider(const Request &req,
                                                    Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     std::unordered_map<std::string, std::string>::const_iterator it =
@@ -3285,7 +5729,8 @@ void OctiHttpServer::Impl::handleAuthUnlinkProvider(const Request &req,
 void OctiHttpServer::Impl::handleLogout(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     store.revokeSession(auth.token);
@@ -3350,7 +5795,8 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
                                               Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -3427,6 +5873,7 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
                   "That handle is already taken by another player. Please choose a different handle.");
         return;
     case UpdateStatus::HANDLE_RATE_LIMITED:
+        noteRateLimit429(req, auth.playerId);
         sendError(res, 429, "HANDLE_CHANGE_RATE_LIMITED",
                   "Handle can only be changed once every 24 hours after initial setup. Please try again later.");
         return;
@@ -3435,6 +5882,11 @@ void OctiHttpServer::Impl::handleProfilePatch(const Request &req,
                   "Display name must be 1 to 64 printable characters and cannot be blank.");
         return;
     case UpdateStatus::INVALID_AVATAR_URL:
+        if (up.setAvatarUrl && lower(up.avatarUrl).rfind("data:", 0) == 0) {
+            applyBanSideEffects(banManager.recordExploitProbe(
+                store, buildAbuseContext(req, auth.playerId),
+                store.currentEpochSec()));
+        }
         sendError(res, 400, "INVALID_AVATAR_URL",
                   "Avatar must be an uploaded image file or a valid https:// URL (up to 512 characters, no spaces).");
         return;
@@ -3459,6 +5911,10 @@ void OctiHttpServer::Impl::handlePlayer(const Request &req, Response &res)
 
 void OctiHttpServer::Impl::handleUsersList(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     UserDirectoryFilter filter;
     if (req.has_param("q")) {
         filter.query = req.get_param_value("q");
@@ -3596,6 +6052,7 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
     ArchiveFilter af;
     af.robotId = r.robotId;
     af.robotUuid = r.robotUuid;
+    af.source = "online";
     af.limit = 50;
     af.offset = 0;
     std::vector<GameRecord> games;
@@ -3662,6 +6119,10 @@ Json OctiHttpServer::Impl::buildRobotProfilePayload(const RobotRecord &r)
 
 void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     std::string id;
     std::unordered_map<std::string, std::string>::const_iterator it =
         req.path_params.find("id");
@@ -3694,13 +6155,28 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
             rFound = store.getRobotByName(h, robotRec);
         }
         if (rFound && robotRec.gamesPlayed > 0) {
+            if (auth.playerId == 0) {
+                applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                    store, clientRemoteIp(req), req.path, 200,
+                    store.currentEpochSec()));
+            }
             sendJson(res, 200, buildRobotProfilePayload(robotRec));
             return;
         }
     }
     if (!found || prof.banned) {
+        if (auth.playerId == 0) {
+            applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                store, clientRemoteIp(req), req.path, 404,
+                store.currentEpochSec()));
+        }
         sendError(res, 404, "NOT_FOUND", "no such user");
         return;
+    }
+    if (auth.playerId == 0) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, clientRemoteIp(req), req.path, 200,
+            store.currentEpochSec()));
     }
 
     std::vector<RobotRecord> robots;
@@ -3796,6 +6272,10 @@ void OctiHttpServer::Impl::handleUserGet(const Request &req, Response &res)
 
 void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     ArenaStandingsFilter filter;
     filter.participantType = "all";
     if (req.has_param("participant_type")) {
@@ -3843,6 +6323,18 @@ void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &r
     }
     if (offset < 0) offset = 0;
     filter.offset = offset;
+
+    const std::string cacheKey =
+        filter.participantType + "|" + filter.query + "|" + filter.sortField +
+        "|" + (filter.sortAsc ? "1" : "0") + "|" + std::to_string(limit) +
+        "|" + std::to_string(offset);
+    const uint64_t storeRev = store.mutationRevision();
+    const int64_t nowMs = steadyMs();
+    CachedPayload cached;
+    if (robotsDirCache.get(cacheKey, storeRev, nowMs, cached)) {
+        sendCachedSnapshot(req, res, cached, "no-store");
+        return;
+    }
 
     std::vector<ArenaStandingEntry> list;
     int64_t total = 0;
@@ -3903,11 +6395,17 @@ void OctiHttpServer::Impl::handleRobotsDirectory(const Request &req, Response &r
     resp["offset"] = offset;
     resp["entries"] = arr;
     resp["robots"] = arr;
-    sendJson(res, 200, resp);
+    CachedPayload stored = robotsDirCache.put(
+        cacheKey, storeRev, 2000, nowMs, "rdir-", dumpJson(resp));
+    sendCachedSnapshot(req, res, stored, "no-store");
 }
 
 void OctiHttpServer::Impl::handleRobotProfileGet(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     std::string id;
     std::unordered_map<std::string, std::string>::const_iterator it =
         req.path_params.find("id");
@@ -3939,6 +6437,7 @@ void OctiHttpServer::Impl::handleRobotProfileGet(const Request &req, Response &r
 
 void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
 {
+    res.set_header("Cache-Control", "no-store");
     Auth auth;
     if (!requireAuth(req, res, auth)) {
         return;
@@ -3992,7 +6491,8 @@ void OctiHttpServer::Impl::handleRobotsList(const Request &req, Response &res)
 void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -4027,8 +6527,24 @@ void OctiHttpServer::Impl::handleRobotCreate(const Request &req, Response &res)
                 sendError(res, 400, "INVALID_ROBOT_URL", "invalid robot URL");
                 return;
             }
+            if (!allowProbeAttempt(req, res, auth.playerId)) {
+                return;
+            }
+            UrlProbeSlotGuard probeSlot(activeUrlProbes, cfg.maxConcurrentUrlProbes);
+            if (!probeSlot.allowed()) {
+                sendError(res, 503, "SERVICE_BUSY",
+                          "too many concurrent robot URL verification probes; retry later");
+                res.set_header("Retry-After", "3");
+                return;
+            }
             std::string reachErr;
-            if (!verifyRobotUrlReachable(robotUrl, reachErr)) {
+            bool disallowedTarget = false;
+            if (!verifyRobotUrlReachable(robotUrl, reachErr, &disallowedTarget)) {
+                if (disallowedTarget) {
+                    applyBanSideEffects(banManager.recordExploitProbe(
+                        store, buildAbuseContext(req, auth.playerId),
+                        store.currentEpochSec()));
+                }
                 sendError(res, 400, "INVALID_ROBOT_URL", reachErr);
                 return;
             }
@@ -4090,7 +6606,8 @@ void OctiHttpServer::Impl::handleRobotPatch(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -4144,8 +6661,24 @@ void OctiHttpServer::Impl::handleRobotPatch(const Request &req, Response &res)
                 sendError(res, 400, "INVALID_ROBOT_URL", "invalid robot URL");
                 return;
             }
+            if (!allowProbeAttempt(req, res, auth.playerId)) {
+                return;
+            }
+            UrlProbeSlotGuard probeSlot(activeUrlProbes, cfg.maxConcurrentUrlProbes);
+            if (!probeSlot.allowed()) {
+                sendError(res, 503, "SERVICE_BUSY",
+                          "too many concurrent robot URL verification probes; retry later");
+                res.set_header("Retry-After", "3");
+                return;
+            }
             std::string reachErr;
-            if (!verifyRobotUrlReachable(robotUrl, reachErr)) {
+            bool disallowedTarget = false;
+            if (!verifyRobotUrlReachable(robotUrl, reachErr, &disallowedTarget)) {
+                if (disallowedTarget) {
+                    applyBanSideEffects(banManager.recordExploitProbe(
+                        store, buildAbuseContext(req, auth.playerId),
+                        store.currentEpochSec()));
+                }
                 sendError(res, 400, "INVALID_ROBOT_URL", reachErr);
                 return;
             }
@@ -4185,6 +6718,7 @@ void OctiHttpServer::Impl::handleRobotPatch(const Request &req, Response &res)
         sendError(res, 409, "ROBOT_NAME_TAKEN", "robot name already taken");
         return;
     case RobotStatus::ROBOT_NAME_RATE_LIMITED:
+        noteRateLimit429(req, auth.playerId);
         sendError(res, 429, "ROBOT_NAME_RATE_LIMITED", "Robot name can only be changed once every 24 hours.");
         return;
     case RobotStatus::NOT_FOUND:
@@ -4203,7 +6737,8 @@ void OctiHttpServer::Impl::handleRobotDelete(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     bool permanent = req.has_param("permanent") &&
@@ -4276,15 +6811,38 @@ void OctiHttpServer::Impl::handleRobotsConnect(const Request &req, Response &res
         }
     }
     if (token.empty()) {
-        res.set_header("WWW-Authenticate", "Bearer");
-        sendError(res, 401, "UNAUTHORIZED", "missing robot token");
+        sendAuthUnauthorized(req, res, "Bearer", "missing robot token",
+                             req.has_header("Authorization"));
         return;
     }
+    const int64_t nowSec = store.currentEpochSec();
     RobotTokenValidation val = store.validateRobotToken(token);
-    if (!val.valid || val.robot.revoked) {
-        res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
-        sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+    if (val.banned) {
+        BanMatch bm;
+        const BanMatch *bmp =
+            (!val.owner.uuid.empty() &&
+             banManager.matchAccount(val.owner.uuid, nowSec, bm))
+                ? &bm
+                : nullptr;
+        sendAccountBanned(res, bmp, nowSec);
         return;
+    }
+    if (!val.valid || val.robot.revoked) {
+        sendAuthUnauthorized(req, res, "Bearer error=\"invalid_token\"",
+                             "invalid or revoked robot token", true);
+        return;
+    }
+    {
+        BanMatch bm;
+        if (banManager.matchRobot(val.robot.robotUuid, nowSec, bm) ||
+            (!val.owner.uuid.empty() &&
+             banManager.matchAccount(val.owner.uuid, nowSec, bm))) {
+            sendAccountBanned(res, &bm, nowSec);
+            return;
+        }
+    }
+    if (val.owner.isAdmin) {
+        banManager.noteVerifiedAdminIp(clientRemoteIp(req), nowSec);
     }
     RobotRecord robotRec = val.robot;
 
@@ -4293,6 +6851,9 @@ void OctiHttpServer::Impl::handleRobotsConnect(const Request &req, Response &res
     fieldBool(body, "if_unused", false, ifUnused, err);
 
     int64_t actorId = makeRobotActorId(robotRec.robotId);
+    if (!allowMutationAttempt(req, res, actorId)) {
+        return;
+    }
     const int64_t now = steadyMs();
 
     std::string leaseId;
@@ -4311,7 +6872,7 @@ void OctiHttpServer::Impl::handleRobotsConnect(const Request &req, Response &res
         lease.leaseId = leaseId;
         lease.connectedAtMs = now;
         lease.lastSeenMs = now;
-        lease.clientIp = req.remote_addr;
+        lease.clientIp = clientRemoteIp(req);
         lease.clientType = "robot";
     }
 
@@ -4353,17 +6914,44 @@ void OctiHttpServer::Impl::handleRobotsDisconnect(const Request &req, Response &
         }
     }
     if (token.empty()) {
-        res.set_header("WWW-Authenticate", "Bearer");
-        sendError(res, 401, "UNAUTHORIZED", "missing robot token");
+        sendAuthUnauthorized(req, res, "Bearer", "missing robot token",
+                             req.has_header("Authorization"));
         return;
     }
+    const int64_t nowSec = store.currentEpochSec();
     RobotTokenValidation val = store.validateRobotToken(token);
-    if (!val.valid || val.robot.revoked) {
-        res.set_header("WWW-Authenticate", "Bearer error=\"invalid_token\"");
-        sendError(res, 401, "UNAUTHORIZED", "invalid or revoked robot token");
+    if (val.banned) {
+        BanMatch bm;
+        const BanMatch *bmp =
+            (!val.owner.uuid.empty() &&
+             banManager.matchAccount(val.owner.uuid, nowSec, bm))
+                ? &bm
+                : nullptr;
+        sendAccountBanned(res, bmp, nowSec);
         return;
+    }
+    if (!val.valid || val.robot.revoked) {
+        sendAuthUnauthorized(req, res, "Bearer error=\"invalid_token\"",
+                             "invalid or revoked robot token", true);
+        return;
+    }
+    {
+        BanMatch bm;
+        if (banManager.matchRobot(val.robot.robotUuid, nowSec, bm) ||
+            (!val.owner.uuid.empty() &&
+             banManager.matchAccount(val.owner.uuid, nowSec, bm))) {
+            sendAccountBanned(res, &bm, nowSec);
+            return;
+        }
+    }
+    if (val.owner.isAdmin) {
+        banManager.noteVerifiedAdminIp(clientRemoteIp(req), nowSec);
     }
     RobotRecord robotRec = val.robot;
+    int64_t actorId = makeRobotActorId(robotRec.robotId);
+    if (!allowMutationAttempt(req, res, actorId)) {
+        return;
+    }
 
     std::string leaseHeader;
     if (req.has_header("X-Octi-Robot-Lease")) {
@@ -4383,7 +6971,6 @@ void OctiHttpServer::Impl::handleRobotsDisconnect(const Request &req, Response &
         }
     }
 
-    int64_t actorId = makeRobotActorId(robotRec.robotId);
     rooms.clearClientPresence(actorId, "robot");
     rooms.leaveLobby(actorId);
 
@@ -4400,6 +6987,9 @@ void OctiHttpServer::Impl::handleRobotsExportConf(const Request &req, Response &
     }
     if (auth.isRobot || auth.playerId <= 0) {
         sendError(res, 403, "FORBIDDEN_ROBOT", "robots cannot export token configs");
+        return;
+    }
+    if (!allowRobotExportConfAttempt(req, res, auth.playerId)) {
         return;
     }
     PlayerProfile prof;
@@ -4432,6 +7022,10 @@ void OctiHttpServer::Impl::handleRobotsExportConf(const Request &req, Response &
 void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
                                              Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     std::string rawMode = "2P_3B";
     if (req.has_param("ladder")) {
         rawMode = req.get_param_value("ladder");
@@ -4533,6 +7127,18 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
          limit < 1)) {
         sendError(res, 400, "INVALID_ARGUMENT",
                   "limit must be a positive integer");
+        return;
+    }
+
+    const std::string lbKey =
+        pool + "|" + participantType + "|" + mode + "|" + ladder + "|" +
+        sortField + "|" + (sortAsc ? "1" : "0") + "|" +
+        (playedOnly ? "1" : "0") + "|" + std::to_string(limit);
+    const uint64_t lbRev = store.mutationRevision();
+    const int64_t lbNowMs = steadyMs();
+    CachedPayload lbCached;
+    if (leaderboardCache.get(lbKey, lbRev, lbNowMs, lbCached)) {
+        sendCachedSnapshot(req, res, lbCached, "no-cache");
         return;
     }
 
@@ -4672,12 +7278,24 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
     j["ladder"] = ladder;
     j["total"] = total;
     j["entries"] = arr;
-    sendJson(res, 200, j);
+    CachedPayload lbStored = leaderboardCache.put(
+        lbKey, lbRev, 2000, lbNowMs, "lb-", dumpJson(j));
+    sendCachedSnapshot(req, res, lbStored, "no-cache");
 }
 
 /* ------------------------------------------------------------------ */
 /* Handlers: lobby, tables, matchmaking                                */
 /* ------------------------------------------------------------------ */
+
+void OctiHttpServer::Impl::finishRoom(const Request &req, int64_t actorId,
+                                      Response &res, const RoomResult &r,
+                                      Json body)
+{
+    if (!r.ok() && r.code == RoomCode::RATE_LIMITED) {
+        noteRateLimit429(req, actorId);
+    }
+    finishRoom(res, r, std::move(body));
+}
 
 void OctiHttpServer::Impl::finishRoom(Response &res, const RoomResult &r,
                                       Json body)
@@ -4696,7 +7314,7 @@ void OctiHttpServer::Impl::finishRoom(Response &res, const RoomResult &r,
 void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
 {
     Auth auth;
-    if (!optionalAuth(req, res, auth)) {
+    if (!optionalAuth(req, res, auth) || !allowLobbySnap(req, res, auth)) {
         return;
     }
     if (auth.playerId == 0) {
@@ -4709,6 +7327,15 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
     } else {
         rooms.enterLobby(auth.playerId);
         rooms.recordClientHeartbeat(auth.playerId, auth.clientType, false);
+    }
+    const uint64_t snapRev =
+        rooms.lobbySnapshotRevision() ^
+        (store.mutationRevision() * 0x9e3779b97f4a7c15ULL);
+    const int64_t snapNowMs = rooms.currentClockMs();
+    CachedPayload lobbyCached;
+    if (lobbyStateCache.get("lobby", snapRev, snapNowMs, lobbyCached)) {
+        sendCachedSnapshot(req, res, lobbyCached, "no-cache");
+        return;
     }
     LobbySnapshot snap = rooms.lobbyState();
     Json j;
@@ -4813,13 +7440,16 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
     }
     j["recent_chat"] = chat;
     j["latest_seq"] = snap.latestSeq;
-    sendJson(res, 200, j);
+    CachedPayload lobbyStored = lobbyStateCache.put(
+        "lobby", snapRev, 500, snapNowMs, "ls-", dumpJson(j));
+    sendCachedSnapshot(req, res, lobbyStored, "no-cache");
 }
 
 void OctiHttpServer::Impl::handleLobbyChat(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -4832,7 +7462,8 @@ void OctiHttpServer::Impl::handleLobbyChat(const Request &req, Response &res)
         sendError(res, 400, "INVALID_ARGUMENT", err);
         return;
     }
-    finishRoom(res, rooms.postLobbyChat(auth.playerId, text), Json::object());
+    finishRoom(req, auth.playerId, res,
+               rooms.postLobbyChat(auth.playerId, text), Json::object());
 }
 
 void OctiHttpServer::Impl::handleLobbyEvents(const Request &req,
@@ -4842,11 +7473,17 @@ void OctiHttpServer::Impl::handleLobbyEvents(const Request &req,
     if (!optionalAuth(req, res, auth)) {
         return;
     }
+    const bool stream = wantsStream(req);
+    if (!stream && !allowLivePoll(req, res, auth)) {
+        return;
+    }
     std::string remoteIp = clientRemoteIp(req);
-    const int64_t viewer = (auth.playerId > 0)
-                               ? auth.playerId
-                               : rooms.ensureAnonymousObserver(remoteIp);
-    if (auth.playerId == 0 && !isLoopbackIp(remoteIp)) {
+    const int64_t viewer =
+        (auth.playerId != 0)
+            ? auth.playerId
+            : (stream ? rooms.ensureAnonymousObserver(remoteIp)
+                      : rooms.findAnonymousObserver(remoteIp));
+    if (auth.playerId == 0 && stream && !isLoopbackIp(remoteIp)) {
         rooms.recordClientHeartbeat(viewer, auth.clientType, false);
     }
     PollFn fetch = [this, viewer](int64_t since, size_t limit,
@@ -4872,10 +7509,24 @@ void OctiHttpServer::Impl::handleLobbyEvents(const Request &req,
 
 void OctiHttpServer::Impl::handleTables(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowLobbySnap(req, res, auth)) {
+        return;
+    }
     bool includeFinished = false;
     if (req.has_param("include_finished")) {
         std::string v = lower(req.get_param_value("include_finished"));
         includeFinished = (v == "1" || v == "true");
+    }
+    const std::string tblKey = includeFinished ? "all" : "open";
+    const uint64_t tblRev =
+        rooms.lobbySnapshotRevision() ^
+        (store.mutationRevision() * 0x9e3779b97f4a7c15ULL);
+    const int64_t tblNowMs = rooms.currentClockMs();
+    CachedPayload tblCached;
+    if (tablesCache.get(tblKey, tblRev, tblNowMs, tblCached)) {
+        sendCachedSnapshot(req, res, tblCached, "no-cache");
+        return;
     }
     std::vector<TableSummary> tables = rooms.listTables(includeFinished);
     Json arr = Json::array();
@@ -4884,14 +7535,17 @@ void OctiHttpServer::Impl::handleTables(const Request &req, Response &res)
     }
     Json j;
     j["tables"] = arr;
-    sendJson(res, 200, j);
+    CachedPayload tblStored = tablesCache.put(
+        tblKey, tblRev, 500, tblNowMs, "tbl-", dumpJson(j));
+    sendCachedSnapshot(req, res, tblStored, "no-cache");
 }
 
 void OctiHttpServer::Impl::handleTableCreate(const Request &req,
                                              Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -4929,7 +7583,8 @@ void OctiHttpServer::Impl::handleTableJoin(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -4948,8 +7603,17 @@ void OctiHttpServer::Impl::handleTableJoin(const Request &req, Response &res)
         sendError(res, 400, "INVALID_ARGUMENT", "seat must be 0..4");
         return;
     }
+    if (!passcode.empty() && checkPasscodeBlocked(req, res, auth.playerId)) {
+        return;
+    }
     RoomResult r =
         rooms.joinTable(id, auth.playerId, static_cast<int>(seat), passcode);
+    if (r.code == RoomCode::FORBIDDEN_PASSCODE) {
+        recordPasscodeFailure(req, res, auth.playerId, r);
+        if (res.status == 429) {
+            return;
+        }
+    }
     Json j;
     j["room_id"] = r.roomId;
     j["seat"] = r.seat;
@@ -4961,7 +7625,8 @@ void OctiHttpServer::Impl::handleTableLeave(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     finishRoom(res, rooms.leaveTable(id, auth.playerId), Json::object());
@@ -4971,7 +7636,8 @@ void OctiHttpServer::Impl::handleTablePurge(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     bool isHost = !auth.isRobot && rooms.isTableHost(id, auth.playerId);
@@ -5001,7 +7667,8 @@ void OctiHttpServer::Impl::handleTableKick(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5018,7 +7685,8 @@ void OctiHttpServer::Impl::handleTableObserve(const Request &req,
 {
     Auth auth;
     std::string id;
-    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
+    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     int64_t viewerId = (auth.playerId > 0)
@@ -5026,6 +7694,12 @@ void OctiHttpServer::Impl::handleTableObserve(const Request &req,
                            : rooms.ensureAnonymousObserver(clientRemoteIp(req));
     RoomResult r = rooms.observeRoom(id, viewerId);
     if (!r.ok()) {
+        if (r.code == RoomCode::FORBIDDEN_PASSCODE) {
+            recordPasscodeFailure(req, res, auth.playerId, r);
+            if (res.status == 429) {
+                return;
+            }
+        }
         sendRoomError(res, r);
         return;
     }
@@ -5039,7 +7713,8 @@ void OctiHttpServer::Impl::handleTableUnobserve(const Request &req,
 {
     Auth auth;
     std::string id;
-    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
+    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     int64_t viewerId = (auth.playerId > 0)
@@ -5051,7 +7726,8 @@ void OctiHttpServer::Impl::handleTableUnobserve(const Request &req,
 void OctiHttpServer::Impl::handleEnqueue(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5080,7 +7756,8 @@ void OctiHttpServer::Impl::handleEnqueue(const Request &req, Response &res)
 void OctiHttpServer::Impl::handleDequeue(const Request &req, Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json j;
@@ -5092,7 +7769,7 @@ void OctiHttpServer::Impl::handleMatchStatus(const Request &req,
                                              Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) || !allowLivePoll(req, res, auth)) {
         return;
     }
     MatchmakingStatus st = rooms.matchmakingStatus(auth.playerId);
@@ -5113,12 +7790,13 @@ void OctiHttpServer::Impl::handleGameGet(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
+    if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth) ||
+        !allowLivePoll(req, res, auth)) {
         return;
     }
-    const int64_t viewerId = (auth.playerId > 0)
+    const int64_t viewerId = (auth.playerId != 0)
                                  ? auth.playerId
-                                 : rooms.ensureAnonymousObserver(clientRemoteIp(req));
+                                 : rooms.findAnonymousObserver(clientRemoteIp(req));
     RoomView view;
     RoomResult r = rooms.getRoomView(id, viewerId, view);
     if (r.code == RoomCode::NOT_FOUND) {
@@ -5188,7 +7866,8 @@ void OctiHttpServer::Impl::handleResign(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     RoomResult r = rooms.resign(id, auth.playerId);
@@ -5201,7 +7880,8 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5288,7 +7968,8 @@ void OctiHttpServer::Impl::handleChat(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5308,7 +7989,8 @@ void OctiHttpServer::Impl::handleChat(const Request &req, Response &res)
         sendError(res, 400, "INVALID_ARGUMENT", "scope must be 'all' or 'team'");
         return;
     }
-    finishRoom(res, rooms.postBoardChat(id, auth.playerId, scope, text),
+    finishRoom(req, auth.playerId, res,
+               rooms.postBoardChat(id, auth.playerId, scope, text),
                Json::object());
 }
 
@@ -5316,7 +7998,8 @@ void OctiHttpServer::Impl::handleBan(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5346,7 +8029,8 @@ void OctiHttpServer::Impl::handleMute(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5374,7 +8058,8 @@ void OctiHttpServer::Impl::handleSettings(const Request &req, Response &res)
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     Json body;
@@ -5423,9 +8108,16 @@ void OctiHttpServer::Impl::handleGameEvents(const Request &req, Response &res)
     if (!pathId(req, "id", res, id) || !optionalAuth(req, res, auth)) {
         return;
     }
-    const int64_t viewer = (auth.playerId > 0)
-                               ? auth.playerId
-                               : rooms.ensureAnonymousObserver(clientRemoteIp(req));
+    const bool stream = wantsStream(req);
+    if (!stream && !allowLivePoll(req, res, auth)) {
+        return;
+    }
+    const std::string remoteIp = clientRemoteIp(req);
+    const int64_t viewer =
+        (auth.playerId != 0)
+            ? auth.playerId
+            : (stream ? rooms.ensureAnonymousObserver(remoteIp)
+                      : rooms.findAnonymousObserver(remoteIp));
     PollFn fetch = [this, id, viewer](int64_t since, size_t limit,
                                       PollBatch &out) -> int {
         RoomPoll poll;
@@ -5549,13 +8241,14 @@ static std::string classifyRuleTermination(const OctiBoard &b, const OctiGame &g
 
 void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res)
 {
-    if (!allowUploadAttempt(req, res)) {
+    const size_t maxBytes = routeMaxBodyBytes(req.method, req.path);
+    if (req.body.empty() || req.body.size() > maxBytes) {
+        sendError(res, req.body.size() > maxBytes ? 413 : 400,
+                  req.body.size() > maxBytes ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
+                  "invalid payload size");
         return;
     }
-    if (req.body.empty() || req.body.size() > 65536) {
-        sendError(res, req.body.size() > 65536 ? 413 : 400,
-                  req.body.size() > 65536 ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
-                  "invalid payload size");
+    if (!allowUploadAttempt(req, res)) {
         return;
     }
     Json root = Json::parse(req.body, nullptr, false);
@@ -5809,6 +8502,38 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         }
     }
 
+    PlayerProfile authedPlayer;
+    bool hasAuthedPlayer = false;
+    if (req.has_header("Authorization")) {
+        std::string token;
+        if (extractBearer(req, token)) {
+            SessionValidation sv = store.validateSession(token);
+            if (sv.valid && sv.playerId > 0 &&
+                store.getProfileById(sv.playerId, authedPlayer)) {
+                hasAuthedPlayer = true;
+            }
+        }
+    }
+
+    if (req.has_header("X-Octi-Install-Token")) {
+        std::string installTok = req.get_header_value("X-Octi-Install-Token");
+        if (!AccountStore::isValidInstallToken(installTok)) {
+            sendError(res, 400, "MALFORMED_UPLOAD", "invalid X-Octi-Install-Token");
+            return;
+        }
+        if (!installId.empty() && isSafeId(installId)) {
+            if (!store.registerOrVerifyInstallToken(installId, installTok)) {
+                sendError(res, 403, "FORBIDDEN", "install token mismatch");
+                return;
+            }
+        }
+    } else if (!installId.empty() && isSafeId(installId) &&
+               store.hasInstallToken(installId)) {
+        sendError(res, 403, "FORBIDDEN",
+                  "missing X-Octi-Install-Token for registered installId");
+        return;
+    }
+
     if (!transcriptObj.contains("plies") || !transcriptObj["plies"].is_array()) {
         sendError(res, 400, "MALFORMED_UPLOAD", "missing plies array");
         return;
@@ -5826,6 +8551,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     int detectedAiDifficulty = 0;
     std::string seatHandle[5] = {"", "Player", "Player", "", ""};
     int64_t seatPlayerId[5] = {0, 0, 0, 0, 0};
+    int64_t claimedSeatPlayerId[5] = {0, 0, 0, 0, 0};
     bool seatIsAi[5] = {false, false, false, false, false};
     auto canonicalSeatOf = [](const Json &p) -> int {
         if (!p.is_object()) {
@@ -5858,7 +8584,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
                 bool isAi = (t == "AI" || h.rfind("AI_", 0) == 0);
                 if (seat >= 1 && seat <= 4) {
                     if (!h.empty()) seatHandle[seat] = h;
-                    if (pid > 0) seatPlayerId[seat] = pid;
+                    if (pid > 0) claimedSeatPlayerId[seat] = pid;
                     seatIsAi[seat] = isAi;
                 }
                 if (t == "AI" || p.value("aiDifficulty", 0) > 0) {
@@ -6167,24 +8893,6 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     rec.platform = platform;
     rec.installId = installId;
 
-    PlayerProfile authedPlayer;
-    bool hasAuthedPlayer = false;
-    if (req.has_header("Authorization")) {
-        std::string token;
-        if (extractBearer(req, token)) {
-            SessionValidation sv = store.validateSession(token);
-            if (sv.valid && sv.playerId > 0) {
-                if (store.getProfileById(sv.playerId, authedPlayer)) {
-                    hasAuthedPlayer = true;
-                }
-            }
-        }
-    }
-    if (!hasAuthedPlayer && !installId.empty() && isSafeId(installId)) {
-        if (store.getPlayerByInstallId(installId, authedPlayer)) {
-            hasAuthedPlayer = true;
-        }
-    }
     if (hasAuthedPlayer && authedPlayer.playerId > 0) {
         if (!installId.empty() && isSafeId(installId)) {
             store.bindInstallToPlayer(installId, authedPlayer.playerId);
@@ -6192,7 +8900,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         int maxSeats = (mode == GAME_MODE_4) ? 4 : 2;
         int humanSeat = 0;
         for (int s = 1; s <= maxSeats; ++s) {
-            if (seatPlayerId[s] == authedPlayer.playerId ||
+            if (claimedSeatPlayerId[s] == authedPlayer.playerId ||
                 (seatHandle[s] == authedPlayer.handle && authedPlayer.handle != "Player")) {
                 humanSeat = s;
                 break;
@@ -6208,6 +8916,9 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         }
         if (humanSeat == 0) humanSeat = 1;
 
+        for (int s = 1; s <= 4; ++s) {
+            seatPlayerId[s] = 0;
+        }
         seatPlayerId[humanSeat] = authedPlayer.playerId;
         seatHandle[humanSeat] = authedPlayer.handle;
 
@@ -6234,6 +8945,9 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
                 if (s == humanSeat || (s == 0 && (t == "HUMAN" || h.rfind("AI_", 0) != 0))) {
                     pEntry["handle"] = authedPlayer.handle;
                     pEntry["player_uuid"] = authedPlayer.uuid;
+                } else {
+                    pEntry.erase("player_uuid");
+                    pEntry.erase("playerId");
                 }
             }
         };
@@ -6243,6 +8957,25 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
         if (storedJson.contains("game") && storedJson["game"].is_object() &&
             storedJson["game"].contains("players")) {
             updateHumanEntry(storedJson["game"]["players"]);
+        }
+        rec.octiTranscript = storedJson.dump();
+    } else {
+        auto stripPlayerIdentity = [](Json &arr) {
+            if (!arr.is_array()) {
+                return;
+            }
+            for (auto &pEntry : arr) {
+                if (!pEntry.is_object()) continue;
+                pEntry.erase("player_uuid");
+                pEntry.erase("playerId");
+            }
+        };
+        if (storedJson.contains("players")) {
+            stripPlayerIdentity(storedJson["players"]);
+        }
+        if (storedJson.contains("game") && storedJson["game"].is_object() &&
+            storedJson["game"].contains("players")) {
+            stripPlayerIdentity(storedJson["game"]["players"]);
         }
         rec.octiTranscript = storedJson.dump();
     }
@@ -6286,6 +9019,40 @@ void OctiHttpServer::Impl::handleArchiveDeleteInstall(const Request &req, Respon
         sendError(res, 400, "INVALID_ARGUMENT", "invalid installId");
         return;
     }
+    Auth auth;
+    if (!optionalAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    const int64_t authedHumanId = (!auth.isRobot && auth.playerId > 0) ? auth.playerId : 0;
+    std::string installToken;
+    if (req.has_header("X-Octi-Install-Token")) {
+        installToken = req.get_header_value("X-Octi-Install-Token");
+    }
+    if (installToken.empty() && authedHumanId <= 0) {
+        if (auth.isRobot) {
+            sendError(res, 403, "FORBIDDEN",
+                      "robots cannot delete install archive data");
+            return;
+        }
+        sendAuthUnauthorized(
+            req, res, "Bearer",
+            "missing X-Octi-Install-Token or Authorization: Bearer header",
+            false);
+        return;
+    }
+    InstallDeleteAuthStatus authSt =
+        store.verifyInstallDeleteAuth(installId, installToken, authedHumanId);
+    if (authSt == InstallDeleteAuthStatus::UNAUTHORIZED) {
+        sendAuthUnauthorized(req, res, "Bearer",
+                             "missing install delete credentials", false);
+        return;
+    }
+    if (authSt != InstallDeleteAuthStatus::AUTHORIZED) {
+        sendError(res, 403, "FORBIDDEN",
+                  "not authorized to delete data for this installId");
+        return;
+    }
     int deleted = store.deleteGamesByInstallId(installId);
     if (deleted < 0) {
         sendError(res, 500, "INTERNAL_ERROR", "failed to delete games");
@@ -6301,7 +9068,8 @@ void OctiHttpServer::Impl::handleArchivePurgeGame(const Request &req, Response &
 {
     Auth auth;
     std::string id;
-    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id)) {
+    if (!requireAuth(req, res, auth) || !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
@@ -6329,7 +9097,8 @@ void OctiHttpServer::Impl::handleAdminRecomputeRatings(const Request &req,
                                                        Response &res)
 {
     Auth auth;
-    if (!requireAuth(req, res, auth)) {
+    if (!requireAuth(req, res, auth) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
     if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
@@ -6360,9 +9129,359 @@ void OctiHttpServer::Impl::handleAdminRecomputeRatings(const Request &req,
     sendJson(res, 200, j);
 }
 
+bool OctiHttpServer::Impl::requireAdminAuth(const Request &req, Response &res,
+                                            Auth &auth,
+                                            std::string &actorLabelOut)
+{
+    res.set_header("Cache-Control", "no-store");
+    if (!requireAuth(req, res, auth)) {
+        return false;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return false;
+    }
+    PlayerProfile prof;
+    if (store.getProfileById(auth.playerId, prof) && !prof.handle.empty()) {
+        actorLabelOut = "@" + prof.handle;
+    } else if (!prof.uuid.empty()) {
+        actorLabelOut = prof.uuid;
+    } else {
+        actorLabelOut = "admin:" + std::to_string(auth.playerId);
+    }
+    return true;
+}
+
+Json OctiHttpServer::Impl::buildBansPayloadJson(int64_t nowSec)
+{
+    std::vector<BanEntry> tempBans;
+    std::vector<BanEntry> permBans;
+    banManager.listBans(store, nowSec, tempBans, permBans);
+
+    Json tempArr = Json::array();
+    for (size_t i = 0; i < tempBans.size(); ++i) {
+        const BanEntry &e = tempBans[i];
+        Json item;
+        item["ban_id"] = e.banId;
+        item["target_type"] = toString(e.targetType);
+        item["target_value"] = e.targetValue;
+        item["display_label"] =
+            e.displayLabel.empty() ? e.targetValue : e.displayLabel;
+        item["reason"] = e.reason;
+        item["source"] = e.source.empty() ? "admin" : e.source;
+        item["created_by"] = e.createdBy;
+        item["created_at"] = e.createdAt;
+        item["expires_at"] = e.expiresAt;
+        item["remaining_sec"] = std::max<int64_t>(0, e.expiresAt - nowSec);
+        tempArr.push_back(std::move(item));
+    }
+
+    Json permArr = Json::array();
+    for (size_t i = 0; i < permBans.size(); ++i) {
+        const BanEntry &e = permBans[i];
+        Json item;
+        item["ban_id"] = e.banId;
+        item["target_type"] = toString(e.targetType);
+        item["target_value"] = e.targetValue;
+        item["display_label"] =
+            e.displayLabel.empty() ? e.targetValue : e.displayLabel;
+        item["reason"] = e.reason;
+        item["created_by"] = e.createdBy;
+        item["created_at"] = e.createdAt;
+        permArr.push_back(std::move(item));
+    }
+
+    Json j;
+    j["ok"] = true;
+    j["server_time"] = nowSec;
+    j["ban_config_path"] = banManager.banConfigPath();
+    j["temp_bans"] = std::move(tempArr);
+    j["permanent_bans"] = std::move(permArr);
+    return j;
+}
+
+void OctiHttpServer::Impl::handleAdminBansList(const Request &req,
+                                               Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !allowBrowseRead(req, res, auth)) {
+        return;
+    }
+    sendJson(res, 200, buildBansPayloadJson(store.currentEpochSec()));
+}
+
+void OctiHttpServer::Impl::handleAdminBanAdd(const Request &req, Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    std::string rawType;
+    std::string rawTarget;
+    std::string rawDuration = "24h";
+    std::string rawReason;
+    std::string err;
+    if (!fieldString(body, "target_type", true, rawType, err) ||
+        !fieldString(body, "target", true, rawTarget, err) ||
+        !fieldString(body, "duration", false, rawDuration, err) ||
+        !fieldString(body, "reason", false, rawReason, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    BanTargetType tType = BanTargetType::IP;
+    if (!parseBanTargetType(rawType, tType)) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "target_type must be ip, account, or robot");
+        return;
+    }
+    BanDuration dur = BanDuration::TEMP_24H;
+    if (!rawDuration.empty() && !parseBanDuration(rawDuration, dur)) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "duration must be 24h or permanent");
+        return;
+    }
+
+    const int64_t nowSec = store.currentEpochSec();
+    BanOpResult op = banManager.addBan(store, tType, rawTarget, dur, rawReason,
+                                       auth.playerId, actorLabel,
+                                       clientRemoteIp(req), nowSec);
+    if (op.status != BanOpStatus::OK) {
+        int httpCode = 400;
+        if (op.status == BanOpStatus::NOT_FOUND) {
+            httpCode = 404;
+        } else if (op.status == BanOpStatus::IO_ERROR) {
+            httpCode = 500;
+        }
+        sendError(res, httpCode,
+                  op.errorCode.empty() ? "BAD_REQUEST" : op.errorCode,
+                  op.errorMessage);
+        return;
+    }
+
+    applyBanSideEffects(op.sideEffects);
+    Json j = buildBansPayloadJson(nowSec);
+    j["ban_id"] = op.entry.banId;
+    sendJson(res, 200, j);
+}
+
+void OctiHttpServer::Impl::handleAdminBansMove(const Request &req,
+                                               Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    if (!body.contains("ban_ids") || !body["ban_ids"].is_array() ||
+        body["ban_ids"].empty() || body["ban_ids"].size() > 256) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "ban_ids must be a non-empty array of up to 256 ban IDs");
+        return;
+    }
+    std::vector<std::string> ids;
+    ids.reserve(body["ban_ids"].size());
+    for (size_t i = 0; i < body["ban_ids"].size(); ++i) {
+        if (!body["ban_ids"][i].is_string()) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "every entry in ban_ids must be a string");
+            return;
+        }
+        const std::string bid = body["ban_ids"][i].get<std::string>();
+        if (!isSafeId(bid)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid ban_id");
+            return;
+        }
+        ids.push_back(bid);
+    }
+
+    std::string rawDuration;
+    std::string err;
+    if (!fieldString(body, "target_duration", true, rawDuration, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    BanDuration targetDur = BanDuration::TEMP_24H;
+    if (!parseBanDuration(rawDuration, targetDur)) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "target_duration must be 24h or permanent");
+        return;
+    }
+
+    const int64_t nowSec = store.currentEpochSec();
+    BanOpResult op = banManager.moveBans(store, ids, targetDur, actorLabel,
+                                         nowSec);
+    if (op.status != BanOpStatus::OK) {
+        int httpCode = 400;
+        if (op.status == BanOpStatus::NOT_FOUND) {
+            httpCode = 404;
+        } else if (op.status == BanOpStatus::IO_ERROR) {
+            httpCode = 500;
+        }
+        sendError(res, httpCode,
+                  op.errorCode.empty() ? "BAD_REQUEST" : op.errorCode,
+                  op.errorMessage);
+        return;
+    }
+    applyBanSideEffects(op.sideEffects);
+    sendJson(res, 200, buildBansPayloadJson(nowSec));
+}
+
+void OctiHttpServer::Impl::handleAdminBanPatch(const Request &req,
+                                               Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    std::string id;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    std::string rawDuration;
+    std::string err;
+    if (fieldPresent(body, "target_duration")) {
+        if (!fieldString(body, "target_duration", true, rawDuration, err)) {
+            sendError(res, 400, "INVALID_ARGUMENT", err);
+            return;
+        }
+    } else if (!fieldString(body, "duration", true, rawDuration, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    BanDuration targetDur = BanDuration::TEMP_24H;
+    if (!parseBanDuration(rawDuration, targetDur)) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "target_duration must be 24h or permanent");
+        return;
+    }
+
+    const int64_t nowSec = store.currentEpochSec();
+    std::vector<std::string> ids = {id};
+    BanOpResult op = banManager.moveBans(store, ids, targetDur, actorLabel,
+                                         nowSec);
+    if (op.status != BanOpStatus::OK) {
+        int httpCode = 400;
+        if (op.status == BanOpStatus::NOT_FOUND) {
+            httpCode = 404;
+        } else if (op.status == BanOpStatus::IO_ERROR) {
+            httpCode = 500;
+        }
+        sendError(res, httpCode,
+                  op.errorCode.empty() ? "BAD_REQUEST" : op.errorCode,
+                  op.errorMessage);
+        return;
+    }
+    applyBanSideEffects(op.sideEffects);
+    sendJson(res, 200, buildBansPayloadJson(nowSec));
+}
+
+void OctiHttpServer::Impl::handleAdminBansRemove(const Request &req,
+                                                 Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    Json body;
+    if (!readJsonBody(req, res, body, false)) {
+        return;
+    }
+    if (!body.contains("ban_ids") || !body["ban_ids"].is_array() ||
+        body["ban_ids"].empty() || body["ban_ids"].size() > 256) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "ban_ids must be a non-empty array of up to 256 ban IDs");
+        return;
+    }
+    std::vector<std::string> ids;
+    ids.reserve(body["ban_ids"].size());
+    for (size_t i = 0; i < body["ban_ids"].size(); ++i) {
+        if (!body["ban_ids"][i].is_string()) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "every entry in ban_ids must be a string");
+            return;
+        }
+        const std::string bid = body["ban_ids"][i].get<std::string>();
+        if (!isSafeId(bid)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid ban_id");
+            return;
+        }
+        ids.push_back(bid);
+    }
+
+    const int64_t nowSec = store.currentEpochSec();
+    BanOpResult op = banManager.removeBans(store, ids, actorLabel, nowSec);
+    if (op.status != BanOpStatus::OK) {
+        int httpCode = 400;
+        if (op.status == BanOpStatus::NOT_FOUND) {
+            httpCode = 404;
+        } else if (op.status == BanOpStatus::IO_ERROR) {
+            httpCode = 500;
+        }
+        sendError(res, httpCode,
+                  op.errorCode.empty() ? "BAD_REQUEST" : op.errorCode,
+                  op.errorMessage);
+        return;
+    }
+    applyBanSideEffects(op.sideEffects);
+    sendJson(res, 200, buildBansPayloadJson(nowSec));
+}
+
+void OctiHttpServer::Impl::handleAdminBanDelete(const Request &req,
+                                                Response &res)
+{
+    Auth auth;
+    std::string actorLabel;
+    std::string id;
+    if (!requireAdminAuth(req, res, auth, actorLabel) ||
+        !pathId(req, "id", res, id) ||
+        !allowMutationAttempt(req, res, auth.playerId)) {
+        return;
+    }
+    const int64_t nowSec = store.currentEpochSec();
+    std::vector<std::string> ids = {id};
+    BanOpResult op = banManager.removeBans(store, ids, actorLabel, nowSec);
+    if (op.status != BanOpStatus::OK) {
+        int httpCode = 400;
+        if (op.status == BanOpStatus::NOT_FOUND) {
+            httpCode = 404;
+        } else if (op.status == BanOpStatus::IO_ERROR) {
+            httpCode = 500;
+        }
+        sendError(res, httpCode,
+                  op.errorCode.empty() ? "BAD_REQUEST" : op.errorCode,
+                  op.errorMessage);
+        return;
+    }
+    applyBanSideEffects(op.sideEffects);
+    sendJson(res, 200, buildBansPayloadJson(nowSec));
+}
+
 void OctiHttpServer::Impl::handleArchiveList(const Request &req,
                                              Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     ArchiveFilter f;
     if (req.has_param("mode")) {
         std::string mode = upper(req.get_param_value("mode"));
@@ -6545,14 +9664,28 @@ void OctiHttpServer::Impl::handleArchiveList(const Request &req,
 
 void OctiHttpServer::Impl::handleArchiveGet(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     std::string id;
     if (!pathId(req, "id", res, id)) {
         return;
     }
     GameRecord rec;
     if (!store.getArchivedGame(id, rec)) {
+        if (auth.playerId == 0) {
+            applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                store, clientRemoteIp(req), req.path, 404,
+                store.currentEpochSec()));
+        }
         sendError(res, 404, "NOT_FOUND", "no such archived game");
         return;
+    }
+    if (auth.playerId == 0) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, clientRemoteIp(req), req.path, 200,
+            store.currentEpochSec()));
     }
     Json j = gameSummaryJson(rec);
     j["final_fen"] = rec.finalFen;
@@ -6567,14 +9700,28 @@ void OctiHttpServer::Impl::handleArchiveGet(const Request &req, Response &res)
 void OctiHttpServer::Impl::handleArchiveTranscript(const Request &req,
                                                    Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
     std::string id;
     if (!pathId(req, "id", res, id)) {
         return;
     }
     std::string transcript;
     if (!store.getArchivedTranscript(id, transcript)) {
+        if (auth.playerId == 0) {
+            applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                store, clientRemoteIp(req), req.path, 404,
+                store.currentEpochSec()));
+        }
         sendError(res, 404, "NOT_FOUND", "no such archived game");
         return;
+    }
+    if (auth.playerId == 0) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, clientRemoteIp(req), req.path, 200,
+            store.currentEpochSec()));
     }
     std::string sanitized = sanitizeTranscriptJson(transcript, true);
     res.status = 200;
@@ -6592,14 +9739,40 @@ void OctiHttpServer::Impl::handleArchiveOcti(const Request &req,
 
 void OctiHttpServer::Impl::handleArchivePlies(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowPliesAttempt(req, res)) {
+        return;
+    }
     std::string id;
     if (!pathId(req, "id", res, id)) {
         return;
     }
+    const uint64_t storeRev = store.mutationRevision();
+    const int64_t nowMs = steadyMs();
+    CachedPayload pliesCached;
+    if (pliesCache.get(id, storeRev, nowMs, pliesCached)) {
+        if (auth.playerId == 0) {
+            applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                store, clientRemoteIp(req), req.path, 200,
+                store.currentEpochSec()));
+        }
+        sendCachedSnapshot(req, res, pliesCached, "no-cache");
+        return;
+    }
     std::string transcript;
     if (!store.getArchivedTranscript(id, transcript)) {
+        if (auth.playerId == 0) {
+            applyBanSideEffects(banManager.recordAnonymousEnumeration(
+                store, clientRemoteIp(req), req.path, 404,
+                store.currentEpochSec()));
+        }
         sendError(res, 404, "NOT_FOUND", "no such archived game");
         return;
+    }
+    if (auth.playerId == 0) {
+        applyBanSideEffects(banManager.recordAnonymousEnumeration(
+            store, clientRemoteIp(req), req.path, 200,
+            store.currentEpochSec()));
     }
 
     Json tObj;
@@ -6688,12 +9861,24 @@ void OctiHttpServer::Impl::handleArchivePlies(const Request &req, Response &res)
     resp["initialFen"] = initialFen;
     resp["initial_fen"] = initialFen;
     resp["plies"] = pliesArr;
-    sendJson(res, 200, resp);
+    CachedPayload pliesStored = pliesCache.put(
+        id, storeRev, 0, nowMs, "ply-", dumpJson(resp));
+    sendCachedSnapshot(req, res, pliesStored, "no-cache");
 }
 
 void OctiHttpServer::Impl::handleArchiveStats(const Request &req, Response &res)
 {
-    (void)req;
+    Auth auth;
+    if (!optionalAuth(req, res, auth) || !allowBrowseRead(req, res, auth)) {
+        return;
+    }
+    const uint64_t statsRev = store.mutationRevision();
+    const int64_t statsNowMs = steadyMs();
+    CachedPayload statsCached;
+    if (archiveStatsCache.get("stats", statsRev, statsNowMs, statsCached)) {
+        sendCachedSnapshot(req, res, statsCached, "no-cache");
+        return;
+    }
     ArchiveStats stats;
     if (!store.getArchiveStats(stats)) {
         sendError(res, 500, "INTERNAL_ERROR", "failed to calculate archive stats");
@@ -6725,18 +9910,35 @@ void OctiHttpServer::Impl::handleArchiveStats(const Request &req, Response &res)
     j["uploads_by_day"] = stats.uploadsByDay;
     j["license"] = "CC-BY-4.0";
     j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
-    sendJson(res, 200, j);
+    CachedPayload statsStored = archiveStatsCache.put(
+        "stats", statsRev, 15000, statsNowMs, "ast-", dumpJson(j));
+    sendCachedSnapshot(req, res, statsStored, "no-cache");
 }
 
 void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res)
 {
-    if (!allowExportAttempt(req, res)) {
+    Auth auth;
+    if (!requireAuth(req, res, auth) ||
+        !allowExportAttempt(req, res, auth.playerId)) {
         return;
     }
 
+    auto exportSlot = std::make_shared<UrlProbeSlotGuard>(
+        activeExportsCount, cfg.maxConcurrentExports);
+    if (!exportSlot->allowed()) {
+        res.set_header("Retry-After", "5");
+        sendError(res, 503, "SERVICE_BUSY",
+                  "too many concurrent archive exports; retry shortly");
+        return;
+    }
+
+    static constexpr int64_t kMaxExportPageLimit = 2000;
+    static constexpr int64_t kMaxExportLegacyOffset = 5000;
+    static constexpr int kExportBatchRows = 64;
+
     ArchiveFilter f;
     f.includeTranscript = true;
-    f.maxLimit = AccountStore::kMaxExportLimit;
+    f.maxLimit = static_cast<int>(kMaxExportPageLimit);
 
     if (req.has_param("mode")) {
         std::string mode = upper(req.get_param_value("mode"));
@@ -6779,10 +9981,18 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
             return;
         }
     }
+    if (req.has_param("robot")) {
+        f.robotUuid = req.get_param_value("robot");
+        if (!isSafeId(f.robotUuid)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid robot id");
+            return;
+        }
+    }
     if (req.has_param("source")) {
         std::string src = lower(req.get_param_value("source"));
         if (src != "online" && src != "client_upload") {
-            sendError(res, 400, "INVALID_ARGUMENT", "source must be online or client_upload");
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "source must be online or client_upload");
             return;
         }
         f.source = src;
@@ -6790,7 +10000,8 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
     if (req.has_param("status")) {
         std::string st = upper(req.get_param_value("status"));
         if (st != "GAME_OVER" && st != "RESIGNED") {
-            sendError(res, 400, "INVALID_ARGUMENT", "status must be GAME_OVER or RESIGNED");
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "status must be GAME_OVER or RESIGNED");
             return;
         }
         f.status = st;
@@ -6798,13 +10009,16 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
     if (req.has_param("winner")) {
         std::string w = upper(req.get_param_value("winner"));
         if (w != "A" && w != "B" && w != "C" && w != "D" && w != "NONE") {
-            sendError(res, 400, "INVALID_ARGUMENT", "winner must be A, B, C, D, or NONE");
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "winner must be A, B, C, D, or NONE");
             return;
         }
         f.winner = w;
     }
     if (req.has_param("aiDifficulty") || req.has_param("ai_difficulty")) {
-        std::string dStr = req.has_param("aiDifficulty") ? req.get_param_value("aiDifficulty") : req.get_param_value("ai_difficulty");
+        std::string dStr = req.has_param("aiDifficulty")
+                               ? req.get_param_value("aiDifficulty")
+                               : req.get_param_value("ai_difficulty");
         int64_t diff = 0;
         if (!parseUnsignedClamped(dStr, 5, diff) || diff < 1 || diff > 5) {
             sendError(res, 400, "INVALID_ARGUMENT", "aiDifficulty must be 1..5");
@@ -6813,7 +10027,9 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
         f.aiDifficulty = static_cast<int>(diff);
     }
     if (req.has_param("appVersion") || req.has_param("app_version")) {
-        std::string av = req.has_param("appVersion") ? req.get_param_value("appVersion") : req.get_param_value("app_version");
+        std::string av = req.has_param("appVersion")
+                             ? req.get_param_value("appVersion")
+                             : req.get_param_value("app_version");
         if (av.size() > 128 || hasControlChars(av)) {
             sendError(res, 400, "INVALID_ARGUMENT", "invalid appVersion");
             return;
@@ -6830,16 +10046,20 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
     }
     if (req.has_param("from")) {
         int64_t fromSec = 0;
-        if (!parseUnsignedClamped(req.get_param_value("from"), INT64_MAX, fromSec)) {
-            sendError(res, 400, "INVALID_ARGUMENT", "from must be a non-negative integer");
+        if (!parseUnsignedClamped(req.get_param_value("from"), INT64_MAX,
+                                  fromSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "from must be a non-negative integer");
             return;
         }
         f.fromSec = fromSec;
     }
     if (req.has_param("to")) {
         int64_t toSec = 0;
-        if (!parseUnsignedClamped(req.get_param_value("to"), INT64_MAX, toSec)) {
-            sendError(res, 400, "INVALID_ARGUMENT", "to must be a non-negative integer");
+        if (!parseUnsignedClamped(req.get_param_value("to"), INT64_MAX,
+                                  toSec)) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "to must be a non-negative integer");
             return;
         }
         f.toSec = toSec;
@@ -6853,7 +10073,8 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
             field = sVal.substr(0, colon);
             dir = lower(sVal.substr(colon + 1));
         }
-        if (field != "ended_at" && field != "uploaded_at" && field != "ply_count") {
+        if (field != "ended_at" && field != "uploaded_at" &&
+            field != "ply_count") {
             sendError(res, 400, "INVALID_ARGUMENT", "invalid sort field");
             return;
         }
@@ -6876,41 +10097,328 @@ void OctiHttpServer::Impl::handleArchiveExport(const Request &req, Response &res
         }
     }
 
-    int64_t limit = 1000;
-    int64_t offset = 0;
-    if ((req.has_param("limit") &&
-         !parseUnsignedClamped(req.get_param_value("limit"), INT32_MAX,
-                               limit)) ||
-        (req.has_param("offset") &&
-         !parseUnsignedClamped(req.get_param_value("offset"), INT32_MAX,
-                               offset))) {
+    if (req.has_param("cursor") && !req.get_param_value("cursor").empty()) {
+        std::string cur = req.get_param_value("cursor");
+        size_t colon = cur.find(':');
+        int64_t curEnd = 0;
+        if (colon == std::string::npos || colon == 0 ||
+            colon + 1 >= cur.size() ||
+            !parseUnsignedStrict(cur.substr(0, colon), INT64_MAX / 2, curEnd) ||
+            !isSafeId(cur.substr(colon + 1))) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "cursor must have format <ended_at>:<game_id>");
+            return;
+        }
+        f.hasCursor = true;
+        f.afterEndedAt = curEnd;
+        f.afterGameId = cur.substr(colon + 1);
+    }
+    if (req.has_param("after_ended_at") &&
+        !req.get_param_value("after_ended_at").empty()) {
+        int64_t afterEnd = 0;
+        if (!parseUnsignedStrict(req.get_param_value("after_ended_at"),
+                                 INT64_MAX / 2, afterEnd)) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "after_ended_at must be a non-negative integer");
+            return;
+        }
+        f.hasCursor = true;
+        f.afterEndedAt = afterEnd;
+    }
+    if (req.has_param("after_game_id") &&
+        !req.get_param_value("after_game_id").empty()) {
+        std::string afterId = req.get_param_value("after_game_id");
+        if (!isSafeId(afterId)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid after_game_id");
+            return;
+        }
+        if (!f.hasCursor) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "after_game_id requires after_ended_at");
+            return;
+        }
+        f.afterGameId = afterId;
+    }
+    if (f.hasCursor && !f.sortField.empty() && f.sortField != "ended_at") {
         sendError(res, 400, "INVALID_ARGUMENT",
-                  "limit and offset must be non-negative integers");
+                  "keyset cursor pagination requires sort=ended_at");
         return;
     }
-    limit = std::max<int64_t>(1, std::min<int64_t>(limit, AccountStore::kMaxExportLimit));
-    f.limit = static_cast<int>(limit);
-    f.offset = static_cast<int>(offset);
 
-    std::vector<GameRecord> games;
-    if (!store.listArchivedGames(f, games)) {
+    int64_t limit = 1000;
+    int64_t offset = 0;
+    if (req.has_param("limit")) {
+        if (!parseUnsignedStrict(req.get_param_value("limit"), INT32_MAX,
+                                 limit) ||
+            limit < 1) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "limit must be a positive integer");
+            return;
+        }
+    }
+    if (req.has_param("offset")) {
+        if (!parseUnsignedStrict(req.get_param_value("offset"), INT32_MAX,
+                                 offset)) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "offset must be a non-negative integer");
+            return;
+        }
+        if (offset > kMaxExportLegacyOffset) {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "offset exceeds maximum 5000; use X-Octi-Next-Cursor / "
+                      "after_ended_at & after_game_id keyset pagination");
+            return;
+        }
+    }
+    if (f.hasCursor && offset != 0) {
+        sendError(res, 400, "INVALID_ARGUMENT",
+                  "offset cannot be combined with cursor pagination");
+        return;
+    }
+    limit = std::max<int64_t>(1, std::min<int64_t>(limit, kMaxExportPageLimit));
+
+    /* Fetch first 64-row batch before headers are committed. */
+    const int firstLimit = static_cast<int>(
+        std::min<int64_t>(limit, kExportBatchRows));
+    ArchiveFilter firstFilter = f;
+    firstFilter.limit = firstLimit;
+    firstFilter.offset = static_cast<int>(offset);
+
+    std::vector<GameRecord> firstBatch;
+    if (!store.listArchivedGames(firstFilter, firstBatch)) {
         sendError(res, 500, "INTERNAL_ERROR", "archive export query failed");
         return;
     }
 
-    std::string ndjson;
-    for (const auto &g : games) {
-        std::string line = sanitizeTranscriptJson(g.octiTranscript, false);
-        if (!line.empty()) {
-            ndjson += line;
-            ndjson += "\n";
+    std::string firstChunk;
+    firstChunk.reserve(firstBatch.size() * 1024);
+    for (size_t i = 0; i < firstBatch.size(); ++i) {
+        appendSingleLineNdjsonRow(firstBatch[i].octiTranscript, firstChunk);
+    }
+
+    /* Compute X-Octi-Next-Cursor when the page is full (rows == limit). */
+    std::string nextCursor;
+    const bool canUseKeysetAdvance =
+        f.sortField.empty() || f.sortField == "ended_at";
+    if (canUseKeysetAdvance && !firstBatch.empty()) {
+        if (static_cast<int64_t>(firstBatch.size()) == limit) {
+            const GameRecord &tail = firstBatch.back();
+            nextCursor = std::to_string(tail.endedAt) + ":" + tail.gameId;
+        } else if (static_cast<int>(firstBatch.size()) == firstLimit &&
+                   limit > firstLimit) {
+            ArchiveFilter tailProbe = f;
+            tailProbe.includeTranscript = false;
+            tailProbe.limit = 1;
+            tailProbe.offset = static_cast<int>(offset + limit - 1);
+            std::vector<GameRecord> tailRow;
+            if (store.listArchivedGames(tailProbe, tailRow) &&
+                !tailRow.empty()) {
+                nextCursor = std::to_string(tailRow[0].endedAt) + ":" +
+                             tailRow[0].gameId;
+            }
         }
+    }
+
+    const bool useGzip =
+        clientAcceptsGzip(req) && firstChunk.size() >= kMinDynamicGzipBytes;
+
+    struct ExportStreamState {
+        std::shared_ptr<UrlProbeSlotGuard> slot;
+        ArchiveFilter baseFilter;
+        bool useKeyset = true;
+        int64_t remaining = 0;
+        int64_t nextOffset = 0;
+        int64_t lastEndedAt = 0;
+        std::string lastGameId;
+        std::string pendingFirstChunk;
+        bool firstChunkPending = true;
+        bool useGzip = false;
+        bool gzipInited = false;
+        z_stream zs;
+        int testBatchDelayMs = 0;
+
+        ExportStreamState()
+        {
+            std::memset(&zs, 0, sizeof(zs));
+        }
+        ~ExportStreamState()
+        {
+            if (gzipInited) {
+                deflateEnd(&zs);
+            }
+        }
+        bool initGzip()
+        {
+            if (deflateInit2(&zs, Z_BEST_SPEED, Z_DEFLATED, 15 + 16, 8,
+                             Z_DEFAULT_STRATEGY) != Z_OK) {
+                return false;
+            }
+            gzipInited = true;
+            return true;
+        }
+        bool writeCompressed(httplib::DataSink &sink, const char *inData,
+                             size_t inLen, int flushMode)
+        {
+            zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(inData));
+            zs.avail_in = static_cast<uInt>(inLen);
+            char outBuf[16384];
+            do {
+                zs.next_out = reinterpret_cast<Bytef *>(outBuf);
+                zs.avail_out = sizeof(outBuf);
+                int ret = deflate(&zs, flushMode);
+                if (ret == Z_STREAM_ERROR) {
+                    return false;
+                }
+                size_t have = sizeof(outBuf) - zs.avail_out;
+                if (have > 0 && !sink.write(outBuf, have)) {
+                    return false;
+                }
+                if (flushMode == Z_FINISH && ret == Z_STREAM_END) {
+                    break;
+                }
+            } while (zs.avail_out == 0 ||
+                     (flushMode == Z_FINISH && zs.avail_in == 0));
+            return true;
+        }
+    };
+
+    auto st = std::make_shared<ExportStreamState>();
+    st->slot = exportSlot;
+    st->baseFilter = f;
+    st->useKeyset = canUseKeysetAdvance;
+    st->remaining = limit - static_cast<int64_t>(firstBatch.size());
+    if (static_cast<int>(firstBatch.size()) < firstLimit || firstBatch.empty()) {
+        st->remaining = 0;
+    } else {
+        st->lastEndedAt = firstBatch.back().endedAt;
+        st->lastGameId = firstBatch.back().gameId;
+        st->nextOffset = offset + static_cast<int64_t>(firstBatch.size());
+    }
+    st->pendingFirstChunk = std::move(firstChunk);
+    st->useGzip = useGzip;
+    st->testBatchDelayMs = cfg.exportBatchDelayMsForTesting;
+    if (st->useGzip && !st->initGzip()) {
+        sendError(res, 500, "INTERNAL_ERROR", "gzip stream init failed");
+        return;
     }
 
     res.status = 200;
     res.set_header("Cache-Control", "no-store");
-    res.set_header("Content-Disposition", "attachment; filename=\"octi-archive-export.ndjson\"");
-    res.set_content(ndjson, "application/x-ndjson; charset=utf-8");
+    res.set_header("Vary", "Accept-Encoding");
+    res.set_header("Content-Disposition",
+                   "attachment; filename=\"octi-archive-export.ndjson\"");
+    if (!nextCursor.empty()) {
+        res.set_header("X-Octi-Next-Cursor", nextCursor);
+    }
+    if (st->useGzip) {
+        res.set_header("Content-Encoding", "gzip");
+    }
+
+    res.set_chunked_content_provider(
+        "application/x-ndjson; charset=utf-8",
+        [this, st](size_t, httplib::DataSink &sink) -> bool {
+            if (stopping.load()) {
+                sink.done();
+                return true;
+            }
+            if (st->testBatchDelayMs > 0) {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(st->testBatchDelayMs));
+            }
+            if (st->firstChunkPending) {
+                st->firstChunkPending = false;
+                if (!st->pendingFirstChunk.empty()) {
+                    const bool isFinal = (st->remaining <= 0);
+                    if (st->useGzip) {
+                        if (!st->writeCompressed(
+                                sink, st->pendingFirstChunk.data(),
+                                st->pendingFirstChunk.size(),
+                                isFinal ? Z_FINISH : Z_SYNC_FLUSH)) {
+                            return false;
+                        }
+                    } else if (!sink.write(st->pendingFirstChunk.data(),
+                                           st->pendingFirstChunk.size())) {
+                        return false;
+                    }
+                    std::string().swap(st->pendingFirstChunk);
+                    if (isFinal) {
+                        sink.done();
+                        return true;
+                    }
+                    return true;
+                }
+                if (st->useGzip) {
+                    if (!st->writeCompressed(sink, "", 0, Z_FINISH)) {
+                        return false;
+                    }
+                }
+                sink.done();
+                return true;
+            }
+
+            if (st->remaining <= 0) {
+                if (st->useGzip) {
+                    if (!st->writeCompressed(sink, "", 0, Z_FINISH)) {
+                        return false;
+                    }
+                }
+                sink.done();
+                return true;
+            }
+
+            const int batchLim = static_cast<int>(
+                std::min<int64_t>(st->remaining, kExportBatchRows));
+            ArchiveFilter bf = st->baseFilter;
+            bf.limit = batchLim;
+            if (st->useKeyset) {
+                bf.offset = 0;
+                bf.hasCursor = true;
+                bf.afterEndedAt = st->lastEndedAt;
+                bf.afterGameId = st->lastGameId;
+            } else {
+                bf.offset = static_cast<int>(st->nextOffset);
+            }
+
+            std::vector<GameRecord> batch;
+            if (!store.listArchivedGames(bf, batch) || batch.empty()) {
+                st->remaining = 0;
+                if (st->useGzip) {
+                    if (!st->writeCompressed(sink, "", 0, Z_FINISH)) {
+                        return false;
+                    }
+                }
+                sink.done();
+                return true;
+            }
+
+            std::string chunk;
+            chunk.reserve(batch.size() * 1024);
+            for (size_t i = 0; i < batch.size(); ++i) {
+                appendSingleLineNdjsonRow(batch[i].octiTranscript, chunk);
+            }
+            st->remaining -= static_cast<int64_t>(batch.size());
+            st->nextOffset += static_cast<int64_t>(batch.size());
+            st->lastEndedAt = batch.back().endedAt;
+            st->lastGameId = batch.back().gameId;
+            if (static_cast<int>(batch.size()) < batchLim) {
+                st->remaining = 0;
+            }
+
+            const bool isFinal = (st->remaining <= 0);
+            if (st->useGzip) {
+                if (!st->writeCompressed(sink, chunk.data(), chunk.size(),
+                                         isFinal ? Z_FINISH : Z_SYNC_FLUSH)) {
+                    return false;
+                }
+            } else if (!chunk.empty() &&
+                       !sink.write(chunk.data(), chunk.size())) {
+                return false;
+            }
+            if (isFinal) {
+                sink.done();
+            }
+            return true;
+        });
 }
 
 void OctiHttpServer::Impl::handleFavicon(const Request &, Response &res)
@@ -6939,29 +10447,45 @@ void OctiHttpServer::Impl::handleFavicon(const Request &, Response &res)
     res.set_content(kFaviconSvg, "image/svg+xml; charset=utf-8");
 }
 
-void OctiHttpServer::Impl::handleIndex(const Request &, Response &res)
+void OctiHttpServer::Impl::handleIndex(const Request &req, Response &res)
 {
-    res.status = 200;
     res.set_header("Cache-Control", "no-cache");
+    res.set_header("ETag", indexEtag);
+    res.set_header("Vary", "Accept-Encoding");
     res.set_header("Content-Security-Policy",
                    "default-src 'none'; script-src 'unsafe-inline'; "
                    "worker-src 'self' blob:; "
                    "style-src 'unsafe-inline'; connect-src 'self'; "
                    "img-src 'self' data:; media-src 'self' data: blob:; "
-                   "base-uri 'none'; "
+                   "object-src 'none'; base-uri 'none'; "
                    "form-action 'none'; frame-ancestors 'none'");
-    res.set_content(webUiHtml(), "text/html; charset=utf-8");
+    if (isHttpsRequest(req)) {
+        res.set_header("Strict-Transport-Security",
+                       "max-age=31536000; includeSubDomains");
+    }
+    if (ifNoneMatchMatches(req, indexEtag)) {
+        res.status = 304;
+        return;
+    }
+    res.status = 200;
+    if (!indexGzipBytes.empty() && clientAcceptsGzip(req)) {
+        res.set_header("Content-Encoding", "gzip");
+        res.set_content(indexGzipBytes, "text/html; charset=utf-8");
+    } else {
+        res.set_content(webUiHtml(), "text/html; charset=utf-8");
+    }
 }
 
 void OctiHttpServer::Impl::handleTelemetryCrash(const Request &req, Response &res)
 {
-    if (!allowUploadAttempt(req, res)) {
+    const size_t maxBytes = routeMaxBodyBytes(req.method, req.path);
+    if (req.body.empty() || req.body.size() > maxBytes) {
+        sendError(res, req.body.size() > maxBytes ? 413 : 400,
+                  req.body.size() > maxBytes ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
+                  "invalid payload size");
         return;
     }
-    if (req.body.empty() || req.body.size() > 65536) {
-        sendError(res, req.body.size() > 65536 ? 413 : 400,
-                  req.body.size() > 65536 ? "PAYLOAD_TOO_LARGE" : "MALFORMED_UPLOAD",
-                  "invalid payload size");
+    if (!allowUploadAttempt(req, res)) {
         return;
     }
     Json root = Json::parse(req.body, nullptr, false);
@@ -7063,6 +10587,24 @@ void OctiHttpServer::Impl::handleTelemetryCrash(const Request &req, Response &re
             return;
         }
     }
+    if (req.has_header("X-Octi-Install-Token")) {
+        std::string installTok = req.get_header_value("X-Octi-Install-Token");
+        if (!AccountStore::isValidInstallToken(installTok)) {
+            sendError(res, 400, "INVALID_ARGUMENT", "invalid X-Octi-Install-Token");
+            return;
+        }
+        if (!installId.empty() && isSafeId(installId)) {
+            if (!store.registerOrVerifyInstallToken(installId, installTok)) {
+                sendError(res, 403, "FORBIDDEN", "install token mismatch");
+                return;
+            }
+        }
+    } else if (!installId.empty() && isSafeId(installId) &&
+               store.hasInstallToken(installId)) {
+        sendError(res, 403, "FORBIDDEN",
+                  "missing X-Octi-Install-Token for registered install_id");
+        return;
+    }
 
     std::string crashId;
     if (root.contains("crash_id") && root["crash_id"].is_string()) {
@@ -7110,6 +10652,14 @@ void OctiHttpServer::Impl::handleTelemetryCrash(const Request &req, Response &re
 
 void OctiHttpServer::Impl::handleTelemetryCrashes(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return;
+    }
     CrashReportFilter f;
     if (req.has_param("platform")) {
         f.platform = req.get_param_value("platform");
@@ -7193,6 +10743,14 @@ bool OctiHttpServer::Impl::pathCrashId(const Request &req, Response &res,
 
 void OctiHttpServer::Impl::handleTelemetryCrashGet(const Request &req, Response &res)
 {
+    Auth auth;
+    if (!requireAuth(req, res, auth)) {
+        return;
+    }
+    if (auth.isRobot || !store.isPlayerAdmin(auth.playerId)) {
+        sendError(res, 403, "FORBIDDEN", "admin privileges required");
+        return;
+    }
     std::string id;
     if (!pathCrashId(req, res, id)) {
         return;
@@ -7237,6 +10795,7 @@ void OctiHttpServer::Impl::registerRoutes()
     };
     static const Route routes[] = {
         {"GET", "/", &Impl::handleIndex},
+        {"GET", "/robots.txt", &Impl::handleRobotsTxt},
         {"GET", "/favicon.ico", &Impl::handleFavicon},
         {"GET", "/favicon.svg", &Impl::handleFavicon},
         {"GET", "/health", &Impl::handleHealth},
@@ -7308,6 +10867,12 @@ void OctiHttpServer::Impl::registerRoutes()
         {"DELETE", "/api/v1/archive/install/:installId", &Impl::handleArchiveDeleteInstall},
         {"DELETE", "/api/v1/archive/games/:id", &Impl::handleArchivePurgeGame},
         {"POST", "/api/v1/admin/recompute-ratings", &Impl::handleAdminRecomputeRatings},
+        {"GET", "/api/v1/admin/bans", &Impl::handleAdminBansList},
+        {"POST", "/api/v1/admin/bans", &Impl::handleAdminBanAdd},
+        {"POST", "/api/v1/admin/bans/move", &Impl::handleAdminBansMove},
+        {"POST", "/api/v1/admin/bans/remove", &Impl::handleAdminBansRemove},
+        {"PATCH", "/api/v1/admin/bans/:id", &Impl::handleAdminBanPatch},
+        {"DELETE", "/api/v1/admin/bans/:id", &Impl::handleAdminBanDelete},
         {"GET", "/api/v1/archive/games", &Impl::handleArchiveList},
         {"GET", "/api/v1/archive/games/:id", &Impl::handleArchiveGet},
         {"GET", "/api/v1/archive/games/:id/transcript", &Impl::handleArchiveTranscript},
@@ -7320,9 +10885,11 @@ void OctiHttpServer::Impl::registerRoutes()
         {"GET", "/api/v1/telemetry/crashes/:id", &Impl::handleTelemetryCrashGet},
     };
 
-    server.set_default_headers({{"X-Content-Type-Options", "nosniff"},
-                                {"Referrer-Policy", "no-referrer"},
-                                {"X-Frame-Options", "DENY"}});
+    server.set_default_headers(
+        {{"X-Content-Type-Options", "nosniff"},
+         {"Referrer-Policy", "no-referrer"},
+         {"X-Frame-Options", "DENY"},
+         {"X-Robots-Tag", "noindex, nofollow, noarchive, noimageindex"}});
 
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); ++i) {
         Handler h = routes[i].handler;
@@ -7349,18 +10916,47 @@ void OctiHttpServer::Impl::registerRoutes()
      */
     server.set_pre_routing_handler(
         [this](const Request &rq, Response &rs) -> httplib::Server::HandlerResponse {
+            if (rq.path != "/health" && rq.path != "/api/v1/health" &&
+                rq.path != "/robots.txt") {
+                const int64_t nowSec = store.currentEpochSec();
+                BanMatch ipMatch;
+                if (banManager.matchIp(clientRemoteIp(rq), nowSec, ipMatch)) {
+                    sendIpBanned(rs, ipMatch, nowSec);
+                    return httplib::Server::HandlerResponse::Handled;
+                }
+            }
+
+            if (rq.path != "/api/v1/health" &&
+                (rq.path == "/api" || rq.path.rfind("/api/", 0) == 0)) {
+                if (rq.has_header("User-Agent") &&
+                    isDisallowedCrawlerUserAgent(rq.get_header_value("User-Agent")) &&
+                    !hasValidBearerAuth(rq)) {
+                    applyBanSideEffects(banManager.recordCrawlerUaHit(
+                        store, clientRemoteIp(rq), store.currentEpochSec()));
+                    sendError(rs, 403, "FORBIDDEN_CRAWLER",
+                              "automated scraping is prohibited");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
+            }
+
             if (rq.path != "/api/v1/health" &&
                 (rq.path == "/api/v1" || rq.path.rfind("/api/v1/", 0) == 0)) {
                 int clientProto = 1;
                 if (rq.has_header("X-Octi-Protocol-Version")) {
                     std::string val = rq.get_header_value("X-Octi-Protocol-Version");
                     if (val.empty()) {
+                        applyBanSideEffects(banManager.recordExploitProbe(
+                            store, buildAbuseContext(rq, 0),
+                            store.currentEpochSec()));
                         sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
                                   "invalid X-Octi-Protocol-Version header");
                         return httplib::Server::HandlerResponse::Handled;
                     }
                     for (size_t i = 0; i < val.size(); ++i) {
                         if (val[i] < '0' || val[i] > '9') {
+                            applyBanSideEffects(banManager.recordExploitProbe(
+                                store, buildAbuseContext(rq, 0),
+                                store.currentEpochSec()));
                             sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
                                       "invalid X-Octi-Protocol-Version header");
                             return httplib::Server::HandlerResponse::Handled;
@@ -7369,12 +10965,18 @@ void OctiHttpServer::Impl::registerRoutes()
                     try {
                         long long v = std::stoll(val);
                         if (v < 1 || v > 1000000) {
+                            applyBanSideEffects(banManager.recordExploitProbe(
+                                store, buildAbuseContext(rq, 0),
+                                store.currentEpochSec()));
                             sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
                                       "invalid X-Octi-Protocol-Version header");
                             return httplib::Server::HandlerResponse::Handled;
                         }
                         clientProto = static_cast<int>(v);
                     } catch (...) {
+                        applyBanSideEffects(banManager.recordExploitProbe(
+                            store, buildAbuseContext(rq, 0),
+                            store.currentEpochSec()));
                         sendError(rs, 400, "INVALID_PROTOCOL_VERSION",
                                   "invalid X-Octi-Protocol-Version header");
                         return httplib::Server::HandlerResponse::Handled;
@@ -7393,20 +10995,54 @@ void OctiHttpServer::Impl::registerRoutes()
             }
 
             if (rq.method == "GET" || rq.method == "HEAD" ||
-                rq.method == "OPTIONS" ||
-                rq.path == "/api/v1/auth/data-deletion" ||
-                rq.path == "/privacy") {
+                rq.method == "OPTIONS") {
                 return httplib::Server::HandlerResponse::Unhandled;
             }
+
+            if (rq.has_header("Content-Length")) {
+                std::string clStr = rq.get_header_value("Content-Length");
+                size_t first = clStr.find_first_not_of(" \t");
+                if (first != std::string::npos) {
+                    size_t last = clStr.find_last_not_of(" \t");
+                    clStr = clStr.substr(first, last - first + 1);
+                }
+                int64_t contentLen = 0;
+                if (!parseUnsignedStrict(clStr, INT64_MAX / 2, contentLen)) {
+                    applyBanSideEffects(banManager.recordExploitProbe(
+                        store, buildAbuseContext(rq, 0),
+                        store.currentEpochSec()));
+                    sendError(rs, 400, "BAD_REQUEST",
+                              "invalid Content-Length header");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
+                const size_t maxBytes = routeMaxBodyBytes(rq.method, rq.path);
+                if (static_cast<size_t>(contentLen) > maxBytes) {
+                    sendError(rs, 413, "PAYLOAD_TOO_LARGE",
+                              "request body is too large");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
+            }
+
             const bool hasBody = rq.get_header_value("Content-Length") != "" ||
                                  rq.has_header("Transfer-Encoding");
             const bool empty = rq.get_header_value("Content-Length") == "0" &&
                                !rq.has_header("Transfer-Encoding");
-            if (hasBody && !empty &&
-                !isJsonContentType(rq.get_header_value("Content-Type"))) {
-                sendError(rs, 415, "UNSUPPORTED_MEDIA_TYPE",
-                          "only application/json request bodies are accepted");
-                return httplib::Server::HandlerResponse::Handled;
+            if (hasBody && !empty) {
+                const std::string ct = rq.get_header_value("Content-Type");
+                if (rq.path == "/api/v1/auth/data-deletion" ||
+                    rq.path == "/privacy") {
+                    if (!isJsonContentType(ct) &&
+                        !isFormUrlEncodedContentType(ct)) {
+                        sendError(rs, 415, "UNSUPPORTED_MEDIA_TYPE",
+                                  "only application/json or form-urlencoded "
+                                  "request bodies are accepted");
+                        return httplib::Server::HandlerResponse::Handled;
+                    }
+                } else if (!isJsonContentType(ct)) {
+                    sendError(rs, 415, "UNSUPPORTED_MEDIA_TYPE",
+                              "only application/json request bodies are accepted");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
             }
             return httplib::Server::HandlerResponse::Unhandled;
         });
@@ -7490,6 +11126,133 @@ uint64_t OctiHttpServer::tickCount() const
 int OctiHttpServer::activeStreams() const
 {
     return _impl->sseActive.load();
+}
+
+int OctiHttpServer::activeExports() const
+{
+    return _impl->activeExportsCount.load();
+}
+
+std::string OctiHttpServer::normalizeIpLiteral(const std::string &raw)
+{
+    size_t first = raw.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return std::string();
+    }
+    size_t last = raw.find_last_not_of(" \t\r\n");
+    std::string s = raw.substr(first, last - first + 1);
+    if (s.empty() || s.size() > 128) {
+        return std::string();
+    }
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c <= 0x20 || c >= 0x7F) {
+            return std::string();
+        }
+    }
+
+    struct in_addr a4;
+    if (::inet_pton(AF_INET, s.c_str(), &a4) == 1) {
+        char buf[INET_ADDRSTRLEN];
+        if (::inet_ntop(AF_INET, &a4, buf, sizeof(buf)) != nullptr) {
+            return std::string(buf);
+        }
+        return std::string();
+    }
+
+    struct in6_addr a6;
+    if (::inet_pton(AF_INET6, s.c_str(), &a6) == 1) {
+        bool v4Mapped = true;
+        for (int i = 0; i < 10; ++i) {
+            if (a6.s6_addr[i] != 0) {
+                v4Mapped = false;
+                break;
+            }
+        }
+        if (v4Mapped && a6.s6_addr[10] == 0xFF && a6.s6_addr[11] == 0xFF) {
+            struct in_addr mapped4;
+            std::memcpy(&mapped4.s_addr, a6.s6_addr + 12, 4);
+            char buf4[INET_ADDRSTRLEN];
+            if (::inet_ntop(AF_INET, &mapped4, buf4, sizeof(buf4)) != nullptr) {
+                return std::string(buf4);
+            }
+            return std::string();
+        }
+        char buf6[INET6_ADDRSTRLEN];
+        if (::inet_ntop(AF_INET6, &a6, buf6, sizeof(buf6)) != nullptr) {
+            return lower(std::string(buf6));
+        }
+    }
+    return std::string();
+}
+
+std::string OctiHttpServer::resolveClientIp(
+    const std::string &peerAddr,
+    const std::string &xffHeader,
+    const std::string &xRealIpHeader,
+    const std::vector<std::string> &trustedProxies)
+{
+    std::string peer = normalizeIpLiteral(peerAddr);
+    if (peer.empty()) {
+        return peerAddr.empty() ? std::string("unknown") : peerAddr;
+    }
+
+    auto isTrusted = [&](const std::string &normIp) -> bool {
+        if (normIp.empty()) {
+            return false;
+        }
+        for (size_t i = 0; i < trustedProxies.size(); ++i) {
+            if (trustedProxies[i] == normIp ||
+                normalizeIpLiteral(trustedProxies[i]) == normIp) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (!isTrusted(peer)) {
+        return peer;
+    }
+
+    size_t xffFirst = xffHeader.find_first_not_of(" \t\r\n");
+    if (xffFirst != std::string::npos) {
+        if (xffHeader.size() > 2048) {
+            return peer;
+        }
+        std::vector<std::string> hops;
+        size_t start = 0;
+        while (start <= xffHeader.size()) {
+            size_t comma = xffHeader.find(',', start);
+            if (comma == std::string::npos) {
+                hops.push_back(xffHeader.substr(start));
+                break;
+            }
+            hops.push_back(xffHeader.substr(start, comma - start));
+            start = comma + 1;
+        }
+        for (size_t idx = hops.size(); idx > 0; --idx) {
+            std::string hopIp = normalizeIpLiteral(hops[idx - 1]);
+            if (hopIp.empty()) {
+                return peer;
+            }
+            if (!isTrusted(hopIp)) {
+                return hopIp;
+            }
+        }
+    }
+
+    size_t xriFirst = xRealIpHeader.find_first_not_of(" \t\r\n");
+    if (xriFirst != std::string::npos && xRealIpHeader.size() <= 256) {
+        std::string realIp = normalizeIpLiteral(xRealIpHeader);
+        if (realIp.empty()) {
+            return peer;
+        }
+        if (!isTrusted(realIp)) {
+            return realIp;
+        }
+    }
+
+    return peer;
 }
 
 } // namespace octi

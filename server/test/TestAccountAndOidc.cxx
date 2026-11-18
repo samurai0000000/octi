@@ -5,9 +5,11 @@
  */
 
 #include "AccountStore.hxx"
+#include "BanManager.hxx"
 #include "EloCalculator.hxx"
 #include "OctiBoard.hxx"
 #include "OctiGame.hxx"
+#include "OctiHttpServer.hxx"
 #include "OidcVerifier.hxx"
 
 #include <nlohmann/json.hpp>
@@ -19,6 +21,9 @@
 #include <rapidcheck.h>
 #include <sqlite3.h>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -40,12 +45,16 @@
 #include <CppUTest/TestHarness.h>
 
 using octi::AccountStore;
+using octi::ArchiveFilter;
 using octi::ArchiveStatus;
+using octi::CrashReportFilter;
+using octi::CrashReportRecord;
 using octi::CreateRobotResult;
 using octi::GameOutcome;
 using octi::GameRecord;
 using octi::LinkResult;
 using octi::LinkStatus;
+using octi::LobbyChatLogRow;
 using octi::LoginResult;
 using octi::OidcVerifier;
 using octi::PlayerProfile;
@@ -284,6 +293,7 @@ Json claimsFor(const std::string &provider, const std::string &sub = "")
     c["iat"] = kNow - 10;
     c["exp"] = kNow + 3600;
     c["email"] = "user@example.com";
+    c["email_verified"] = true;
     c["name"] = "Test User";
     c["picture"] = "https://example.com/avatar.png";
     return c;
@@ -457,6 +467,7 @@ VerifiedClaims makeClaims(const std::string &provider, const std::string &sub,
     c.sub = sub;
     c.name = name;
     c.email = email;
+    c.emailVerified = !email.empty();
     c.picture = "https://example.com/avatar.png";
     c.issuer = issuerFor(provider);
     c.exp = kNow + 3600;
@@ -1538,7 +1549,8 @@ TEST(AccountStoreTest, SchemaMatchesPlanAndHasNoGuestSupport)
                              " WHERE name LIKE '%guest%'"));
     CHECK_EQUAL(27, countRows("SELECT COUNT(*) FROM pragma_table_info('players')"));
     CHECK_EQUAL(4, countRows("SELECT COUNT(*) FROM pragma_table_info('player_installs')"));
-    CHECK_EQUAL(8, countRows(
+    CHECK_EQUAL(3, countRows("SELECT COUNT(*) FROM pragma_table_info('install_tokens')"));
+    CHECK_EQUAL(9, countRows(
                        "SELECT COUNT(*) FROM pragma_table_info('linked_identities')"));
     CHECK_EQUAL(7, countRows("SELECT COUNT(*) FROM pragma_table_info('sessions')"));
     CHECK_EQUAL(37, countRows("SELECT COUNT(*) FROM pragma_table_info('games')"));
@@ -2401,7 +2413,10 @@ TEST(AccountStoreTest, ArchiveAndQueryOctiTranscript)
     CHECK_EQUAL(1, got.winnerSeat);
     STRCMP_EQUAL("RESIGNATION", got.termination.c_str());
     CHECK_EQUAL(4, got.plyCount);
-    CHECK_TRUE(got.octiTranscript == g.octiTranscript);
+    CHECK_TRUE(got.octiTranscript.find('\n') == std::string::npos);
+    CHECK_TRUE(got.octiTranscript.find('\r') == std::string::npos);
+    CHECK_TRUE(got.octiTranscript.find("\"license\":\"CC-BY-4.0\"") !=
+               std::string::npos);
     STRCMP_EQUAL(g.finalFen.c_str(), got.finalFen.c_str());
     CHECK_EQUAL(kNow - 300, got.startedAt);
     CHECK_EQUAL(kNow, got.endedAt);
@@ -2416,7 +2431,7 @@ TEST(AccountStoreTest, ArchiveAndQueryOctiTranscript)
 
     std::string transcript;
     CHECK_TRUE(store->getArchivedTranscript(g.gameId, transcript));
-    CHECK_TRUE(transcript == g.octiTranscript);
+    CHECK_TRUE(transcript == got.octiTranscript);
     CHECK_FALSE(store->getArchivedTranscript("g-missing", transcript));
     CHECK_FALSE(store->getArchivedGame("g-missing", got));
     CHECK_FALSE(store->getArchivedGame("' OR 1=1 --", got));
@@ -2954,7 +2969,7 @@ TEST(AccountStoreTest, BioLocationAndDataUriAvatar)
     CHECK_TRUE(AccountStore::validAvatarUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg=="));
     CHECK_TRUE(AccountStore::validAvatarUrl("data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAD8D+JaQAA3AA/ua1AAA="));
     CHECK_TRUE(AccountStore::validAvatarUrl("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"));
-    CHECK_TRUE(AccountStore::validAvatarUrl("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="));
+    CHECK_FALSE(AccountStore::validAvatarUrl("data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="));
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/unknown;base64,abc"));
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,"));
     CHECK_FALSE(AccountStore::validAvatarUrl("data:image/png;base64,bad!char@"));
@@ -2982,18 +2997,20 @@ TEST(AccountStoreTest, BioLocationAndDataUriAvatar)
     CHECK_EQUAL((int)UpdateStatus::INVALID_AVATAR_URL, (int)store->updateProfile(pid, badAv));
 
     // Successful update
+    const std::string valid1x1PngUri =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     ProfileUpdate upd;
     upd.setBio = true;
     upd.bio = "Master Octi strategist.";
     upd.setLocation = true;
     upd.location = "San Francisco, CA";
     upd.setAvatarUrl = true;
-    upd.avatarUrl = "data:image/png;base64,iVBORw0KGgo=";
+    upd.avatarUrl = valid1x1PngUri;
     PlayerProfile updated;
     CHECK_EQUAL((int)UpdateStatus::OK, (int)store->updateProfile(pid, upd, &updated));
     STRCMP_EQUAL("Master Octi strategist.", updated.bio.c_str());
     STRCMP_EQUAL("San Francisco, CA", updated.location.c_str());
-    STRCMP_EQUAL("data:image/png;base64,iVBORw0KGgo=", updated.avatarUrl.c_str());
+    STRCMP_EQUAL(valid1x1PngUri.c_str(), updated.avatarUrl.c_str());
 
     // Verify lookup by id, uuid, handle
     PlayerProfile p1, p2, p3;
@@ -3006,7 +3023,7 @@ TEST(AccountStoreTest, BioLocationAndDataUriAvatar)
 
     CHECK_TRUE(store->getProfileByHandle(updated.handle, p3));
     STRCMP_EQUAL("Master Octi strategist.", p3.bio.c_str());
-    STRCMP_EQUAL("data:image/png;base64,iVBORw0KGgo=", p3.avatarUrl.c_str());
+    STRCMP_EQUAL(valid1x1PngUri.c_str(), p3.avatarUrl.c_str());
 
     CHECK_FALSE(store->getProfileByHandle("non-existent-handle-xyz", p3));
 }
@@ -4416,6 +4433,1046 @@ TEST(AccountStoreTest, PerVariantLeaderboardOutcomeIsolationAndNoProgressDraw)
     CHECK_EQUAL(1, arenaAll[0].wins);
     CHECK_EQUAL(0, arenaAll[0].losses);
     CHECK_EQUAL(1, arenaAll[0].draws);
+}
+
+TEST(OidcVerifierTest, GoogleUnverifiedOrMissingEmailVerifiedClearsEmail)
+{
+    /* Nominal: Google verified email + nonce preserved */
+    Json cOk = claimsFor("google", "sub-g-verified");
+    cOk["email"] = "admin@selfso.com";
+    cOk["email_verified"] = true;
+    cOk["nonce"] = "oidc-nonce-xyz-123";
+    VerifyResult rOk = verifier->verifyIdToken(
+        "google", jwtSign(rsHeader(), cOk, keys().rsa.get()));
+    CHECK_STATUS(OK, rOk);
+    STRCMP_EQUAL("admin@selfso.com", rOk.claims.email.c_str());
+    CHECK_TRUE(rOk.claims.emailVerified);
+    STRCMP_EQUAL("oidc-nonce-xyz-123", rOk.claims.nonce.c_str());
+
+    /* Fault 1: Google email_verified == false clears email */
+    Json cFalse = claimsFor("google", "sub-g-unverified");
+    cFalse["email"] = "admin@selfso.com";
+    cFalse["email_verified"] = false;
+    VerifyResult rFalse = verifier->verifyIdToken(
+        "google", jwtSign(rsHeader(), cFalse, keys().rsa.get()));
+    CHECK_STATUS(OK, rFalse);
+    STRCMP_EQUAL("", rFalse.claims.email.c_str());
+    CHECK_FALSE(rFalse.claims.emailVerified);
+
+    /* Fault 2: Google missing email_verified clears email */
+    Json cMissing = claimsFor("google", "sub-g-missing-ev");
+    cMissing["email"] = "admin@selfso.com";
+    cMissing.erase("email_verified");
+    VerifyResult rMissing = verifier->verifyIdToken(
+        "google", jwtSign(rsHeader(), cMissing, keys().rsa.get()));
+    CHECK_STATUS(OK, rMissing);
+    STRCMP_EQUAL("", rMissing.claims.email.c_str());
+    CHECK_FALSE(rMissing.claims.emailVerified);
+
+    /* Fault 3: Google string "true" is non-boolean -> rejected as unverified */
+    Json cStrTrue = claimsFor("google", "sub-g-str-ev");
+    cStrTrue["email"] = "admin@selfso.com";
+    cStrTrue["email_verified"] = "true";
+    VerifyResult rStrTrue = verifier->verifyIdToken(
+        "google", jwtSign(rsHeader(), cStrTrue, keys().rsa.get()));
+    CHECK_STATUS(OK, rStrTrue);
+    STRCMP_EQUAL("", rStrTrue.claims.email.c_str());
+    CHECK_FALSE(rStrTrue.claims.emailVerified);
+
+    /* Apple string "true" vs "false", and Microsoft explicit false vs absent */
+    Json cAppleTrue = claimsFor("apple", "sub-a-str-true");
+    cAppleTrue["email_verified"] = "true";
+    VerifyResult rAppleTrue = verifier->verifyIdToken(
+        "apple", jwtSign(rsHeader(), cAppleTrue, keys().rsa.get()));
+    CHECK_STATUS(OK, rAppleTrue);
+    CHECK_TRUE(rAppleTrue.claims.emailVerified);
+    STRCMP_EQUAL("user@example.com", rAppleTrue.claims.email.c_str());
+
+    Json cAppleFalse = claimsFor("apple", "sub-a-str-false");
+    cAppleFalse["email_verified"] = "false";
+    VerifyResult rAppleFalse = verifier->verifyIdToken(
+        "apple", jwtSign(rsHeader(), cAppleFalse, keys().rsa.get()));
+    CHECK_STATUS(OK, rAppleFalse);
+    CHECK_FALSE(rAppleFalse.claims.emailVerified);
+    STRCMP_EQUAL("", rAppleFalse.claims.email.c_str());
+
+    Json cMsFalse = claimsFor("microsoft", "sub-ms-false");
+    cMsFalse["email_verified"] = false;
+    VerifyResult rMsFalse = verifier->verifyIdToken(
+        "microsoft", jwtSign(rsHeader(), cMsFalse, keys().rsa.get()));
+    CHECK_STATUS(OK, rMsFalse);
+    CHECK_FALSE(rMsFalse.claims.emailVerified);
+    STRCMP_EQUAL("", rMsFalse.claims.email.c_str());
+
+    Json cMsAbsent = claimsFor("microsoft", "sub-ms-absent");
+    cMsAbsent.erase("email_verified");
+    VerifyResult rMsAbsent = verifier->verifyIdToken(
+        "microsoft", jwtSign(rsHeader(), cMsAbsent, keys().rsa.get()));
+    CHECK_STATUS(OK, rMsAbsent);
+    CHECK_FALSE(rMsAbsent.claims.emailVerified);
+    STRCMP_EQUAL("user@example.com", rMsAbsent.claims.email.c_str());
+}
+
+TEST(AccountStoreTest, VerifiedEmailAdminGateNonHijackBindAndOnlineOnlyRobotStats)
+{
+    OidcVerifier v;
+    v.setClock([]() -> int64_t { return kNow; });
+    v.setClientId("google", "client-google");
+    v.setKeySet("google", defaultJwks(), kNow);
+
+    store->setAdminGoogleIdentities({"sub-real-admin", "admin@selfso.com"});
+
+    /* 1a. Unverified Google email via OidcVerifier must NOT grant admin */
+    Json cUnver = claimsFor("google", "sub-attacker-unverified");
+    cUnver["email"] = "admin@selfso.com";
+    cUnver["email_verified"] = false;
+    VerifyResult vrUnver = v.verifyIdToken(
+        "google", jwtSign(rsHeader(), cUnver, keys().rsa.get()));
+    CHECK_TRUE(vrUnver.ok());
+    LoginResult lrUnver = store->loginWithSso(vrUnver.claims, "test");
+    CHECK_TRUE(lrUnver.ok);
+    CHECK_FALSE(lrUnver.profile.isAdmin);
+    CHECK_FALSE(store->isPlayerAdmin(lrUnver.profile.playerId));
+
+    /* 1b. Direct VerifiedClaims with emailVerified=false stored in DB must NOT grant admin */
+    VerifiedClaims rawUnver = makeClaims("google", "sub-direct-unverified",
+                                         "Direct Unverified", "admin@selfso.com");
+    rawUnver.emailVerified = false;
+    LoginResult lrDirectUnver = store->loginWithSso(rawUnver, "test");
+    CHECK_TRUE(lrDirectUnver.ok);
+    CHECK_FALSE(lrDirectUnver.profile.isAdmin);
+    CHECK_FALSE(store->isPlayerAdmin(lrDirectUnver.profile.playerId));
+    CHECK_FALSE(lrDirectUnver.identities.empty());
+    CHECK_FALSE(lrDirectUnver.identities[0].emailVerified);
+
+    /* 1c. Verified Google email and matching Google sub both grant admin */
+    Json cVer = claimsFor("google", "sub-verified-email-admin");
+    cVer["email"] = "ADMIN@SELFSO.COM";
+    cVer["email_verified"] = true;
+    VerifyResult vrVer = v.verifyIdToken(
+        "google", jwtSign(rsHeader(), cVer, keys().rsa.get()));
+    CHECK_TRUE(vrVer.ok());
+    LoginResult lrVer = store->loginWithSso(vrVer.claims, "test");
+    CHECK_TRUE(lrVer.ok);
+    CHECK_TRUE(lrVer.profile.isAdmin);
+    CHECK_TRUE(store->isPlayerAdmin(lrVer.profile.playerId));
+    CHECK_TRUE(lrVer.identities[0].emailVerified);
+
+    Json cSubAdmin = claimsFor("google", "sub-real-admin");
+    cSubAdmin["email"] = "other@example.com";
+    cSubAdmin["email_verified"] = false;
+    VerifyResult vrSub = v.verifyIdToken(
+        "google", jwtSign(rsHeader(), cSubAdmin, keys().rsa.get()));
+    CHECK_TRUE(vrSub.ok());
+    LoginResult lrSub = store->loginWithSso(vrSub.claims, "test");
+    CHECK_TRUE(lrSub.ok);
+    CHECK_TRUE(lrSub.profile.isAdmin);
+    CHECK_TRUE(store->isPlayerAdmin(lrSub.profile.playerId));
+
+    /* 2. Legacy linked_identities schema migration backfills email_verified=1 once */
+    {
+        TempDir migDir;
+        std::string migDb = migDir.path() + "/legacy_mig.db";
+        std::string migErr;
+        {
+            AccountStore bootstrap;
+            CHECK_TRUE(bootstrap.openOrCreate(migDb, migErr));
+            bootstrap.close();
+        }
+        sqlite3 *raw = nullptr;
+        CHECK_EQUAL(SQLITE_OK, sqlite3_open(migDb.c_str(), &raw));
+        const char *legacySql =
+            "DROP TABLE linked_identities;"
+            "CREATE TABLE linked_identities ("
+            " identity_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " player_id INTEGER NOT NULL,"
+            " provider TEXT NOT NULL,"
+            " provider_sub TEXT NOT NULL,"
+            " provider_email TEXT NOT NULL DEFAULT '',"
+            " display_hint TEXT NOT NULL DEFAULT '',"
+            " linked_at INTEGER NOT NULL,"
+            " last_login_at INTEGER NOT NULL,"
+            " UNIQUE(provider, provider_sub));"
+            "INSERT INTO players(player_id, uuid, handle, display_name, created_at, last_seen_at)"
+            " VALUES(1, 'u-leg-1', 'legadmin', 'Legacy Admin', 100, 100);"
+            "INSERT INTO linked_identities(player_id, provider, provider_sub, provider_email, linked_at, last_login_at)"
+            " VALUES(1, 'google', 'sub-leg-1', 'legacy-admin@selfso.com', 100, 100);";
+        CHECK_EQUAL(SQLITE_OK, sqlite3_exec(raw, legacySql, nullptr, nullptr, nullptr));
+        sqlite3_close(raw);
+
+        AccountStore migStore;
+        CHECK_TRUE(migStore.openOrCreate(migDb, migErr));
+        migStore.setAdminGoogleIdentities({"legacy-admin@selfso.com"});
+        CHECK_TRUE(migStore.isPlayerAdmin(1));
+
+        VerifiedClaims postMigUnver = makeClaims("google", "sub-post-mig-unver",
+                                                 "PostMig", "legacy-admin@selfso.com");
+        postMigUnver.emailVerified = false;
+        LoginResult lrPost = migStore.loginWithSso(postMigUnver, "test");
+        CHECK_TRUE(lrPost.ok);
+        CHECK_FALSE(migStore.isPlayerAdmin(lrPost.profile.playerId));
+        int64_t postPlayerId = lrPost.profile.playerId;
+        migStore.close();
+
+        /* Re-opening must NOT overwrite email_verified=0 on post-migration rows */
+        AccountStore migStore2;
+        CHECK_TRUE(migStore2.openOrCreate(migDb, migErr));
+        migStore2.setAdminGoogleIdentities({"legacy-admin@selfso.com"});
+        CHECK_TRUE(migStore2.isPlayerAdmin(1));
+        CHECK_FALSE(migStore2.isPlayerAdmin(postPlayerId));
+    }
+
+    /* 3. bindInstallToPlayer must not let a second user hijack an existing binding */
+    LoginResult lrAlice = login("google", "sub-inst-alice", "Alice");
+    LoginResult lrBob = login("google", "sub-inst-bob", "Bob");
+    CHECK_TRUE(lrAlice.ok && lrBob.ok);
+    CHECK_TRUE(store->bindInstallToPlayer("inst-shared-01", lrAlice.profile.playerId));
+    CHECK_TRUE(store->bindInstallToPlayer("inst-shared-01", lrAlice.profile.playerId));
+    CHECK_FALSE(store->bindInstallToPlayer("inst-shared-01", lrBob.profile.playerId));
+    PlayerProfile ownerProf;
+    CHECK_TRUE(store->getPlayerByInstallId("inst-shared-01", ownerProf));
+    CHECK_EQUAL(lrAlice.profile.playerId, ownerProf.playerId);
+
+    /* 4. install_tokens registration, boundary lengths, auth checks & atomic delete */
+    CHECK_FALSE(AccountStore::isValidInstallToken(""));
+    CHECK_FALSE(AccountStore::isValidInstallToken("short15chars123"));
+    CHECK_FALSE(AccountStore::isValidInstallToken("has space inside token 1234567890"));
+    CHECK_FALSE(AccountStore::isValidInstallToken(std::string(257, 'a')));
+    CHECK_TRUE(AccountStore::isValidInstallToken(std::string(16, 'a')));
+    const std::string tok32 = "0123456789abcdef0123456789abcdef";
+    CHECK_EQUAL(32, static_cast<int>(tok32.size()));
+    CHECK_TRUE(AccountStore::isValidInstallToken(tok32));
+    CHECK_TRUE(AccountStore::isValidInstallToken(std::string(256, 'z')));
+
+    CHECK_FALSE(store->hasInstallToken("inst-tok-01"));
+    CHECK_TRUE(store->registerOrVerifyInstallToken("inst-tok-01", tok32));
+    CHECK_TRUE(store->hasInstallToken("inst-tok-01"));
+    CHECK_TRUE(store->registerOrVerifyInstallToken("inst-tok-01", tok32));
+    CHECK_FALSE(store->registerOrVerifyInstallToken("inst-tok-01", "fedcba9876543210fedcba9876543210"));
+
+    GameRecord gInst = record("g-inst-del-01", clockNow, 0, 0);
+    gInst.source = "client_upload";
+    gInst.installId = "inst-tok-01";
+    std::string err;
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGame(gInst, err)));
+    octi::CrashReportRecord crInst;
+    crInst.crashId = "cr-inst-del-01";
+    crInst.createdAt = clockNow;
+    crInst.platform = "linux-x86_64";
+    crInst.exceptionType = "std::runtime_error";
+    crInst.installId = "inst-tok-01";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::STORED),
+                static_cast<int>(store->recordCrashReport(crInst, err)));
+    CHECK_TRUE(store->bindInstallToPlayer("inst-tok-01", lrAlice.profile.playerId));
+
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::UNAUTHORIZED),
+                static_cast<int>(store->verifyInstallDeleteAuth("inst-tok-01", "", 0)));
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::FORBIDDEN),
+                static_cast<int>(store->verifyInstallDeleteAuth(
+                    "inst-tok-01", "fedcba9876543210fedcba9876543210", 0)));
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::FORBIDDEN),
+                static_cast<int>(store->verifyInstallDeleteAuth(
+                    "inst-tok-01", "", lrBob.profile.playerId)));
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::AUTHORIZED),
+                static_cast<int>(store->verifyInstallDeleteAuth(
+                    "inst-tok-01", "", lrAlice.profile.playerId)));
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::AUTHORIZED),
+                static_cast<int>(store->verifyInstallDeleteAuth("inst-tok-01", tok32, 0)));
+
+    CHECK_EQUAL(2, store->deleteGamesByInstallId("inst-tok-01"));
+    /* Re-deleting purged install succeeds with valid 32-char token or admin (0 deleted) */
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::AUTHORIZED),
+                static_cast<int>(store->verifyInstallDeleteAuth("inst-tok-01", tok32, 0)));
+    CHECK_EQUAL(static_cast<int>(octi::InstallDeleteAuthStatus::AUTHORIZED),
+                static_cast<int>(store->verifyInstallDeleteAuth(
+                    "inst-tok-01", "", lrVer.profile.playerId)));
+    CHECK_EQUAL(0, store->deleteGamesByInstallId("inst-tok-01"));
+
+    /* 5. Anonymous client_upload naming a robot must NOT pollute robot stats */
+    CreateRobotResult botRes = store->createRobot(lrAlice.profile.playerId, "ArenaShieldBot");
+    CHECK_EQUAL(static_cast<int>(RobotStatus::OK), static_cast<int>(botRes.status));
+
+    GameRecord spoofUpload = record("g-spoof-upload-bot", clockNow, 0, 0);
+    spoofUpload.source = "client_upload";
+    spoofUpload.p1Handle = "ArenaShieldBot";
+    spoofUpload.p2Handle = "AI_Hard";
+    spoofUpload.result = "P1_WIN";
+    spoofUpload.winnerSeat = 1;
+    spoofUpload.winner = "A";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGame(spoofUpload, err)));
+    CHECK_TRUE(store->reconcileRobotStats());
+    octi::RecomputeRatingsResult rcRes;
+    CHECK_TRUE(store->recomputeAllRatings(rcRes, err));
+
+    RobotRecord botCheck;
+    CHECK_TRUE(store->getRobotById(botRes.robot.robotId, botCheck));
+    CHECK_EQUAL(0, botCheck.gamesPlayed);
+    CHECK_EQUAL(0, botCheck.wins);
+    CHECK_EQUAL(0, botCheck.losses);
+    GameRecord spoofStored;
+    CHECK_TRUE(store->getArchivedGame("g-spoof-upload-bot", spoofStored));
+    CHECK_EQUAL(0, spoofStored.p1RobotId);
+}
+
+namespace {
+
+std::string stdBase64EncodeBytes(const std::string &raw)
+{
+    if (raw.empty()) {
+        return std::string();
+    }
+    std::string out(4 * ((raw.size() + 2) / 3), '\0');
+    int written = EVP_EncodeBlock(
+        reinterpret_cast<unsigned char *>(&out[0]),
+        reinterpret_cast<const unsigned char *>(raw.data()),
+        static_cast<int>(raw.size()));
+    if (written <= 0) {
+        return std::string();
+    }
+    out.resize(static_cast<size_t>(written));
+    return out;
+}
+
+std::string makePngHeaderBytes(uint32_t width, uint32_t height)
+{
+    std::string b;
+    b.append("\x89PNG\r\n\x1a\n", 8);
+    b.append("\x00\x00\x00\x0d", 4);
+    b.append("IHDR", 4);
+    unsigned char dims[8] = {
+        static_cast<unsigned char>((width >> 24) & 0xFF),
+        static_cast<unsigned char>((width >> 16) & 0xFF),
+        static_cast<unsigned char>((width >> 8) & 0xFF),
+        static_cast<unsigned char>(width & 0xFF),
+        static_cast<unsigned char>((height >> 24) & 0xFF),
+        static_cast<unsigned char>((height >> 16) & 0xFF),
+        static_cast<unsigned char>((height >> 8) & 0xFF),
+        static_cast<unsigned char>(height & 0xFF)
+    };
+    b.append(reinterpret_cast<const char *>(dims), 8);
+    /* bitDepth=8, colorType=6 (RGBA), compression=0, filter=0, interlace=0 + 4B CRC + IEND */
+    b.append("\x08\x06\x00\x00\x00\x00\x00\x00\x00", 9);
+    b.append("\x00\x00\x00\x00IEND\xae\x42\x60\x82", 12);
+    return b;
+}
+
+std::string makeJpegSof0HeaderBytes(uint16_t width, uint16_t height)
+{
+    std::string b;
+    /* SOI + APP0 (JFIF) + SOF0 + EOI */
+    b.append("\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00", 20);
+    unsigned char sof0[11] = {
+        0xFF, 0xC0,
+        0x00, 0x0B, /* length = 11 (2 len + 1 prec + 2 H + 2 W + 1 Nf + 3 comp) */
+        0x08,       /* precision = 8 */
+        static_cast<unsigned char>((height >> 8) & 0xFF),
+        static_cast<unsigned char>(height & 0xFF),
+        static_cast<unsigned char>((width >> 8) & 0xFF),
+        static_cast<unsigned char>(width & 0xFF),
+        0x01,       /* 1 component */
+        0x01
+    };
+    b.append(reinterpret_cast<const char *>(sof0), 11);
+    b.append("\x11\x00\xff\xd9", 4);
+    return b;
+}
+
+std::string makeGif89aHeaderBytes(uint16_t width, uint16_t height)
+{
+    std::string b("GIF89a", 6);
+    unsigned char lsd[8] = {
+        static_cast<unsigned char>(width & 0xFF),
+        static_cast<unsigned char>((width >> 8) & 0xFF),
+        static_cast<unsigned char>(height & 0xFF),
+        static_cast<unsigned char>((height >> 8) & 0xFF),
+        0x00, 0x00, 0x00,
+        0x3B /* GIF trailer */
+    };
+    b.append(reinterpret_cast<const char *>(lsd), 8);
+    return b;
+}
+
+std::string makeWebpVp8lHeaderBytes(uint16_t width, uint16_t height)
+{
+    /* RFC 9649 VP8L header: 'RIFF' + size(20) + 'WEBP' + 'VP8L' + chunkSize(8) + 0x2F + 4B packed dims */
+    const uint32_t wMinus1 = (width > 0 ? static_cast<uint32_t>(width - 1) : 0u) & 0x3FFFu;
+    const uint32_t hMinus1 = (height > 0 ? static_cast<uint32_t>(height - 1) : 0u) & 0x3FFFu;
+    const uint32_t packed = wMinus1 | (hMinus1 << 14);
+    unsigned char raw[28] = {
+        'R', 'I', 'F', 'F',
+        20, 0, 0, 0,
+        'W', 'E', 'B', 'P',
+        'V', 'P', '8', 'L',
+        8, 0, 0, 0,
+        0x2F,
+        static_cast<unsigned char>(packed & 0xFFu),
+        static_cast<unsigned char>((packed >> 8) & 0xFFu),
+        static_cast<unsigned char>((packed >> 16) & 0xFFu),
+        static_cast<unsigned char>((packed >> 24) & 0xFFu),
+        0x00, 0x00, 0x00
+    };
+    return std::string(reinterpret_cast<const char *>(raw), sizeof(raw));
+}
+
+} // namespace
+
+TEST(AccountStoreTest, Envelope3AvatarSvgRejectionAndRasterWebpBounds)
+{
+    std::string avDir = dir->path() + "/e3_avatars";
+    store->setAvatarDir(avDir);
+    int64_t pid = newPlayer("sub-e3-av", "Envelope3 Avatar User");
+
+    /* 1. SVG data URI rejected in both validAvatarUrl and updateProfile */
+    const std::string svgXssUri =
+        "data:image/svg+xml;base64," +
+        stdBase64EncodeBytes("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>");
+    CHECK_FALSE(AccountStore::validAvatarUrl(svgXssUri));
+
+    ProfileUpdate u;
+    u.setAvatarUrl = true;
+    u.avatarUrl = svgXssUri;
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    /* 2. Fake PNG data URI wrapping HTML/script payload rejected */
+    u.avatarUrl = "data:image/png;base64," +
+                  stdBase64EncodeBytes("<script>alert('xss')</script>");
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    /* 3. Boundary: 1024x1024 raster headers accepted vs 1025x1024 / 0x10 / 16383x16383 rejected */
+    u.avatarUrl = "data:image/png;base64," + stdBase64EncodeBytes(makePngHeaderBytes(1024, 1024));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::OK),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/png;base64," + stdBase64EncodeBytes(makePngHeaderBytes(1025, 1024));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/png;base64," + stdBase64EncodeBytes(makePngHeaderBytes(0, 64));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/jpeg;base64," + stdBase64EncodeBytes(makeJpegSof0HeaderBytes(1024, 1024));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::OK),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/jpeg;base64," + stdBase64EncodeBytes(makeJpegSof0HeaderBytes(1024, 1025));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/gif;base64," + stdBase64EncodeBytes(makeGif89aHeaderBytes(1024, 1024));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::OK),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    u.avatarUrl = "data:image/gif;base64," + stdBase64EncodeBytes(makeGif89aHeaderBytes(1025, 1024));
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    /* SEC-15: 16383x16383 WebP bomb header rejected before WebPDecodeRGBA */
+    const std::string webpBomb = makeWebpVp8lHeaderBytes(16383, 16383);
+    std::string outPng;
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("webp", webpBomb));
+    CHECK_FALSE(AccountStore::transcodeWebpToPng(webpBomb, outPng));
+    u.avatarUrl = "data:image/webp;base64," + stdBase64EncodeBytes(webpBomb);
+    CHECK_EQUAL(static_cast<int>(UpdateStatus::INVALID_AVATAR_URL),
+                static_cast<int>(store->updateProfile(pid, u)));
+
+    /* Direct validateRasterAvatarBytes nominal, boundary & format-confusion checks */
+    CHECK_TRUE(AccountStore::validateRasterAvatarBytes("webp", makeWebpVp8lHeaderBytes(1, 1)));
+    CHECK_TRUE(AccountStore::validateRasterAvatarBytes("webp", makeWebpVp8lHeaderBytes(1024, 1024)));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("webp", makeWebpVp8lHeaderBytes(1025, 1024)));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("webp", makeWebpVp8lHeaderBytes(1024, 1025)));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("svg", "<svg></svg>"));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("png", makeGif89aHeaderBytes(16, 16)));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("jpg", makePngHeaderBytes(16, 16)));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("webp", webpBomb.substr(12))); /* raw VP8L without RIFF..WEBP */
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("png", ""));
+    CHECK_FALSE(AccountStore::validateRasterAvatarBytes("png", std::string(AccountStore::kMaxAvatarDataUriBytes + 1, 'x')));
+
+    /* Legacy >1024x1024 .webp file on disk rejected safely by readAvatarFile */
+    {
+        std::ofstream bombOut((avDir + "/77777.webp").c_str(),
+                              std::ios::binary | std::ios::trunc);
+        bombOut.write(webpBomb.data(), webpBomb.size());
+    }
+    std::string readBytes;
+    std::string readMime;
+    CHECK_FALSE(store->readAvatarFile("77777.webp", readBytes, readMime));
+}
+
+TEST(AccountStoreTest, Envelope3DisallowedProbeAddressUnitAndRapidCheck)
+{
+    using octi::OctiHttpServer;
+    std::string reason;
+
+    /* 1. Explicit SSRF bogon vectors (string & sockaddr_in/sockaddr_in6) */
+    const char *mustReject[] = {
+        "127.0.0.1",
+        "127.255.255.254",
+        "0.0.0.0",
+        "0.1.2.3",
+        "10.0.0.1",
+        "100.64.0.1",
+        "100.127.255.254",
+        "169.254.169.254",
+        "172.16.0.1",
+        "172.31.255.254",
+        "192.0.0.1",
+        "192.0.2.1",
+        "192.88.99.1",
+        "192.168.1.1",
+        "198.18.0.1",
+        "198.51.100.1",
+        "203.0.113.1",
+        "224.0.0.1",
+        "239.255.255.250",
+        "240.0.0.1",
+        "255.255.255.255",
+        "::",
+        "::1",
+        "::ffff:127.0.0.1",
+        "::ffff:169.254.169.254",
+        "::ffff:8.8.8.8",
+        "::127.0.0.1",
+        "64:ff9b::7f00:1",
+        "64:ff9b::a9fe:a9fe",
+        "64:ff9b:1::7f00:1",
+        "100::1",
+        "2001:0000:4136:e378:8000:63bf:3fff:fdd2",
+        "2001:2::1",
+        "2001:10::1",
+        "2001:db8::1",
+        "2002:7f00:0001::1",
+        "2002:a9fe:a9fe::1",
+        "fc00::1",
+        "fd12:3456:789a::1",
+        "fe80::1",
+        "fe80::1%eth0",
+        "fec0::1",
+        "ff02::1",
+        "",
+        "not-an-ip-literal"
+    };
+    for (size_t i = 0; i < sizeof(mustReject) / sizeof(mustReject[0]); ++i) {
+        reason.clear();
+        CHECK_TRUE_TEXT(
+            OctiHttpServer::isDisallowedProbeAddress(mustReject[i], reason, false),
+            mustReject[i]);
+        CHECK_FALSE(reason.empty());
+    }
+
+    /* Loopback test flag allows ONLY native 127.0.0.0/8 and ::1, NEVER ::ffff:/NAT64/6to4 */
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress("127.0.0.1", reason, false));
+    CHECK_FALSE(OctiHttpServer::isDisallowedProbeAddress("127.0.0.1", reason, true));
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress("::1", reason, false));
+    CHECK_FALSE(OctiHttpServer::isDisallowedProbeAddress("::1", reason, true));
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress("::ffff:127.0.0.1", reason, true));
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress("64:ff9b::7f00:1", reason, true));
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress("2002:7f00:0001::1", reason, true));
+
+    /* Global unicast IPv4 and IPv6 addresses are permitted */
+    const char *mustAllow[] = {
+        "1.1.1.1",
+        "8.8.8.8",
+        "93.184.216.34",
+        "100.63.255.255",
+        "100.128.0.1",
+        "172.15.255.254",
+        "172.32.0.1",
+        "223.255.255.254",
+        "2606:4700:4700::1111",
+        "2001:4860:4860::8888",
+        "2a00:1450:4001:81b::200e"
+    };
+    for (size_t i = 0; i < sizeof(mustAllow) / sizeof(mustAllow[0]); ++i) {
+        CHECK_FALSE_TEXT(
+            OctiHttpServer::isDisallowedProbeAddress(mustAllow[i], reason, false),
+            mustAllow[i]);
+    }
+
+    /* Truncated / null / bad-family sockaddr fail closed */
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress(nullptr, 0, reason, false));
+    struct sockaddr_in shortSin;
+    std::memset(&shortSin, 0, sizeof(shortSin));
+    shortSin.sin_family = AF_INET;
+    inet_pton(AF_INET, "8.8.8.8", &shortSin.sin_addr);
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress(
+        reinterpret_cast<const struct sockaddr *>(&shortSin),
+        sizeof(shortSin) - 1, reason, false));
+    struct sockaddr_in6 scopedSin6;
+    std::memset(&scopedSin6, 0, sizeof(scopedSin6));
+    scopedSin6.sin6_family = AF_INET6;
+    inet_pton(AF_INET6, "2606:4700:4700::1111", &scopedSin6.sin6_addr);
+    scopedSin6.sin6_scope_id = 2;
+    CHECK_TRUE(OctiHttpServer::isDisallowedProbeAddress(
+        reinterpret_cast<const struct sockaddr *>(&scopedSin6),
+        sizeof(scopedSin6), reason, false));
+
+    /* 2. RapidCheck property suites on IPv4/IPv6/mapped/NAT64/6to4/Teredo bogons */
+    bool v4BogonOk = rc::check(
+        "IPv4 private, loopback, CGNAT, link-local, multicast, and reserved blocks always disallowed",
+        []() {
+            int bucket = *rc::gen::inRange(0, 8);
+            uint32_t rawHost = *rc::gen::arbitrary<uint32_t>();
+            uint32_t ip = 0;
+            switch (bucket) {
+            case 0: ip = 0x00000000u | (rawHost & 0x00FFFFFFu); break; /* 0.0.0.0/8 */
+            case 1: ip = 0x0A000000u | (rawHost & 0x00FFFFFFu); break; /* 10.0.0.0/8 */
+            case 2: ip = 0x64400000u | (rawHost & 0x003FFFFFu); break; /* 100.64.0.0/10 */
+            case 3: ip = 0x7F000000u | (rawHost & 0x00FFFFFFu); break; /* 127.0.0.0/8 */
+            case 4: ip = 0xA9FE0000u | (rawHost & 0x0000FFFFu); break; /* 169.254.0.0/16 */
+            case 5: ip = 0xAC100000u | (rawHost & 0x000FFFFFu); break; /* 172.16.0.0/12 */
+            case 6: ip = 0xC0A80000u | (rawHost & 0x0000FFFFu); break; /* 192.168.0.0/16 */
+            default: ip = 0xE0000000u | (rawHost & 0x1FFFFFFFu); break; /* >= 224.0.0.0 */
+            }
+            struct sockaddr_in sin;
+            std::memset(&sin, 0, sizeof(sin));
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(ip);
+            std::string err;
+            RC_ASSERT(OctiHttpServer::isDisallowedProbeAddress(
+                reinterpret_cast<const struct sockaddr *>(&sin),
+                sizeof(sin), err, false));
+        });
+    CHECK_TRUE(v4BogonOk);
+
+    bool v6TransitionOk = rc::check(
+        "IPv4-mapped (::ffff:0:0/96), NAT64 (64:ff9b::/96 & 64:ff9b:1::/48), 6to4 (2002::/16), and Teredo (2001::/32) always disallowed",
+        []() {
+            int kind = *rc::gen::inRange(0, 5);
+            uint32_t v4 = *rc::gen::arbitrary<uint32_t>();
+            uint64_t tail = *rc::gen::arbitrary<uint64_t>();
+            struct sockaddr_in6 sin6;
+            std::memset(&sin6, 0, sizeof(sin6));
+            sin6.sin6_family = AF_INET6;
+            unsigned char *b = sin6.sin6_addr.s6_addr;
+
+            if (kind == 0) {
+                /* ::ffff:0:0/96 */
+                b[10] = 0xFF;
+                b[11] = 0xFF;
+                b[12] = static_cast<unsigned char>((v4 >> 24) & 0xFF);
+                b[13] = static_cast<unsigned char>((v4 >> 16) & 0xFF);
+                b[14] = static_cast<unsigned char>((v4 >> 8) & 0xFF);
+                b[15] = static_cast<unsigned char>(v4 & 0xFF);
+            } else if (kind == 1) {
+                /* 64:ff9b::/96 */
+                b[0] = 0x00; b[1] = 0x64; b[2] = 0xFF; b[3] = 0x9B;
+                b[12] = static_cast<unsigned char>((v4 >> 24) & 0xFF);
+                b[13] = static_cast<unsigned char>((v4 >> 16) & 0xFF);
+                b[14] = static_cast<unsigned char>((v4 >> 8) & 0xFF);
+                b[15] = static_cast<unsigned char>(v4 & 0xFF);
+            } else if (kind == 2) {
+                /* 64:ff9b:1::/48 */
+                b[0] = 0x00; b[1] = 0x64; b[2] = 0xFF; b[3] = 0x9B;
+                b[4] = 0x00; b[5] = 0x01;
+                b[12] = static_cast<unsigned char>((v4 >> 24) & 0xFF);
+                b[13] = static_cast<unsigned char>((v4 >> 16) & 0xFF);
+                b[14] = static_cast<unsigned char>((v4 >> 8) & 0xFF);
+                b[15] = static_cast<unsigned char>(v4 & 0xFF);
+            } else if (kind == 3) {
+                /* 2002::/16 */
+                b[0] = 0x20; b[1] = 0x02;
+                b[2] = static_cast<unsigned char>((v4 >> 24) & 0xFF);
+                b[3] = static_cast<unsigned char>((v4 >> 16) & 0xFF);
+                b[4] = static_cast<unsigned char>((v4 >> 8) & 0xFF);
+                b[5] = static_cast<unsigned char>(v4 & 0xFF);
+                for (int i = 0; i < 8; ++i) {
+                    b[8 + i] = static_cast<unsigned char>((tail >> (i * 8)) & 0xFF);
+                }
+            } else {
+                /* 2001::/32 Teredo */
+                b[0] = 0x20; b[1] = 0x01; b[2] = 0x00; b[3] = 0x00;
+                b[4] = static_cast<unsigned char>((v4 >> 24) & 0xFF);
+                b[5] = static_cast<unsigned char>((v4 >> 16) & 0xFF);
+                b[6] = static_cast<unsigned char>((v4 >> 8) & 0xFF);
+                b[7] = static_cast<unsigned char>(v4 & 0xFF);
+                for (int i = 0; i < 8; ++i) {
+                    b[8 + i] = static_cast<unsigned char>((tail >> (i * 8)) & 0xFF);
+                }
+            }
+            std::string err;
+            RC_ASSERT(OctiHttpServer::isDisallowedProbeAddress(
+                reinterpret_cast<const struct sockaddr *>(&sin6),
+                sizeof(sin6), err, true));
+        });
+    CHECK_TRUE(v6TransitionOk);
+
+    bool v6LocalAndDocOk = rc::check(
+        "IPv6 ULA, link-local, documentation, and multicast blocks always disallowed",
+        []() {
+            int kind = *rc::gen::inRange(0, 4);
+            std::array<uint8_t, 16> raw;
+            for (size_t i = 0; i < 16; ++i) {
+                raw[i] = *rc::gen::arbitrary<uint8_t>();
+            }
+            if (kind == 0) {
+                raw[0] = static_cast<uint8_t>(0xFC | (raw[0] & 0x01)); /* fc00::/7 */
+            } else if (kind == 1) {
+                raw[0] = 0xFE;
+                raw[1] = static_cast<uint8_t>(0x80 | (raw[1] & 0x3F)); /* fe80::/10 */
+            } else if (kind == 2) {
+                raw[0] = 0x20; raw[1] = 0x01; raw[2] = 0x0D; raw[3] = 0xB8; /* 2001:db8::/32 */
+            } else {
+                raw[0] = 0xFF; /* ff00::/8 */
+            }
+            struct sockaddr_in6 sin6;
+            std::memset(&sin6, 0, sizeof(sin6));
+            sin6.sin6_family = AF_INET6;
+            std::memcpy(sin6.sin6_addr.s6_addr, raw.data(), 16);
+            std::string err;
+            RC_ASSERT(OctiHttpServer::isDisallowedProbeAddress(
+                reinterpret_cast<const struct sockaddr *>(&sin6),
+                sizeof(sin6), err, false));
+        });
+    CHECK_TRUE(v6LocalAndDocOk);
+
+    bool fuzzStringsOk = rc::check(
+        "isDisallowedProbeAddress string overload never crashes and fails closed on non-IPs",
+        []() {
+            std::string s = *rc::gen::arbitrary<std::string>();
+            std::string err;
+            bool disallowed = OctiHttpServer::isDisallowedProbeAddress(s, err, false);
+            if (!disallowed) {
+                RC_ASSERT(!OctiHttpServer::normalizeIpLiteral(s).empty());
+            } else {
+                RC_ASSERT(!err.empty());
+            }
+        });
+    CHECK_TRUE(fuzzStringsOk);
+}
+
+TEST(AccountStoreTest, Envelope4SessionCapEvictsOldestBeyond32)
+{
+    std::vector<LoginResult> logins;
+    for (int i = 0; i < 35; ++i) {
+        clockNow = kNow + i;
+        LoginResult r = login("google", "g-cap-user");
+        CHECK_TRUE(r.ok);
+        logins.push_back(r);
+    }
+    int64_t pid = logins[0].profile.playerId;
+    CHECK_EQUAL(32, store->countActiveSessions(pid));
+    CHECK_FALSE(store->validateSession(logins[0].sessionToken, clockNow).valid);
+    CHECK_FALSE(store->validateSession(logins[1].sessionToken, clockNow).valid);
+    CHECK_FALSE(store->validateSession(logins[2].sessionToken, clockNow).valid);
+    for (size_t i = 3; i < logins.size(); ++i) {
+        CHECK_TRUE(store->validateSession(logins[i].sessionToken, clockNow).valid);
+    }
+}
+
+TEST(AccountStoreTest, Envelope4KeysetCursorPaginationAndCrashChatRetention)
+{
+    /* 1. Verify idx_games_export_cursor exists */
+    CHECK_EQUAL(1, countRows("SELECT COUNT(*) FROM sqlite_master"
+                             " WHERE type='index' AND name='idx_games_export_cursor'"));
+
+    /* 2. Insert 7 games including tied ended_at timestamps + client.extended metadata */
+    int64_t pA = newPlayer("g-cur-A", "CurAlpha");
+    int64_t pB = newPlayer("g-cur-B", "CurBeta");
+    const int64_t endTimes[7] = {
+        kNow + 10, kNow + 20, kNow + 30, kNow + 30, kNow + 30, kNow + 40, kNow + 50
+    };
+    const char *ids[7] = {
+        "g-cur-01", "g-cur-02", "g-cur-03a", "g-cur-03b", "g-cur-03c", "g-cur-04", "g-cur-05"
+    };
+    for (int i = 0; i < 7; ++i) {
+        GameRecord g = record(ids[i], endTimes[i], pA, pB, "2P");
+        Json tj = Json::parse(g.octiTranscript);
+        tj["client"] = Json{
+            {"appVersion", "2.6.3"},
+            {"platform", "linux"},
+            {"extended", Json{{"installId", "priv-inst-secret"}}}};
+        /* Pass pretty-printed multi-line JSON with client.extended */
+        g.octiTranscript = tj.dump(2);
+        std::string err;
+        CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                    static_cast<int>(store->archiveGame(g, err)));
+    }
+
+    /* Walk DESC with limit=2 via keyset cursor (afterEndedAt, afterGameId) */
+    std::vector<std::string> walkedDesc;
+    ArchiveFilter fDesc;
+    fDesc.includeTranscript = true;
+    fDesc.limit = 2;
+    fDesc.maxLimit = 2000;
+    while (true) {
+        std::vector<GameRecord> page;
+        CHECK_TRUE(store->listArchivedGames(fDesc, page));
+        if (page.empty()) {
+            break;
+        }
+        for (size_t i = 0; i < page.size(); ++i) {
+            CHECK_TRUE(page[i].octiTranscript.find('\n') == std::string::npos);
+            CHECK_TRUE(page[i].octiTranscript.find('\r') == std::string::npos);
+            CHECK_TRUE(page[i].octiTranscript.find("priv-inst-secret") ==
+                       std::string::npos);
+            CHECK_TRUE(page[i].octiTranscript.find("\"extended\"") ==
+                       std::string::npos);
+            CHECK_TRUE(page[i].octiTranscript.find("\"license\":\"CC-BY-4.0\"") !=
+                       std::string::npos);
+            walkedDesc.push_back(page[i].gameId);
+        }
+        if (static_cast<int>(page.size()) < fDesc.limit) {
+            break;
+        }
+        fDesc.hasCursor = true;
+        fDesc.afterEndedAt = page.back().endedAt;
+        fDesc.afterGameId = page.back().gameId;
+    }
+    CHECK_EQUAL(7, static_cast<int>(walkedDesc.size()));
+    const char *expectedDesc[7] = {
+        "g-cur-05", "g-cur-04", "g-cur-03c", "g-cur-03b", "g-cur-03a", "g-cur-02", "g-cur-01"
+    };
+    for (int i = 0; i < 7; ++i) {
+        STRCMP_EQUAL(expectedDesc[i], walkedDesc[static_cast<size_t>(i)].c_str());
+    }
+
+    /* Walk ASC with limit=3 via keyset cursor */
+    std::vector<std::string> walkedAsc;
+    ArchiveFilter fAsc;
+    fAsc.includeTranscript = true;
+    fAsc.sortAsc = true;
+    fAsc.limit = 3;
+    while (true) {
+        std::vector<GameRecord> page;
+        CHECK_TRUE(store->listArchivedGames(fAsc, page));
+        if (page.empty()) {
+            break;
+        }
+        for (size_t i = 0; i < page.size(); ++i) {
+            walkedAsc.push_back(page[i].gameId);
+        }
+        if (static_cast<int>(page.size()) < fAsc.limit) {
+            break;
+        }
+        fAsc.hasCursor = true;
+        fAsc.afterEndedAt = page.back().endedAt;
+        fAsc.afterGameId = page.back().gameId;
+    }
+    CHECK_EQUAL(7, static_cast<int>(walkedAsc.size()));
+    for (int i = 0; i < 7; ++i) {
+        STRCMP_EQUAL(ids[i], walkedAsc[static_cast<size_t>(i)].c_str());
+    }
+
+    /* 3. purgeOldCrashReports enforces both cutoffSec and maxRows */
+    for (int i = 0; i < 8; ++i) {
+        clockNow = kNow + i * 100;
+        CrashReportRecord cr;
+        cr.crashId = "cr-ret-" + std::to_string(i);
+        cr.createdAt = clockNow;
+        cr.platform = "linux";
+        cr.appVersion = "2.6.3";
+        cr.exceptionType = "SIGSEGV";
+        cr.exceptionMessage = "crash " + std::to_string(i);
+        std::string err;
+        CHECK_EQUAL(static_cast<int>(ArchiveStatus::STORED),
+                    static_cast<int>(store->recordCrashReport(cr, err)));
+    }
+    /* 3 rows have uploaded_at < kNow + 300; remaining 5 get capped to maxRows = 3 -> 5 deleted */
+    int purgedCrashes = store->purgeOldCrashReports(kNow + 300, 3);
+    CHECK_EQUAL(5, purgedCrashes);
+    CrashReportFilter cf;
+    cf.limit = 20;
+    std::vector<CrashReportRecord> remCrashes;
+    int64_t totalCrashes = 0;
+    CHECK_TRUE(store->listCrashReports(cf, remCrashes, &totalCrashes));
+    CHECK_EQUAL(3, static_cast<int>(totalCrashes));
+    STRCMP_EQUAL("cr-ret-7", remCrashes[0].crashId.c_str());
+    STRCMP_EQUAL("cr-ret-6", remCrashes[1].crashId.c_str());
+    STRCMP_EQUAL("cr-ret-5", remCrashes[2].crashId.c_str());
+
+    /* 4. purgeLobbyChatLogsBefore enforces both cutoffEpochMs and maxRows */
+    for (int i = 1; i <= 8; ++i) {
+        CHECK_TRUE(store->appendLobbyChatLog(
+            static_cast<uint64_t>(i), "u-1", "alice",
+            "chat " + std::to_string(i), 1000LL * i));
+    }
+    CHECK_TRUE(store->purgeLobbyChatLogsBefore(4000LL, 3));
+    std::vector<LobbyChatLogRow> chatRows;
+    CHECK_TRUE(store->listLobbyChatLogs(chatRows, 20));
+    CHECK_EQUAL(3, static_cast<int>(chatRows.size()));
+    CHECK_EQUAL(6u, static_cast<unsigned>(chatRows[0].seq));
+    CHECK_EQUAL(7u, static_cast<unsigned>(chatRows[1].seq));
+    CHECK_EQUAL(8u, static_cast<unsigned>(chatRows[2].seq));
+}
+
+TEST(AccountStoreTest, Envelope5BannedPlayerSessionAndSsoEnforcement)
+{
+    LoginResult lr1 = login("google", "g-e5-banned-user", "BannedUser");
+    CHECK_TRUE(lr1.ok);
+    const int64_t pid = lr1.profile.playerId;
+    CHECK_TRUE(store->validateSession(lr1.sessionToken, clockNow).valid);
+
+    CreateRobotResult bot = store->createRobot(pid, "e5_banned_owner_bot", "Owner bot");
+    CHECK_EQUAL(static_cast<int>(RobotStatus::OK), static_cast<int>(bot.status));
+    CHECK_TRUE(store->validateRobotToken(bot.rawToken).valid);
+
+    /* Banning player must immediately invalidate existing sessions, SSO logins, and robot tokens */
+    CHECK_TRUE(store->setBanned(pid, true));
+
+    octi::SessionValidation svBanned = store->validateSession(lr1.sessionToken, clockNow);
+    CHECK_FALSE(svBanned.valid);
+    CHECK_TRUE(svBanned.banned);
+    STRCMP_EQUAL("banned", svBanned.reason.c_str());
+
+    /* Attempting SSO login while banned must fail closed without minting a session */
+    LoginResult lrBanned = login("google", "g-e5-banned-user", "BannedUser");
+    CHECK_FALSE(lrBanned.ok);
+    CHECK_TRUE(lrBanned.banned);
+    CHECK_TRUE(lrBanned.sessionToken.empty());
+
+    RobotTokenValidation rvBanned = store->validateRobotToken(bot.rawToken);
+    CHECK_FALSE(rvBanned.valid);
+    CHECK_TRUE(rvBanned.banned);
+
+    /* Even after revokeAllSessions, a banned player's session reports banned=true */
+    store->revokeAllSessions(pid);
+    octi::SessionValidation svRevokedAndBanned =
+        store->validateSession(lr1.sessionToken, clockNow);
+    CHECK_FALSE(svRevokedAndBanned.valid);
+    CHECK_TRUE(svRevokedAndBanned.banned);
+    STRCMP_EQUAL("banned", svRevokedAndBanned.reason.c_str());
+
+    /* Unbanning restores SSO login and robot token validity */
+    CHECK_TRUE(store->setBanned(pid, false));
+    CHECK_TRUE(store->validateRobotToken(bot.rawToken).valid);
+    LoginResult lrRestored = login("google", "g-e5-banned-user", "BannedUser");
+    CHECK_TRUE(lrRestored.ok);
+    CHECK_FALSE(lrRestored.sessionToken.empty());
+    CHECK_TRUE(store->validateSession(lrRestored.sessionToken, clockNow).valid);
+}
+
+TEST(AccountStoreTest, Envelope5TempBansAuditLogAndAbuseDetectorUnit)
+{
+    LoginResult lrTemp = login("google", "g-e5-temp-acct", "TempAcct");
+    LoginResult lrPerm = login("apple", "a-e5-perm-acct", "PermAcct");
+    LoginResult lrAdmin = login("google", "g-e5-unit-admin", "UnitAdmin");
+    CHECK_TRUE(lrTemp.ok && lrPerm.ok && lrAdmin.ok);
+    store->setAdminGoogleIdentities({"g-e5-unit-admin"});
+    CHECK_TRUE(store->isPlayerAdmin(lrAdmin.profile.playerId));
+
+    CreateRobotResult rBot =
+        store->createRobot(lrPerm.profile.playerId, "e5_unit_bot", "Bot");
+    CHECK_EQUAL(static_cast<int>(RobotStatus::OK), static_cast<int>(rBot.status));
+
+    /* 1. temp_bans persistence + purgeExpiredTempBans respects permanentAccountUuids */
+    CHECK_TRUE(store->setBanned(lrTemp.profile.playerId, true));
+    CHECK_TRUE(store->setBanned(lrPerm.profile.playerId, true));
+
+    octi::TempBanRow row1;
+    row1.banId = "ban_24h_unit_1";
+    row1.targetType = "account";
+    row1.targetValue = lrTemp.profile.uuid;
+    row1.displayLabel = "@" + lrTemp.profile.handle;
+    row1.reason = "temp violation";
+    row1.source = "auto";
+    row1.createdBy = "system";
+    row1.createdAt = clockNow;
+    row1.expiresAt = clockNow + 86400;
+    CHECK_TRUE(store->upsertTempBan(row1));
+
+    octi::TempBanRow row2 = row1;
+    row2.banId = "ban_24h_unit_2";
+    row2.targetValue = lrPerm.profile.uuid;
+    row2.displayLabel = "@" + lrPerm.profile.handle;
+    CHECK_TRUE(store->upsertTempBan(row2));
+
+    std::vector<octi::TempBanRow> listed;
+    CHECK_TRUE(store->listTempBans(listed));
+    CHECK_EQUAL(2, static_cast<int>(listed.size()));
+
+    /* Before expiry: nothing purged */
+    CHECK_EQUAL(0, store->purgeExpiredTempBans(clockNow + 86399, {lrPerm.profile.uuid}));
+
+    /* At expiry: both temp rows purged; lrTemp unbanned, lrPerm remains banned due to perm list */
+    CHECK_EQUAL(2, store->purgeExpiredTempBans(clockNow + 86400, {lrPerm.profile.uuid}));
+    PlayerProfile pTempAfter;
+    PlayerProfile pPermAfter;
+    CHECK_TRUE(store->getProfileById(lrTemp.profile.playerId, pTempAfter));
+    CHECK_TRUE(store->getProfileById(lrPerm.profile.playerId, pPermAfter));
+    CHECK_FALSE(pTempAfter.banned);
+    CHECK_TRUE(pPermAfter.banned);
+    CHECK_TRUE(store->setBanned(lrPerm.profile.playerId, false));
+
+    /* 2. BanManager operator hand-edited bans.json (@handle & robot_name resolution) */
+    const std::string banJsonPath = dir->path() + "/operator_bans.json";
+    {
+        std::ofstream ofs(banJsonPath, std::ios::binary | std::ios::trunc);
+        ofs << "{\n"
+            << "  \"version\": 1,\n"
+            << "  \"updated_at\": " << clockNow << ",\n"
+            << "  \"entries\": [\n"
+            << "    {\"ban_id\":\"op1\",\"target_type\":\"account\",\"target_value\":\"@"
+            << lrPerm.profile.handle << "\",\"reason\":\"hand-edited handle\"},\n"
+            << "    {\"ban_id\":\"op2\",\"target_type\":\"robot\",\"target_value\":\""
+            << rBot.robot.robotName << "\",\"reason\":\"hand-edited bot\"}\n"
+            << "  ]\n"
+            << "}\n";
+    }
+    octi::BanManager bm;
+    bm.configure(banJsonPath, "127.0.0.1", {"127.0.0.1", "::1"});
+    std::string loadErr;
+    CHECK_TRUE_TEXT(bm.loadFromStorage(*store, clockNow, loadErr), loadErr.c_str());
+
+    octi::BanMatch matchAcct;
+    octi::BanMatch matchBot;
+    CHECK_TRUE(bm.matchAccount(lrPerm.profile.uuid, clockNow, matchAcct));
+    CHECK_TRUE(bm.matchRobot(rBot.robot.robotUuid, clockNow, matchBot));
+    CHECK_TRUE(store->getProfileById(lrPerm.profile.playerId, pPermAfter));
+    CHECK_TRUE(pPermAfter.banned);
+
+    /* 3. AbusePatternDetector bounded memory (kMaxTrackedKeys) + all 4 escalation families */
+    octi::BanThresholds thr;
+    thr.authFailuresIn300s = 4;
+    thr.passcodeFailuresIn300s = 3;
+    thr.crawlerUaIn300s = 3;
+    thr.anonEnumPathsIn300s = 5;
+    thr.exploitProbesIn300s = 3;
+    bm.configure(dir->path() + "/detector_bans.json", "127.0.0.1", {"127.0.0.1", "::1"}, thr);
+
+    /* Flood > kMaxTrackedKeys distinct IPs below threshold -> bounded eviction, zero crash */
+    for (int i = 0; i < 16500; ++i) {
+        const std::string synthIp =
+            "198.18." + std::to_string((i / 250) % 256) + "." +
+            std::to_string((i % 250) + 1);
+        octi::AbuseActorContext c;
+        c.remoteIp = synthIp;
+        bm.recordAuthFailure(*store, c, clockNow);
+    }
+
+    /* Admin IP & loopback immunity under detector floods */
+    bm.noteVerifiedAdminIp("203.0.113.200", clockNow);
+    for (int i = 0; i < 10; ++i) {
+        bm.recordCrawlerUaHit(*store, "203.0.113.200", clockNow);
+        bm.recordCrawlerUaHit(*store, "127.0.0.1", clockNow);
+    }
+    octi::BanMatch mImmune;
+    CHECK_FALSE(bm.matchIp("203.0.113.200", clockNow, mImmune));
+    CHECK_FALSE(bm.matchIp("127.0.0.1", clockNow, mImmune));
+
+    /* Anonymous distinct-path enumeration escalates at 5 distinct paths (not duplicate hits) */
+    for (int i = 0; i < 10; ++i) {
+        bm.recordAnonymousEnumeration(*store, "203.0.113.101",
+                                      "/api/v1/archive/games/same", 404, clockNow);
+    }
+    CHECK_FALSE(bm.matchIp("203.0.113.101", clockNow, mImmune));
+    for (int i = 0; i < 5; ++i) {
+        bm.recordAnonymousEnumeration(
+            *store, "203.0.113.101",
+            "/api/v1/archive/games/g" + std::to_string(i), 404, clockNow);
+    }
+    CHECK_TRUE(bm.matchIp("203.0.113.101", clockNow, mImmune));
+    LONGS_EQUAL(clockNow + 86400, mImmune.expiresAt);
+
+    /* Verify ban_audit_log recorded the automatic 24h escalation */
+    std::vector<octi::BanAuditLogRow> logs;
+    CHECK_TRUE(store->listBanAuditLogs(logs, 20));
+    CHECK_FALSE(logs.empty());
+    STRCMP_EQUAL("auto_ban_24h", logs[0].action.c_str());
 }
 
 int main(int argc, char **argv)
