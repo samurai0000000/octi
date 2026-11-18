@@ -6009,8 +6009,17 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     EXPECT_STATUS(200, rIndex);
     CHECK_TRUE(rIndex.body.find("id=\"tab-robots\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"nav-online-btn\"") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("Play in Browser") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("Play Online") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Browser-Play") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Online-Play") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find(">Archive</button>") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find(">Journal</button>") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"nav-journal-btn\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"tab-journal\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("href=\"/journal/2026-11-18/g-20261118-2165.html\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("src=\"/journal/2026-11-18/img/cover_g20261118_2165.jpg\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Play in Browser</button>") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Play Online</button>") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find(">Game Archive</button>") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OCTI v" + std::string(OCTI_APP_VERSION)) != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
@@ -6234,7 +6243,7 @@ TEST(OctiHttpServerIntegrationTest, WebUiTenThemesTabletopLobbyRefinementsAndLev
         CHECK_TRUE(rIndex.body.find(th + ": {") != std::string::npos);
         CHECK_TRUE(rIndex.body.find("<option value=\"" + th + "\"") != std::string::npos);
     }
-    CHECK_TRUE(rIndex.body.find("id=\"btn-theme\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"btn-theme\"") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"web-play-theme-select\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"replay-theme-select\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("applyTheme(t") != std::string::npos ||
@@ -9566,7 +9575,7 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, ui);
     CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
     CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
-    CHECK_TRUE(ui.body.find("OCTI v2.6.3") != std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.6.4") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
@@ -10756,7 +10765,8 @@ TEST(OctiHttpServerIntegrationTest, Envelope1TrustedProxyRateLimitCrawlerSseAndB
     {
         HttpServerConfig prodDefaults;
         CHECK_EQUAL(96, prodDefaults.maxSseStreams);
-        CHECK_EQUAL(6, prodDefaults.maxSsePerIp);
+        CHECK_EQUAL(64, prodDefaults.maxSsePerIp);
+        CHECK_EQUAL(6, prodDefaults.maxSseAnonPerIp);
         CHECK_EQUAL(8, prodDefaults.maxSsePerPlayer);
         LONGS_EQUAL(120000, prodDefaults.sseAnonMaxDurationMs);
         CHECK_EQUAL(30, prodDefaults.authFailureRateLimitMax);
@@ -10768,30 +10778,28 @@ TEST(OctiHttpServerIntegrationTest, Envelope1TrustedProxyRateLimitCrawlerSseAndB
         DOUBLES_EQUAL(15.0, prodDefaults.browseAnonIpBurst, 1e-6);
     }
 
-    /* 1. GET /robots.txt, X-Robots-Tag default header, and index CSP object-src */
+    /* 1. GET /robots.txt allows public pages while protecting /api/, and index CSP object-src */
     Reply robots = http().get("/robots.txt");
     EXPECT_STATUS(200, robots);
     CHECK_TRUE(robots.contentType.find("text/plain") == 0);
-    STRCMP_EQUAL("User-agent: *\nDisallow: /\n", robots.body.c_str());
-    STRCMP_EQUAL("noindex, nofollow, noarchive, noimageindex",
-                 robots.header("X-Robots-Tag").c_str());
+    STRCMP_EQUAL("User-agent: *\nAllow: /\nDisallow: /api/\n", robots.body.c_str());
+    CHECK_TRUE(robots.header("X-Robots-Tag").empty());
 
     Reply idx = http().get("/");
     EXPECT_STATUS(200, idx);
-    STRCMP_EQUAL("noindex, nofollow, noarchive, noimageindex",
-                 idx.header("X-Robots-Tag").c_str());
+    CHECK_TRUE(idx.header("X-Robots-Tag").empty());
     CHECK_TRUE(idx.header("Content-Security-Policy").find("object-src 'none'") !=
                std::string::npos);
     CHECK_TRUE(idx.header("Content-Security-Policy").find("frame-ancestors 'none'") !=
                std::string::npos);
 
     {
-        HttpServerConfig allowRobotsCfg = testConfig();
-        allowRobotsCfg.disallowRobotsTxt = false;
-        startEnv(allowRobotsCfg, true, nullptr);
-        Reply allowReply = http().get("/robots.txt");
-        EXPECT_STATUS(200, allowReply);
-        STRCMP_EQUAL("User-agent: *\nAllow: /\n", allowReply.body.c_str());
+        HttpServerConfig disallowRobotsCfg = testConfig();
+        disallowRobotsCfg.disallowRobotsTxt = true;
+        startEnv(disallowRobotsCfg, true, nullptr);
+        Reply disallowReply = http().get("/robots.txt");
+        EXPECT_STATUS(200, disallowReply);
+        STRCMP_EQUAL("User-agent: *\nDisallow: /\n", disallowReply.body.c_str());
     }
 
     /* 2. Forwarded client IP isolation, multi-hop XFF, and ::ffff: normalization */
@@ -11092,6 +11100,52 @@ TEST(OctiHttpServerIntegrationTest, Envelope1TrustedProxyRateLimitCrawlerSseAndB
         CHECK_TRUE(anonSse.waitFor("event: reconnect", 2000));
         CHECK_TRUE(anonSse.waitFinished(2000));
         anonSse.stop();
+
+        /* Shared-NAT regression: 8 concurrent authed streams + wait_ms polling
+         * succeed on one IP while anonymous SSE remains tightly capped per IP. */
+        HttpServerConfig natCfg = testConfig();
+        natCfg.maxSseStreams = 32;
+        natCfg.maxSsePerIp = 16;
+        natCfg.maxSseAnonPerIp = 2;
+        natCfg.maxSsePerPlayer = 4;
+        natCfg.sseAnonMaxDurationMs = 5000;
+        natCfg.sseMaxDurationMs = 5000;
+        startEnv(natCfg, true, nullptr);
+
+        User u1 = signIn("google", "sub-nat-1", "NatUser1");
+        User u2 = signIn("apple", "sub-nat-2", "NatUser2");
+        User u3 = signIn("microsoft", "sub-nat-3", "NatUser3");
+        User u4 = signIn("google", "sub-nat-4", "NatUser4");
+        const httplib::Headers natHdr = {{"X-Forwarded-For", "203.0.113.200"}};
+        std::vector<std::unique_ptr<SseClient> > natStreams;
+        const std::string tokens[4] = {u1.token, u2.token, u3.token, u4.token};
+        for (int idx = 0; idx < 8; ++idx) {
+            auto sc = std::make_unique<SseClient>();
+            sc->start(env->server->port(), "/api/v1/lobby/events?stream=1",
+                      tokens[idx % 4], natHdr);
+            CHECK_TRUE(sc->waitFor("retry: 3000", 3000));
+            natStreams.push_back(std::move(sc));
+        }
+
+        /* 2 anonymous SSE streams still allowed on same NAT IP, 3rd returns 429,
+         * and wait_ms polling fallback still returns 200. */
+        SseClient a1, a2;
+        a1.start(env->server->port(), "/api/v1/lobby/events?stream=1", "", natHdr);
+        a2.start(env->server->port(), "/api/v1/lobby/events?stream=1", "", natHdr);
+        CHECK_TRUE(a1.waitFor("retry: 3000", 3000));
+        CHECK_TRUE(a2.waitFor("retry: 3000", 3000));
+        Reply a3 = http().get("/api/v1/lobby/events?stream=1", "", natHdr);
+        EXPECT_ERROR(429, "TOO_MANY_STREAMS", a3);
+        EXPECT_STATUS(200, http().get("/api/v1/lobby/events?since_seq=999999&wait_ms=10",
+                                      "", natHdr));
+
+        a1.stop();
+        a2.stop();
+        natStreams.clear();
+        for (int i = 0; i < 200 && env->server->activeStreams() != 0; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        CHECK_EQUAL(0, env->server->activeStreams());
     }
 
     /* 8. Per-route payload caps (16 KiB / 64 KiB / 128 KiB / 512 KiB) & form Content-Type checks */
@@ -11189,7 +11243,7 @@ TEST(OctiHttpServerIntegrationTest, Envelope2OauthAdminInstallAndUploadSecurityG
     /* 1. WebUI <meta name="robots"> present, ?auth_token= removed, export-conf uses octi_jwt_token */
     Reply rRoot = http().get("/");
     EXPECT_STATUS(200, rRoot);
-    CHECK_TRUE(rRoot.body.find("<meta name=\"robots\" content=\"noindex, nofollow, noarchive, noimageindex\">") != std::string::npos);
+    CHECK_TRUE(rRoot.body.find("<meta name=\"robots\" content=\"index, follow\">") != std::string::npos);
     CHECK_TRUE(rRoot.body.find("searchParams.get(\"auth_token\")") == std::string::npos);
     CHECK_TRUE(rRoot.body.find("var tok = sessionToken") == std::string::npos);
     CHECK_TRUE(rRoot.body.find("localStorage.getItem(\"octi_jwt_token\")") != std::string::npos);

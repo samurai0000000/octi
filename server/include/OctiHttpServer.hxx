@@ -81,7 +81,7 @@ struct HttpServerConfig {
     bool behindTls = false;
     bool allowSyntheticOauthCallbackForTesting = false;
     bool anonymizeObserverHandles = true;
-    bool disallowRobotsTxt = true;
+    bool disallowRobotsTxt = false;
 
     /* HTTP keep-alive connection bounds. */
     int keepAliveMaxCount = 100;
@@ -102,7 +102,8 @@ struct HttpServerConfig {
      * time; clients resume with Last-Event-ID.
      */
     int maxSseStreams = 96;
-    int maxSsePerIp = 6;
+    int maxSsePerIp = 64;
+    int maxSseAnonPerIp = 6;
     int maxSsePerPlayer = 8;
     int ssePollMs = 200;
     int sseHeartbeatMs = 15000;

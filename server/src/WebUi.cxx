@@ -19,7 +19,7 @@ const char kIndexHtml[] = R"OCTIUI(<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
+<meta name="robots" content="index, follow">
 <title>OCTI &mdash; Web Player, Archive &amp; Leaderboard</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -114,6 +114,7 @@ header {
   color: var(--dim);
 }
 nav { display: flex; gap: 6px; flex-wrap: nowrap; white-space: nowrap; }
+nav#nav { gap: 5px; }
 nav button, .btn {
   background: #ffffff;
   color: var(--fg);
@@ -131,6 +132,10 @@ nav button, .btn {
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+nav#nav button {
+  padding: 6px 11px;
+  font-size: 13px;
 }
 nav button:hover:not(:disabled), .btn:hover:not(:disabled) {
   background: #f4f4f5;
@@ -669,6 +674,124 @@ tr.active-ply {
   .rb-toc {
     position: static;
   }
+}
+/* The OCTI Journal (#tab-journal) */
+.journal-hero {
+  background: linear-gradient(135deg, #090d16 0%, #132035 58%, #1c283c 100%);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 26px 30px;
+  color: #f8fafc;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  margin-bottom: 18px;
+}
+.journal-hero h1 {
+  margin: 0 0 10px 0;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: #fde047;
+  line-height: 1.22;
+}
+.journal-hero p {
+  margin: 0 0 14px 0;
+  font-size: 14.5px;
+  color: #cbd5e1;
+  line-height: 1.65;
+  max-width: 920px;
+}
+.journal-callout {
+  background: rgba(200, 162, 83, 0.11);
+  border: 1px solid rgba(200, 162, 83, 0.42);
+  border-left: 4px solid #c8a253;
+  border-radius: 8px;
+  padding: 13px 16px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: #e2e8f0;
+  line-height: 1.58;
+}
+.journal-callout a {
+  color: #fde047;
+  font-weight: 700;
+  text-decoration: underline;
+}
+.journal-feature-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+@media (max-width: 860px) {
+  .journal-feature-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+.journal-cover-wrap {
+  background: #0b0f17;
+  border: 1.5px solid #c8a253;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  display: block;
+}
+.journal-cover-wrap img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.journal-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.journal-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f4f4f5;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.journal-meta-pill.gold {
+  background: rgba(200, 162, 83, 0.16);
+  border-color: #c8a253;
+  color: #854d0e;
+}
+.journal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+.journal-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.journal-card h2 {
+  margin: 0 0 10px 0;
+  font-size: 22px;
+  line-height: 1.3;
+  color: var(--fg);
+}
+.journal-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--fg);
+}
+.journal-card p {
+  margin: 0 0 14px 0;
+  font-size: 14px;
+  line-height: 1.64;
+  color: var(--dim);
 }
 .rule-box h4 {
   margin: 0 0 6px 0;
@@ -1442,29 +1565,18 @@ tr.active-ply {
   </div>
   <nav id="nav">
     <button type="button" data-tab="home" id="nav-home-btn" class="btn on">Home</button>
-    <button type="button" data-tab="play" id="tab-btn-play" class="btn">Play in Browser</button>
-    <button type="button" data-tab="online" id="nav-online-btn" class="btn">Play Online</button>
+    <button type="button" data-tab="play" id="tab-btn-play" class="btn">Browser-Play</button>
+    <button type="button" data-tab="online" id="nav-online-btn" class="btn">Online-Play</button>
     <button type="button" data-tab="users" id="nav-users-btn" class="btn">Players</button>
     <button type="button" data-tab="board" id="nav-board-btn" class="btn">Leaderboard</button>
     <button type="button" data-tab="robots" id="nav-robots-btn" class="btn">Robots</button>
-    <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Game Archive</button>
+    <button type="button" data-tab="archive" id="nav-archive-btn" class="btn">Archive</button>
     <button type="button" data-tab="rules" id="nav-rules-btn" class="btn">Rulebook</button>
+    <button type="button" data-tab="journal" id="nav-journal-btn" class="btn">Journal</button>
     <button type="button" data-tab="account" id="nav-account-btn" class="btn">Account</button>
   </nav>
   <div class="header-right">
     <span id="health" class="dim"></span>
-    <select id="btn-theme" class="btn" style="padding:4px 8px;font-size:12px;cursor:pointer;" title="Switch Theme">
-      <option value="obsidian" selected>Obsidian Brass</option>
-      <option value="rosewood">Rosewood Ivory</option>
-      <option value="neon">Neon Circuit</option>
-      <option value="jade">Jade Dynasty</option>
-      <option value="aurora">Arctic Aurora</option>
-      <option value="forge">Volcanic Forge</option>
-      <option value="candy">Candy Pop</option>
-      <option value="pearl">Ocean Pearl</option>
-      <option value="steam">Steampunk Brass</option>
-      <option value="nebula">Cosmic Nebula</option>
-    </select>
     <button type="button" class="btn" id="nav-auth-pill" title="Click to view Account">Guest (Not Signed In)</button>
   </div>
 </header>
@@ -1482,8 +1594,8 @@ tr.active-ply {
           Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore archived replays, or register automated bots.
         </p>
         <div class="row" style="gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Play in Browser</button>
-          <button type="button" class="btn" id="home-cta-online" style="padding:10px 18px;font-size:14px;">Play Online</button>
+          <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Browser-Play</button>
+          <button type="button" class="btn" id="home-cta-online" style="padding:10px 18px;font-size:14px;">Online-Play</button>
           <button type="button" class="btn" id="home-cta-users" style="padding:10px 18px;font-size:14px;">Browse Players</button>
           <button type="button" class="btn" id="home-cta-account" style="padding:10px 18px;font-size:14px;">Sign In with Google</button>
         </div>
@@ -2968,7 +3080,7 @@ tr.active-ply {
       </div>
       <div class="row" style="margin:0;gap:8px;">
         <button type="button" class="btn btn-primary" id="rules-cta-play">Practice vs AI Bot</button>
-        <button type="button" class="btn" id="rules-cta-online" style="background:#1e293b;color:#f8fafc;border-color:#475569;">Play Online</button>
+        <button type="button" class="btn" id="rules-cta-online" style="background:#1e293b;color:#f8fafc;border-color:#475569;">Online-Play</button>
       </div>
     </div>
   </div>
@@ -3176,6 +3288,70 @@ tr.active-ply {
           </ul>
         </div>
       </article>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 9: The OCTI Journal -->
+<section id="tab-journal" class="tab">
+  <div class="journal-hero" id="journal-hero-panel">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:4px;">
+      <div class="home-pill-badge" id="journal-masthead-badge">THE OCTI JOURNAL &bull; STRATEGY, PRONG GEOMETRY &amp; GAME STUDIES</div>
+      <a href="/journal/" class="btn" id="journal-standalone-link" style="background:#1e293b;color:#fde047;border-color:#c8a253;font-size:12.5px;padding:6px 12px;">Open Standalone Journal Portal (/journal/) &rarr;</a>
+    </div>
+    <h1 id="journal-masthead-title">The OCTI Journal</h1>
+    <p id="journal-masthead-lead">
+      Dedicated to the development and study of <strong>OCTI as an abstract strategy game</strong>&mdash;opening theory, directional prong geometry, multi-pod stack orchestration, back-rank defense, liberation tempo, and annotated milestone encounters between human masters and artificial intelligence.
+    </p>
+    <div class="journal-callout" id="journal-contributors-callout">
+      <strong>Open Editorial Bench &amp; Invitation to Professor Donald Green (<a href="/#users/Octagon">@Octagon</a>):</strong>
+      <em>The OCTI Journal</em> chronicles the living art of OCTI over the board. We warmly welcome future guest essays, historical notes, and deep game annotations from OCTI&rsquo;s creator, <strong>Professor Donald Green (<a href="/#users/Octagon">@Octagon</a>)</strong>, and from competitive players across the community.
+    </div>
+  </div>
+
+  <div class="journal-card" id="journal-issue-1-card" style="margin-bottom:18px;border:1.5px solid #c8a253;">
+    <div class="journal-feature-grid" id="journal-issue-1-grid">
+      <a href="/journal/2026-11-18/g-20261118-2165.html" class="journal-cover-wrap" id="journal-issue-1-cover-link" title="Read Issue #1 Full Feature">
+        <img id="journal-issue-1-cover" src="/journal/2026-11-18/img/cover_g20261118_2165.jpg" loading="lazy" alt="OCTI cloth board and box signed Don Green 2001 — The OCTI Journal Issue #1 Cover">
+      </a>
+      <div id="journal-issue-1-copy">
+        <div class="journal-meta-strip" id="journal-issue-1-meta">
+          <span class="journal-meta-pill gold">ISSUE #1 &bull; NOV 18, 2026</span>
+          <span class="journal-meta-pill">2P_3B &bull; 176 PLIES</span>
+          <span class="journal-meta-pill">FEATURED MATCH: <code>g-20261118-2165</code></span>
+        </div>
+        <h2 id="journal-issue-1-headline">The First Neural Network Meets the Creator: <a href="/#robots/octibot-cc-transformer2" style="color:var(--acc-bright);text-decoration:none;">@octibot-cc-transformer2</a> vs. Don Green (<a href="/#users/Octagon" style="color:var(--acc-bright);text-decoration:none;">@Octagon</a>)</h2>
+        <p id="journal-issue-1-brief-1">
+          In a landmark 176-ply <code>2P_3B</code> encounter, OCTI&rsquo;s inventor <strong>Professor Donald Green (<a href="/#users/Octagon">@Octagon</a>, Seat B)</strong> faced <strong><a href="/#robots/octibot-cc-transformer2">@octibot-cc-transformer2</a> (Seat A)</strong>&mdash;the first OCTI engine guided by a deep pod-centric <strong>Entity Transformer</strong> policy/value neural network and batched PUCT Monte Carlo Tree Search running on a modest 75W <strong>NVIDIA GeForce GTX 1050 Ti</strong> GPU. After surviving Don&rsquo;s early triple-stack buildup on <code>77</code> and back-rank raid (<code>66efh-64-62x</code>, <code>75deg-55-53x</code>), the neural challenger unleashed a razor-sharp counter-capture at ply 55 (<code>34abce-54-52x</code>) and stormed onto square <code>67</code> at ply 89 (<code>56abcefgh-67</code>), surging to a commanding search evaluation of <strong><code>+24,053</code></strong>.
+        </p>
+        <p id="journal-issue-1-brief-2">
+          Yet what looked like an inevitable machine victory became a masterclass in human resilience and strategic deception. Refusing to play into the silicon horizon, Don deployed a stoic reserve defender (<code>37</code> at ply 90) and uncorked a sequence of creative <strong>non-PV</strong> defensive and counter-attacking maneuvers (<code>21ef+b</code>, <code>28bcdeh+f</code>, <code>21abcefh-22</code>, and <code>15abcdefh-26</code>) outside the engine&rsquo;s top-5 Principal Variation candidates. Forensic post-mortem analysis reveals how Don exploited a massive <strong><code>+42,773</code>-centipawn static evaluation mirage</strong> before clinically sweeping all three home bases at ply 176 (<code>BASE_OCCUPATION</code>).
+        </p>
+        <div class="row" style="gap:10px;margin:8px 0 0 0;flex-wrap:wrap;">
+          <a href="/journal/2026-11-18/g-20261118-2165.html" class="btn btn-primary" id="journal-issue-1-read-link" style="background:#c8a253;border-color:#e5c158;color:#0b0f17;font-weight:700;padding:9px 16px;">Read Full Illustrated Article &rarr;</a>
+          <a href="#replay/g-20261118-2165" class="btn" id="journal-issue-1-replay-link" style="padding:9px 16px;">Watch Interactive Replay (g-20261118-2165)</a>
+          <a href="/journal/" class="btn" id="journal-issue-1-index-link" style="padding:9px 14px;">All Journal Issues</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="journal-columns-panel">
+    <h2 style="margin:0 0 4px 0;">Editorial Scope &amp; Recurring Columns</h2>
+    <p class="dim" style="margin:0 0 12px 0;font-size:13.5px;">Exploring the strategic depth, tactical geometry, and evolving theory of OCTI across classic human games and human-vs-silicon duels.</p>
+    <div class="journal-grid" id="journal-columns-grid">
+      <div class="journal-card" id="journal-col-mastery">
+        <h3>1. Human Mastery &amp; Creator Annotations</h3>
+        <p style="margin:0;">Deep tactical walkthroughs of competitive <code>2P_3B</code>, <code>2P_1B</code>, and <code>OFK</code> battles, multi-pod composite stack coordination, and historical perspectives from Professor Donald Green (<a href="/#users/Octagon">@Octagon</a>).</p>
+      </div>
+      <div class="journal-card" id="journal-col-neural">
+        <h3>2. Silicon Minds vs. Human Intuition</h3>
+        <p style="margin:0;">Forensic studies of where classical alpha-beta engines, Entity Transformer neural evaluators, and human strategic judgment converge&mdash;and how creative non-PV defense induces horizon mirages.</p>
+      </div>
+      <div class="journal-card" id="journal-col-studies">
+        <h3>3. Prong Geometry &amp; Endgame Studies</h3>
+        <p style="margin:0;">Opening prong investment vs. early reserve pod deployment, back-rank infiltration countermeasures, pod liberation (<code>*</code>) timing, and 3-base simultaneous occupation technique.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -4217,14 +4393,6 @@ function applyTheme(themeKey) {
   } catch (e) {}
 
   var pal = PALETTES[currentTheme];
-  var btnTheme = document.getElementById("btn-theme");
-  if (btnTheme) {
-    if (btnTheme.tagName === "SELECT") {
-      btnTheme.value = currentTheme;
-    } else {
-      btnTheme.textContent = "Theme: " + pal.name;
-    }
-  }
   var playSel = document.getElementById("web-play-theme-select");
   if (playSel) playSel.value = currentTheme;
   var replaySel = document.getElementById("replay-theme-select");
@@ -5330,21 +5498,6 @@ window.addEventListener("resize", function () {
     drawBoardState(boardStates[k]);
   });
 });
-
-if ($("btn-theme")) {
-  $("btn-theme").value = currentTheme;
-  $("btn-theme").addEventListener("change", function () {
-    applyTheme(this.value);
-  });
-  $("btn-theme").addEventListener("click", function () {
-    if (this.tagName !== "SELECT") {
-      var keys = Object.keys(PALETTES);
-      var idx = keys.indexOf(currentTheme);
-      var next = keys[(idx + 1) % keys.length];
-      applyTheme(next);
-    }
-  });
-}
 
 if ($("btn-rotate")) {
   $("btn-rotate").addEventListener("click", function () {
@@ -42932,6 +43085,7 @@ var tabs = {
   robots: $("tab-robots"),
   replay: $("tab-replay"),
   rules: $("tab-rules"),
+  journal: $("tab-journal"),
   account: $("tab-account")
 };
 

@@ -4273,10 +4273,24 @@ bool OctiHttpServer::Impl::tryAcquireSseSlot(
         outMsg = "too many open event streams; use polling";
         return false;
     }
-    if (cfg.maxSsePerIp > 0 && !ip.empty()) {
-        auto ipIt = sseByIp.find(ip);
+    const std::string ipKey = ip.empty()
+        ? std::string()
+        : ((playerId == 0 ? "anon:" : "auth:") + ip);
+    int perIpLimit = 0;
+    if (playerId == 0) {
+        if (cfg.maxSseAnonPerIp > 0 && cfg.maxSsePerIp > 0) {
+            perIpLimit = std::min(cfg.maxSseAnonPerIp, cfg.maxSsePerIp);
+        } else {
+            perIpLimit = (cfg.maxSseAnonPerIp > 0) ? cfg.maxSseAnonPerIp
+                                                   : cfg.maxSsePerIp;
+        }
+    } else {
+        perIpLimit = cfg.maxSsePerIp;
+    }
+    if (perIpLimit > 0 && !ipKey.empty()) {
+        auto ipIt = sseByIp.find(ipKey);
         int curIp = (ipIt != sseByIp.end()) ? ipIt->second : 0;
-        if (curIp >= cfg.maxSsePerIp) {
+        if (curIp >= perIpLimit) {
             outStatus = 429;
             outCode = "TOO_MANY_STREAMS";
             outMsg = "too many open event streams from this IP; use polling";
@@ -4295,14 +4309,14 @@ bool OctiHttpServer::Impl::tryAcquireSseSlot(
     }
 
     ++sseActive;
-    if (!ip.empty()) {
-        ++sseByIp[ip];
+    if (!ipKey.empty()) {
+        ++sseByIp[ipKey];
     }
     if (playerId != 0) {
         ++sseByPlayer[playerId];
     }
     outSlot = std::make_shared<SseStreamSlotGuard>(
-        sseActive, sseQuotaMutex, sseByIp, sseByPlayer, ip, playerId);
+        sseActive, sseQuotaMutex, sseByIp, sseByPlayer, ipKey, playerId);
     return true;
 }
 
@@ -4360,16 +4374,14 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
 
         if (waitMs > 0 && batch.frames.empty() && !batch.gap &&
             !stopping.load()) {
-            const std::string remoteIp = clientRemoteIp(req);
+            /* Long-polling ("use polling") is bounded only by the global worker
+             * stream ceiling so rejected SSE clients can always fall back cleanly. */
             std::shared_ptr<SseStreamSlotGuard> slotGuard;
             int slotStatus = 503;
             std::string slotCode;
             std::string slotMsg;
-            if (!tryAcquireSseSlot(remoteIp, auth.playerId, slotGuard,
+            if (!tryAcquireSseSlot(std::string(), 0, slotGuard,
                                    slotStatus, slotCode, slotMsg)) {
-                if (slotStatus == 429) {
-                    noteRateLimit429(req, auth.playerId);
-                }
                 res.set_header("Retry-After", "5");
                 sendError(res, slotStatus, slotCode, slotMsg);
                 return;
@@ -4436,8 +4448,8 @@ void OctiHttpServer::Impl::respondEvents(const Request &req, Response &res,
     std::string slotMsg;
     if (!tryAcquireSseSlot(remoteIp, auth.playerId, slotGuard,
                            slotStatus, slotCode, slotMsg)) {
-        if (slotStatus == 429) {
-            noteRateLimit429(req, auth.playerId);
+        if (slotStatus == 429 && auth.playerId == 0) {
+            noteRateLimit429(req, 0);
         }
         res.set_header("Retry-After", "5");
         sendError(res, slotStatus, slotCode, slotMsg);
@@ -4495,7 +4507,7 @@ void OctiHttpServer::Impl::handleRobotsTxt(const Request &, Response &res)
         res.set_content("User-agent: *\nDisallow: /\n",
                         "text/plain; charset=utf-8");
     } else {
-        res.set_content("User-agent: *\nAllow: /\n",
+        res.set_content("User-agent: *\nAllow: /\nDisallow: /api/\n",
                         "text/plain; charset=utf-8");
     }
 }
@@ -10888,8 +10900,7 @@ void OctiHttpServer::Impl::registerRoutes()
     server.set_default_headers(
         {{"X-Content-Type-Options", "nosniff"},
          {"Referrer-Policy", "no-referrer"},
-         {"X-Frame-Options", "DENY"},
-         {"X-Robots-Tag", "noindex, nofollow, noarchive, noimageindex"}});
+         {"X-Frame-Options", "DENY"}});
 
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); ++i) {
         Handler h = routes[i].handler;
