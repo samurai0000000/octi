@@ -5837,7 +5837,8 @@ OctiThinkingDialog::OctiThinkingDialog(BotDifficulty difficulty,
     , _sliderVal(0)
 {
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    setWindowModality(Qt::ApplicationModal);
+    setWindowModality(Qt::NonModal);
+    setAttribute(Qt::WA_ShowWithoutActivating, true);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(true);
 

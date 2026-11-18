@@ -4178,6 +4178,246 @@ TEST(AccountStoreTest, RecomputeAllRatingsAndPurgeArchivedGameReconciliation)
     CHECK_EQUAL(0, pH1.gamesPlayed);
 }
 
+TEST(AccountStoreTest, PerVariantLeaderboardOutcomeIsolationAndNoProgressDraw)
+{
+    int64_t h1 = newPlayer("g-pv-h1", "VariantAlice");
+    int64_t h2 = newPlayer("g-pv-h2", "VariantBob");
+    int64_t h3 = newPlayer("g-pv-h3", "VariantCarol");
+    int64_t hUnplayed = newPlayer("g-pv-h4", "VariantUnplayed");
+    (void)hUnplayed;
+
+    std::string err;
+
+    /* 1. Pool 1 2P_3B win: h1 defeats h2 */
+    GameRecord g3bWin = record("g-pv-3b-win", clockNow + 10, h1, h2, "2P");
+    g3bWin.gameBases = 3;
+    g3bWin.rated = 1;
+    g3bWin.eloPool = 1;
+    g3bWin.result = "P1_WIN";
+    g3bWin.winnerSeat = 1;
+    g3bWin.winner = "A";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    g3bWin,
+                    {{h1, 0, 1216, GameOutcome::WIN},
+                     {h2, 0, 1184, GameOutcome::LOSS}},
+                    {}, err)));
+
+    /* 2. Pool 1 2P_3B R7 NO_PROGRESS_DRAW: h1 draws h2 */
+    GameRecord g3bDraw = record("g-pv-3b-r7draw", clockNow + 20, h1, h2, "2P");
+    g3bDraw.gameBases = 3;
+    g3bDraw.rated = 1;
+    g3bDraw.eloPool = 1;
+    g3bDraw.result = "DRAW";
+    g3bDraw.winnerSeat = 0;
+    g3bDraw.winner = "NONE";
+    g3bDraw.termination = "NO_PROGRESS_DRAW";
+    g3bDraw.status = "GAME_OVER";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    g3bDraw,
+                    {{h1, 0, 1215, GameOutcome::DRAW},
+                     {h2, 0, 1185, GameOutcome::DRAW}},
+                    {}, err)));
+
+    /* 3. Pool 1 2P_1B win: h2 defeats h3 */
+    GameRecord g1bWin = record("g-pv-1b-win", clockNow + 30, h2, h3, "2P");
+    g1bWin.gameBases = 1;
+    g1bWin.rated = 1;
+    g1bWin.eloPool = 1;
+    g1bWin.result = "P1_WIN";
+    g1bWin.winnerSeat = 1;
+    g1bWin.winner = "A";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    g1bWin,
+                    {{h2, 0, 1216, GameOutcome::WIN},
+                     {h3, 0, 1184, GameOutcome::LOSS}},
+                    {}, err)));
+
+    /* 4. Pool 1 OFK R7 NO_PROGRESS_DRAW: h3 draws h1 */
+    GameRecord gOfkDraw = record("g-pv-ofk-r7draw", clockNow + 40, h3, h1, "OFK");
+    gOfkDraw.gameBases = 1;
+    gOfkDraw.rated = 1;
+    gOfkDraw.eloPool = 1;
+    gOfkDraw.result = "DRAW";
+    gOfkDraw.winnerSeat = 0;
+    gOfkDraw.winner = "NONE";
+    gOfkDraw.termination = "NO_PROGRESS_DRAW";
+    gOfkDraw.status = "GAME_OVER";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    gOfkDraw,
+                    {{h3, 0, 1200, GameOutcome::DRAW},
+                     {h1, 0, 1200, GameOutcome::DRAW}},
+                    {}, err)));
+
+    /* Query 2P_3B: must reflect ONLY 2P_3B games (h1: 1-0-1, h2: 0-1-1, h3: 0-0-0) */
+    std::vector<octi::LeaderboardEntry> lb3b;
+    CHECK_TRUE(store->leaderboard("2P_3B", 10, lb3b));
+    CHECK_EQUAL(4, static_cast<int>(lb3b.size()));
+    STRCMP_EQUAL("VariantAlice", lb3b[0].handle.c_str());
+    CHECK_EQUAL(1, lb3b[0].rank);
+    CHECK_EQUAL(2, lb3b[0].ladderGames);
+    CHECK_EQUAL(2, lb3b[0].gamesPlayed);
+    CHECK_EQUAL(1, lb3b[0].wins);
+    CHECK_EQUAL(0, lb3b[0].losses);
+    CHECK_EQUAL(1, lb3b[0].draws);
+
+    STRCMP_EQUAL("VariantBob", lb3b[1].handle.c_str());
+    CHECK_EQUAL(2, lb3b[1].rank);
+    CHECK_EQUAL(2, lb3b[1].ladderGames);
+    CHECK_EQUAL(2, lb3b[1].gamesPlayed);
+    CHECK_EQUAL(0, lb3b[1].wins);
+    CHECK_EQUAL(1, lb3b[1].losses);
+    CHECK_EQUAL(1, lb3b[1].draws);
+
+    /* Unplayed in 2P_3B (h3 played 2P_1B + OFK; hUnplayed played 0) must have 0 variant stats */
+    for (size_t i = 2; i < lb3b.size(); ++i) {
+        CHECK_EQUAL(0, lb3b[i].rank);
+        CHECK_EQUAL(0, lb3b[i].ladderGames);
+        CHECK_EQUAL(0, lb3b[i].gamesPlayed);
+        CHECK_EQUAL(0, lb3b[i].wins);
+        CHECK_EQUAL(0, lb3b[i].losses);
+        CHECK_EQUAL(0, lb3b[i].draws);
+    }
+
+    /* Query 2P_1B: h2 is 1-0-0, h3 is 0-1-0, h1 is unplayed (0-0-0) */
+    std::vector<octi::LeaderboardEntry> lb1b;
+    CHECK_TRUE(store->leaderboard("2P_1B", 10, lb1b));
+    STRCMP_EQUAL("VariantBob", lb1b[0].handle.c_str());
+    CHECK_EQUAL(1, lb1b[0].gamesPlayed);
+    CHECK_EQUAL(1, lb1b[0].wins);
+    CHECK_EQUAL(0, lb1b[0].losses);
+    CHECK_EQUAL(0, lb1b[0].draws);
+
+    STRCMP_EQUAL("VariantCarol", lb1b[1].handle.c_str());
+    CHECK_EQUAL(1, lb1b[1].gamesPlayed);
+    CHECK_EQUAL(0, lb1b[1].wins);
+    CHECK_EQUAL(1, lb1b[1].losses);
+    CHECK_EQUAL(0, lb1b[1].draws);
+
+    /* Query OFK: h1 and h3 are each 0-0-1 from NO_PROGRESS_DRAW */
+    std::vector<octi::LeaderboardEntry> lbOfk;
+    CHECK_TRUE(store->leaderboard("OFK", 10, lbOfk));
+    CHECK_EQUAL(1, lbOfk[0].gamesPlayed);
+    CHECK_EQUAL(0, lbOfk[0].wins);
+    CHECK_EQUAL(0, lbOfk[0].losses);
+    CHECK_EQUAL(1, lbOfk[0].draws);
+    DOUBLES_EQUAL(0.0, lbOfk[0].winRate, 0.01);
+    CHECK_EQUAL(1, lbOfk[1].gamesPlayed);
+    CHECK_EQUAL(0, lbOfk[1].wins);
+    CHECK_EQUAL(0, lbOfk[1].losses);
+    CHECK_EQUAL(1, lbOfk[1].draws);
+
+    /* Direct SQL playedOnly=true + limit=1 check on Pool 1 leaderboard */
+    std::vector<octi::LeaderboardEntry> lb3bPlayedOnly;
+    int64_t total3bPlayed = 0;
+    CHECK_TRUE(store->leaderboard("2P_3B", 1, lb3bPlayedOnly, true, &total3bPlayed));
+    CHECK_EQUAL(2, static_cast<int>(total3bPlayed));
+    CHECK_EQUAL(1, static_cast<int>(lb3bPlayedOnly.size()));
+    STRCMP_EQUAL("VariantAlice", lb3bPlayedOnly[0].handle.c_str());
+    DOUBLES_EQUAL(50.0, lb3bPlayedOnly[0].winRate, 0.01);
+
+    /* Pool 1 leaderboardOverall: excludes hUnplayed (0 games), supports sortField + sortAsc */
+    std::vector<octi::LeaderboardEntry> lbOverall;
+    int64_t totalOverall = 0;
+    CHECK_TRUE(store->leaderboardOverall("elo_2p_1b", false, 10, lbOverall, &totalOverall));
+    CHECK_EQUAL(3, static_cast<int>(totalOverall));
+    CHECK_EQUAL(3, static_cast<int>(lbOverall.size()));
+    /* h2 (1216, 1 game in 2P_1B) and h3 (1184, 1 game in 2P_1B) precede h1 (1200, 0 games in 2P_1B) */
+    STRCMP_EQUAL("VariantBob", lbOverall[0].handle.c_str());
+    STRCMP_EQUAL("VariantCarol", lbOverall[1].handle.c_str());
+    STRCMP_EQUAL("VariantAlice", lbOverall[2].handle.c_str());
+    CHECK_EQUAL(3, lbOverall[2].gamesPlayed);
+    CHECK_EQUAL(2, lbOverall[2].games2p3b);
+    CHECK_EQUAL(0, lbOverall[2].games2p1b);
+    CHECK_EQUAL(1, lbOverall[2].gamesOfk);
+    CHECK_EQUAL(1, lbOverall[2].wins);
+    CHECK_EQUAL(0, lbOverall[2].losses);
+    CHECK_EQUAL(2, lbOverall[2].draws);
+    CHECK_FALSE(store->leaderboardOverall("bad_sort", false, 10, lbOverall, &totalOverall));
+
+    /* Pool 2 listArenaStandings per-variant W/L/D + SQL playedOnly + ladder filter */
+    CreateRobotResult botARes = store->createRobot(h1, "PvArenaBotA", "Bot A");
+    CreateRobotResult botBRes = store->createRobot(h2, "PvArenaBotB", "Bot B");
+    CHECK_EQUAL(static_cast<int>(octi::RobotStatus::OK), static_cast<int>(botARes.status));
+    CHECK_EQUAL(static_cast<int>(octi::RobotStatus::OK), static_cast<int>(botBRes.status));
+    int64_t botA = botARes.robot.robotId;
+    int64_t botB = botBRes.robot.robotId;
+
+    /* Bot A beats h3 in 2P_3B, and Bot A draws Bot B via NO_PROGRESS_DRAW in OFK */
+    GameRecord gArena3b = record("g-pv-arena-3b", clockNow + 50, h3, 0, "2P");
+    gArena3b.gameBases = 3;
+    gArena3b.p2RobotId = botA;
+    gArena3b.p2Handle = "PvArenaBotA";
+    gArena3b.rated = 1;
+    gArena3b.eloPool = 2;
+    gArena3b.result = "P2_WIN";
+    gArena3b.winnerSeat = 2;
+    gArena3b.winner = "B";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    gArena3b,
+                    {{h3, 0, 1184, GameOutcome::LOSS},
+                     {0, botA, 1216, GameOutcome::WIN}},
+                    {{botA, GameOutcome::WIN}}, err)));
+
+    GameRecord gArenaOfk = record("g-pv-arena-ofk-draw", clockNow + 60, 0, 0, "OFK");
+    gArenaOfk.gameBases = 1;
+    gArenaOfk.p1RobotId = botA;
+    gArenaOfk.p1Handle = "PvArenaBotA";
+    gArenaOfk.p2RobotId = botB;
+    gArenaOfk.p2Handle = "PvArenaBotB";
+    gArenaOfk.rated = 1;
+    gArenaOfk.eloPool = 2;
+    gArenaOfk.result = "DRAW";
+    gArenaOfk.winnerSeat = 0;
+    gArenaOfk.winner = "NONE";
+    gArenaOfk.termination = "NO_PROGRESS_DRAW";
+    gArenaOfk.status = "GAME_OVER";
+    CHECK_EQUAL(static_cast<int>(ArchiveStatus::OK),
+                static_cast<int>(store->archiveGameWithRatings(
+                    gArenaOfk,
+                    {{0, botA, 1200, GameOutcome::DRAW},
+                     {0, botB, 1200, GameOutcome::DRAW}},
+                    {{botA, GameOutcome::DRAW},
+                     {botB, GameOutcome::DRAW}}, err)));
+
+    octi::ArenaStandingsFilter af;
+    af.ladder = "2P_3B";
+    af.playedOnly = true;
+    af.limit = 1;
+    std::vector<octi::ArenaStandingEntry> arena3b;
+    int64_t arenaTotal = 0;
+    CHECK_TRUE(store->listArenaStandings(af, arena3b, &arenaTotal));
+    /* BotB only played OFK, so 2P_3B playedOnly=true has total == 2 (BotA + h3), limit=1 returns BotA with 1-0-0 */
+    CHECK_EQUAL(2, static_cast<int>(arenaTotal));
+    CHECK_EQUAL(1, static_cast<int>(arena3b.size()));
+    STRCMP_EQUAL("PvArenaBotA", arena3b[0].name.c_str());
+    CHECK_EQUAL(1, arena3b[0].rank);
+    CHECK_EQUAL(1, arena3b[0].gamesPlayed);
+    CHECK_EQUAL(1, arena3b[0].wins);
+    CHECK_EQUAL(0, arena3b[0].losses);
+    CHECK_EQUAL(0, arena3b[0].draws);
+    CHECK_EQUAL(1, arena3b[0].drawsOfk);
+    DOUBLES_EQUAL(100.0, arena3b[0].winRate, 0.01);
+
+    /* Overall (empty ladder) preserves aggregate counts (BotA: 2 games, 1-0-1) */
+    af.ladder.clear();
+    af.playedOnly = false;
+    af.limit = 10;
+    af.sortField = "games_played";
+    std::vector<octi::ArenaStandingEntry> arenaAll;
+    CHECK_TRUE(store->listArenaStandings(af, arenaAll, &arenaTotal));
+    CHECK_EQUAL(3, static_cast<int>(arenaTotal));
+    STRCMP_EQUAL("PvArenaBotA", arenaAll[0].name.c_str());
+    CHECK_EQUAL(2, arenaAll[0].gamesPlayed);
+    CHECK_EQUAL(1, arenaAll[0].wins);
+    CHECK_EQUAL(0, arenaAll[0].losses);
+    CHECK_EQUAL(1, arenaAll[0].draws);
+}
+
 int main(int argc, char **argv)
 {
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();

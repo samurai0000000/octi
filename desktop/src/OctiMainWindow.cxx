@@ -829,6 +829,9 @@ OctiMainWindow::OctiMainWindow(
         dlg.exec();
     });
     QObject::connect(_newLocalGameBtn, &QPushButton::clicked, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         NewLocalGameDialog dlg(_theme, this);
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
@@ -838,6 +841,9 @@ OctiMainWindow::OctiMainWindow(
         }
     });
     QObject::connect(_sidebarNewGameBtn, &QPushButton::clicked, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         NewLocalGameDialog dlg(_theme, this);
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
@@ -847,6 +853,9 @@ OctiMainWindow::OctiMainWindow(
         }
     });
     QObject::connect(_archiveBtn, &QPushButton::clicked, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         ArchiveBrowserDialog dlg(_netClient.get(), _theme, this);
         dlg.setOnLoadReplayCallback(
             [this](const std::string & /*gameId*/,
@@ -893,6 +902,9 @@ OctiMainWindow::OctiMainWindow(
         proposePauseOrResume();
     });
     QObject::connect(_undoRequestBtn, &QPushButton::clicked, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         if (_composer.isAwaitingConfirmation() || _composer.isGuidedMoveActive()) {
             _composer.cancelAndRollback();
             if (_boardCanvas) {
@@ -1377,6 +1389,9 @@ void OctiMainWindow::showBoardView()
 
 void OctiMainWindow::showLobbyView()
 {
+    if (_botSearchActive) {
+        return;
+    }
     if (_viewStack && _lobbyView) {
         _lobbyView->setViewerIdentity(_profile.uuid, _profile.handle);
         _lobbyView->setActiveRoomState(
@@ -1499,6 +1514,7 @@ void OctiMainWindow::setTheme(ThemeId theme)
     }
     refreshMoveHistoryAndFenUi();
     setupMenuBar();
+    updateMenuActionsState();
     updateStartMatchOverlay();
 }
 
@@ -1726,6 +1742,9 @@ void OctiMainWindow::setupMenuBar()
     _actNewGame = gameMenu->addAction(createMenuIcon(MenuIconKind::NEW_GAME, _theme), "New Local / Bot Game...");
     _actNewGame->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
     QObject::connect(_actNewGame, &QAction::triggered, this, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         NewLocalGameDialog dlg(_theme, this);
         dlg.setConfig(_localConfig);
         if (dlg.exec() == QDialog::Accepted) {
@@ -1763,8 +1782,11 @@ void OctiMainWindow::setupMenuBar()
 
     _actUndo = gameMenu->addAction(createMenuIcon(MenuIconKind::UNDO_MOVE, _theme), "Undo Move");
     _actUndo->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Z));
-    _actUndo->setEnabled(!_inOnlineRoom);
+    _actUndo->setEnabled(!_inOnlineRoom && !_botSearchActive);
     QObject::connect(_actUndo, &QAction::triggered, this, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         if (_composer.isAwaitingConfirmation() || _composer.isGuidedMoveActive()) {
             _composer.cancelAndRollback();
             if (_boardCanvas) {
@@ -1940,6 +1962,9 @@ void OctiMainWindow::setupMenuBar()
     _actArchive = onlineMenu->addAction(createMenuIcon(MenuIconKind::GAME_ARCHIVE, _theme), "Game Archive & Replay Browser...");
     _actArchive->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
     QObject::connect(_actArchive, &QAction::triggered, this, [this]() {
+        if (_botSearchActive) {
+            return;
+        }
         ArchiveBrowserDialog dlg(_netClient.get(), _theme, this);
         dlg.setOnLoadReplayCallback(
             [this](const std::string &, const std::string &transcript, const ArchivedGameSummary &) {
@@ -2072,6 +2097,9 @@ BotTuningProfile OctiMainWindow::strengthenedProfileForDifficulty(
 
 void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 {
+    if (_botSearchActive) {
+        return;
+    }
     leaveOnlineRoom();
     _gameOverDialogShownForCurrentMatch = false;
     _transcriptUploadedForCurrentMatch = false;
@@ -2138,6 +2166,9 @@ void OctiMainWindow::startNewLocalGame(const LocalGameConfig &cfg)
 
 void OctiMainWindow::beginAwaitingMatchStart()
 {
+    if (_botSearchActive) {
+        return;
+    }
     _awaitingMatchStart = true;
     _matchStartedEpochSec = 0;
     _currentTurnStartedEpochMs = 0;
@@ -2160,7 +2191,7 @@ void OctiMainWindow::beginAwaitingMatchStart()
 
 void OctiMainWindow::confirmMatchStart()
 {
-    if (!_awaitingMatchStart) {
+    if (_botSearchActive || !_awaitingMatchStart) {
         return;
     }
     _awaitingMatchStart = false;
@@ -2180,6 +2211,9 @@ void OctiMainWindow::confirmMatchStart()
 
 void OctiMainWindow::reconfigurePendingMatch(const LocalGameConfig &cfg)
 {
+    if (_botSearchActive) {
+        return;
+    }
     startNewLocalGame(cfg);
     beginAwaitingMatchStart();
     updateStartMatchOverlay();
@@ -2303,32 +2337,33 @@ void OctiMainWindow::updateMenuActionsState()
 
     // 1. &Game Menu
     if (_actNewGame) {
-        _actNewGame->setEnabled(true);
+        _actNewGame->setEnabled(!_botSearchActive);
     }
     if (_actBoardView) {
         _actBoardView->setEnabled(!boardVisible);
     }
     if (_actLobbyView) {
-        _actLobbyView->setEnabled(!lobbyVisible && !_offlineMode);
+        _actLobbyView->setEnabled(!lobbyVisible && !_offlineMode && !_botSearchActive);
     }
     if (_actOfferDraw) {
-        _actOfferDraw->setEnabled(canActInMatch);
+        _actOfferDraw->setEnabled(canActInMatch && !_botSearchActive);
     }
     if (_actPauseResume) {
-        _actPauseResume->setEnabled(canActInMatch);
+        _actPauseResume->setEnabled(canActInMatch && !_botSearchActive);
     }
     if (_actUndo) {
-        bool canUndoMove = (!online && localGameActive && !_awaitingMatchStart &&
+        bool canUndoMove = (!_botSearchActive && !online && localGameActive && !_awaitingMatchStart &&
             (_composer.isAwaitingConfirmation() || _composer.isGuidedMoveActive() ||
              (_board.getGame() && _board.getGame()->canUndo())));
         _actUndo->setEnabled(canUndoMove);
     }
     if (_actClaimForfeit) {
-        bool forfeitEnabled = (canActInMatch && _claimForfeitBtn && _claimForfeitBtn->isEnabled());
+        bool forfeitEnabled = (!_botSearchActive && canActInMatch && _claimForfeitBtn && _claimForfeitBtn->isEnabled());
         _actClaimForfeit->setEnabled(forfeitEnabled);
     }
     if (_actResign) {
-        bool resignEnabled = online ? canActInMatch : (localGameActive && !_awaitingMatchStart && !gameOver);
+        bool resignEnabled = !_botSearchActive &&
+            (online ? canActInMatch : (localGameActive && !_awaitingMatchStart && !gameOver));
         _actResign->setEnabled(resignEnabled);
     }
     if (_actExportMoves) {
@@ -2355,16 +2390,16 @@ void OctiMainWindow::updateMenuActionsState()
         _actSfx->setEnabled(true);
     }
     if (_actVcrFirst) {
-        _actVcrFirst->setEnabled(boardVisible && vcrCurrentPly() > 0);
+        _actVcrFirst->setEnabled(!_botSearchActive && boardVisible && vcrCurrentPly() > 0);
     }
     if (_actVcrPrev) {
-        _actVcrPrev->setEnabled(boardVisible && vcrCurrentPly() > 0);
+        _actVcrPrev->setEnabled(!_botSearchActive && boardVisible && vcrCurrentPly() > 0);
     }
     if (_actVcrNext) {
-        _actVcrNext->setEnabled(boardVisible && vcrCurrentPly() < vcrTotalPlies());
+        _actVcrNext->setEnabled(!_botSearchActive && boardVisible && vcrCurrentPly() < vcrTotalPlies());
     }
     if (_actVcrLast) {
-        _actVcrLast->setEnabled(boardVisible && vcrCurrentPly() < vcrTotalPlies());
+        _actVcrLast->setEnabled(!_botSearchActive && boardVisible && vcrCurrentPly() < vcrTotalPlies());
     }
 
     // 3. &Online Menu
@@ -2378,7 +2413,7 @@ void OctiMainWindow::updateMenuActionsState()
         _actLeaderboard->setEnabled(!_offlineMode);
     }
     if (_actArchive) {
-        _actArchive->setEnabled(!_offlineMode);
+        _actArchive->setEnabled(!_offlineMode && !_botSearchActive);
     }
     if (_actRobots) {
         _actRobots->setEnabled(!_offlineMode);
@@ -2417,7 +2452,7 @@ const LocalGameConfig &OctiMainWindow::localGameConfig() const
 
 bool OctiMainWindow::executeBotTurnIfNeeded()
 {
-    if (_awaitingMatchStart) {
+    if (_botSearchActive || _awaitingMatchStart) {
         return false;
     }
     if (!_isLocalBotGame || _inOnlineRoom) {
@@ -2427,16 +2462,29 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
     if (!game || !game->isGameStarted() || game->isGameOver()) {
         return false;
     }
+    if (game->getTurn() == _localConfig.humanSeat) {
+        return false;
+    }
 
     if (!isVisible()) {
         _botEngine.setTimeBudgetMs(25);
     }
+
+    QPointer<OctiMainWindow> self(this);
+    _botSearchActive = true;
+    _abortBotSearch = false;
+    if (_boardCanvas) {
+        _boardCanvas->setInteractiveEnabled(false);
+    }
+    updateMatchActionsVisibility();
+    updateMenuActionsState();
 
     int safetyCount = 0;
     bool movedAny = false;
     std::string lastBotMoveStr;
     BotSearchStats botStats;
     while (!game->isGameOver() &&
+           !_abortBotSearch &&
            game->getTurn() != _localConfig.humanSeat &&
            safetyCount < 8) {
         ++safetyCount;
@@ -2449,13 +2497,25 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             botMove = _botEngine.chooseMove(_board, &botStats);
         } else {
             OctiThinkingDialog thinkingDlg(_botEngine.difficulty(), budgetMs, _theme, this);
+            QPointer<OctiThinkingDialog> dlgGuard(&thinkingDlg);
+            _activeThinkingDialog = &thinkingDlg;
             thinkingDlg.positionBelowBoard(this, _boardCanvas);
+            thinkingDlg.show();
+            thinkingDlg.raise();
 
+            const std::string rootFen = _board.toPositionString();
+            const int rootNoProgressPlies = game->getNoProgressPlies();
             std::atomic<bool> done{false};
             std::string chosen;
-            std::thread worker([this, &done, &chosen, &botStats]() {
+            std::thread worker([this, rootFen, rootNoProgressPlies, &done, &chosen, &botStats]() {
                 try {
-                    chosen = _botEngine.chooseMove(_board, &botStats);
+                    OctiBoard searchBoard;
+                    searchBoard.suppressBoardUpdateNotification(true);
+                    searchBoard.fromPositionString(rootFen);
+                    if (searchBoard.getGame()) {
+                        searchBoard.getGame()->setNoProgressPlies(rootNoProgressPlies);
+                    }
+                    chosen = _botEngine.chooseMove(searchBoard, &botStats);
                 } catch (const std::exception &ex) {
                     octi::desktop::OctiCrashReporter::recordHandledException(
                         "OctiBotWorkerThread", typeid(ex).name(), ex.what(),
@@ -2473,28 +2533,54 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
                 done.store(true);
             });
 
+            QEventLoop thinkingLoop;
+            _activeThinkingLoop = &thinkingLoop;
             QTimer tickTimer;
-            QObject::connect(&tickTimer, &QTimer::timeout, &thinkingDlg, [&]() {
+            QObject::connect(&tickTimer, &QTimer::timeout, &thinkingLoop, [&]() {
+                if (!self) {
+                    thinkingLoop.quit();
+                    return;
+                }
                 int elapsed = static_cast<int>(timer.elapsed());
                 int depth = _botEngine.liveDepthReached();
                 std::uint64_t nodes = _botEngine.liveNodesVisited();
                 int score = _botEngine.liveBestScore();
-                thinkingDlg.updateProgress(elapsed, budgetMs, depth, nodes, score);
-                if (done.load()) {
-                    thinkingDlg.accept();
+                if (dlgGuard) {
+                    dlgGuard->updateProgress(elapsed, budgetMs, depth, nodes, score);
+                }
+                if (done.load() || _abortBotSearch) {
+                    if (_boardCanvas) {
+                        _boardCanvas->closeActiveZoomDialog();
+                    }
+                    thinkingLoop.quit();
                 }
             });
-            tickTimer.start(50);
+            tickTimer.start(25);
 
-            thinkingDlg.exec();
+            if (!done.load() && !_abortBotSearch) {
+                thinkingLoop.exec();
+            }
             tickTimer.stop();
+            if (self) {
+                _activeThinkingLoop = nullptr;
+                _activeThinkingDialog.clear();
+                if (_boardCanvas) {
+                    _boardCanvas->closeActiveZoomDialog();
+                }
+            }
+            if (dlgGuard) {
+                dlgGuard->hide();
+            }
             if (worker.joinable()) {
                 worker.join();
+            }
+            if (!self || _abortBotSearch) {
+                break;
             }
             botMove = chosen;
         }
 
-        if (botMove.empty()) {
+        if (_abortBotSearch || botMove.empty()) {
             break;
         }
         try {
@@ -2524,6 +2610,25 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
             break;
         }
     }
+
+    if (!self) {
+        return false;
+    }
+
+    const bool aborted = _abortBotSearch;
+    _botSearchActive = false;
+    _abortBotSearch = false;
+    if (_boardCanvas) {
+        _boardCanvas->setInteractiveEnabled(
+            _inOnlineRoom ? isInteractiveOnlineTurn() : !_awaitingMatchStart);
+    }
+    updateMatchActionsVisibility();
+    updateMenuActionsState();
+
+    if (aborted) {
+        return movedAny;
+    }
+
     if (movedAny) {
         _composer.refreshLegalMoves();
         if (_boardCanvas) {
@@ -2550,7 +2655,7 @@ bool OctiMainWindow::executeBotTurnIfNeeded()
 
 void OctiMainWindow::showHint()
 {
-    if (!_board.getGame() || _board.getGame()->isGameOver()) {
+    if (_botSearchActive || !_board.getGame() || _board.getGame()->isGameOver()) {
         return;
     }
     BotSearchStats stats;
@@ -2609,6 +2714,10 @@ ApiResult<CreateTableResponse> OctiMainWindow::createAndEnterOnlineTable(
     const CreateTableRequest &req)
 {
     ApiResult<CreateTableResponse> res;
+    if (_botSearchActive) {
+        res.errorMessage = "AI search in progress";
+        return res;
+    }
     if (!_netClient) {
         res.errorMessage = "Network client is null";
         return res;
@@ -2665,6 +2774,10 @@ ApiResult<JoinTableResponse> OctiMainWindow::joinAndEnterOnlineTable(
     const std::string &passcode)
 {
     ApiResult<JoinTableResponse> res;
+    if (_botSearchActive) {
+        res.errorMessage = "AI search in progress";
+        return res;
+    }
     if (!_netClient) {
         res.errorMessage = "Network client is null";
         return res;
@@ -2717,6 +2830,10 @@ ApiResult<bool> OctiMainWindow::observeOnlineTable(
     const std::string &passcode)
 {
     ApiResult<bool> res;
+    if (_botSearchActive) {
+        res.errorMessage = "AI search in progress";
+        return res;
+    }
     if (!_netClient) {
         res.errorMessage = "Network client is null";
         return res;
@@ -3841,6 +3958,10 @@ ApiResult<GameActionData> OctiMainWindow::claimOpponentForfeit()
 ApiResult<bool> OctiMainWindow::resignCurrentGame()
 {
     ApiResult<bool> res;
+    if (_botSearchActive) {
+        res.errorMessage = "AI search in progress";
+        return res;
+    }
     if (_inOnlineRoom && !_onlineRoomId.empty() && _netClient) {
         res = _netClient->resignGame(_onlineRoomId);
         refreshOnlineGameView();
@@ -3912,6 +4033,9 @@ ApiResult<GameActionData> OctiMainWindow::declineActiveProposal()
 
 void OctiMainWindow::vcrFirst()
 {
+    if (_botSearchActive) {
+        return;
+    }
     OctiGame *g = _board.getGame();
     if (!g) {
         return;
@@ -3932,6 +4056,9 @@ void OctiMainWindow::vcrFirst()
 
 void OctiMainWindow::vcrPrev()
 {
+    if (_botSearchActive) {
+        return;
+    }
     OctiGame *g = _board.getGame();
     if (!g || !g->canUndo()) {
         return;
@@ -3950,6 +4077,9 @@ void OctiMainWindow::vcrPrev()
 
 void OctiMainWindow::vcrNext()
 {
+    if (_botSearchActive) {
+        return;
+    }
     OctiGame *g = _board.getGame();
     if (!g || !g->canRedo()) {
         return;
@@ -3968,6 +4098,9 @@ void OctiMainWindow::vcrNext()
 
 void OctiMainWindow::vcrLast()
 {
+    if (_botSearchActive) {
+        return;
+    }
     OctiGame *g = _board.getGame();
     if (!g) {
         return;
@@ -4051,7 +4184,7 @@ QListWidget *OctiMainWindow::moveHistoryListWidget() const
 bool OctiMainWindow::loadOctiTranscriptIntoReplay(
     const std::string &octiTranscript)
 {
-    if (octiTranscript.empty()) {
+    if (_botSearchActive || octiTranscript.empty()) {
         return false;
     }
     leaveOnlineRoom();
@@ -4233,6 +4366,9 @@ bool OctiMainWindow::saveTranscriptToFile(const std::string &filePath) const
 
 bool OctiMainWindow::loadTranscriptFromFile(const std::string &filePath)
 {
+    if (_botSearchActive) {
+        return false;
+    }
     std::ifstream ifs(filePath);
     if (!ifs.is_open()) {
         return false;
@@ -4276,6 +4412,9 @@ void OctiMainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     syncSidePanelsToBoardEdges();
+    if (_activeThinkingDialog) {
+        _activeThinkingDialog->positionBelowBoard(this, _boardCanvas);
+    }
     updateMenuActionsState();
 }
 
@@ -4284,6 +4423,20 @@ void OctiMainWindow::showEvent(QShowEvent *event)
     QMainWindow::showEvent(event);
     syncSidePanelsToBoardEdges();
     updateMenuActionsState();
+}
+
+void OctiMainWindow::closeEvent(QCloseEvent *event)
+{
+    if (_botSearchActive) {
+        _abortBotSearch = true;
+        if (_boardCanvas) {
+            _boardCanvas->closeActiveZoomDialog();
+        }
+        if (_activeThinkingLoop) {
+            _activeThinkingLoop->quit();
+        }
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void OctiMainWindow::keyPressEvent(QKeyEvent *event)
@@ -4446,10 +4599,13 @@ void OctiMainWindow::updateMatchActionsVisibility()
 
     if (_sidebarNewGameBtn) {
         _sidebarNewGameBtn->setVisible(!online);
-        _sidebarNewGameBtn->setEnabled(!online);
+        _sidebarNewGameBtn->setEnabled(!online && !_botSearchActive);
+    }
+    if (_newLocalGameBtn) {
+        _newLocalGameBtn->setEnabled(!online && !_botSearchActive);
     }
     if (_actNewGame) {
-        _actNewGame->setEnabled(!online);
+        _actNewGame->setEnabled(!online && !_botSearchActive);
     }
 
     if (_waitingRoomBannerWidget) {
@@ -4502,23 +4658,35 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _claimForfeitBtn->setEnabled(canActInMatch && opponentForfeitClaimable);
     }
     bool localGameActive = (_board.getGame() && _board.getGame()->isGameStarted() && !_board.getGame()->isGameOver());
+    if (_vcrFirstBtn) {
+        _vcrFirstBtn->setEnabled(!_botSearchActive && vcrCurrentPly() > 0);
+    }
+    if (_vcrPrevBtn) {
+        _vcrPrevBtn->setEnabled(!_botSearchActive && vcrCurrentPly() > 0);
+    }
+    if (_vcrNextBtn) {
+        _vcrNextBtn->setEnabled(!_botSearchActive && vcrCurrentPly() < vcrTotalPlies());
+    }
+    if (_vcrLastBtn) {
+        _vcrLastBtn->setEnabled(!_botSearchActive && vcrCurrentPly() < vcrTotalPlies());
+    }
     if (_undoRequestBtn) {
         if (online) {
             _undoRequestBtn->setVisible(false);
             _undoRequestBtn->setEnabled(false);
         } else {
             _undoRequestBtn->setVisible(true);
-            _undoRequestBtn->setEnabled(localGameActive);
+            _undoRequestBtn->setEnabled(localGameActive && !_botSearchActive);
         }
     }
     if (_actUndo) {
-        _actUndo->setEnabled(!online && localGameActive);
+        _actUndo->setEnabled(!online && localGameActive && !_botSearchActive);
     }
     if (_resignBtn) {
         if (online) {
-            _resignBtn->setEnabled(canActInMatch);
+            _resignBtn->setEnabled(canActInMatch && !_botSearchActive);
         } else {
-            _resignBtn->setEnabled(localGameActive);
+            _resignBtn->setEnabled(localGameActive && !_botSearchActive);
         }
     }
     if (_moderationBtn) {

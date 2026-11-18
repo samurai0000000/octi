@@ -1502,69 +1502,109 @@ fun ZoomedSquareDialog(
     rotation: OctiBoardGeometry.BoardRotation,
     themeId: OctiThemeId,
     canInteract: Boolean = true,
+    boardRevision: Long = 0L,
     onDismiss: () -> Unit,
     onBeginGuidedMove: (podIndex: Int, moveAllStack: Boolean) -> Unit,
     onAddProng: (podIndex: Int, dir: OctiDir, superProng: Boolean) -> Unit,
     onPlaceReservePod: (liberate: Boolean) -> Unit
 ) {
-    val displayBoard = if (composer.isAwaitingConfirmation && board === composer.board) {
-        composer.buildPreviewBoard() ?: board
-    } else {
-        board
+    val stagedNotation = composer.stagedMoveNotation()
+    val displayBoard = synchronized(board) {
+        if (composer.isAwaitingConfirmation && board === composer.board) {
+            composer.buildPreviewBoard() ?: board
+        } else {
+            board
+        }
     }
-    val displayGame = displayBoard.game
-    val sq = if (displayBoard.isValidCoord(squareX - 1, squareY - 1)) {
-        displayBoard.squareAt(squareX - 1, squareY - 1)
-    } else {
-        null
+    val sq = remember(displayBoard, boardRevision, canInteract, squareX, squareY, stagedNotation) {
+        synchronized(displayBoard) {
+            if (displayBoard.isValidCoord(squareX - 1, squareY - 1)) {
+                val rawSq = displayBoard.squareAt(squareX - 1, squareY - 1)
+                val snapSq = OctiSquare(rawSq.gameMode, rawSq.type, rawSq.locX, rawSq.locY)
+                for (p in rawSq.pods()) {
+                    snapSq.addPod(p)
+                }
+                snapSq
+            } else {
+                null
+            }
+        }
     }
+    val displayGame = synchronized(displayBoard) { displayBoard.game }
     val numPods = sq?.numPods ?: 0
     val activeComposerForClaims = if (board === composer.board) composer else null
-    val sortedPodIndices = remember(sq, squareX, squareY, numPods, composer.stagedMoveNotation()) {
-        if (sq != null) OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq).toList() else emptyList()
+    val sortedPodIndices = remember(sq, boardRevision, canInteract, squareX, squareY, numPods, stagedNotation) {
+        synchronized(displayBoard) {
+            if (sq != null) OctiBoardRenderer.sortedPodIndicesMostProngsFirst(sq).toList() else emptyList()
+        }
     }
-    val stackChipSpecs = remember(sq, squareX, squareY, numPods, composer.stagedMoveNotation()) {
-        OctiDialogs.buildStackPodChipSpecs(sq, activeComposerForClaims, squareX, squareY)
+    val stackChipSpecs = remember(sq, boardRevision, canInteract, squareX, squareY, numPods, stagedNotation) {
+        synchronized(displayBoard) {
+            OctiDialogs.buildStackPodChipSpecs(sq, activeComposerForClaims, squareX, squareY)
+        }
     }
-    val defaultPodIdx = remember(sortedPodIndices) {
+    val defaultPodIdx = remember(sortedPodIndices, boardRevision) {
         val unclaimed = sortedPodIndices.firstOrNull { activeComposerForClaims?.isSquarePodClaimed(squareX, squareY, it) != true }
         unclaimed ?: sortedPodIndices.firstOrNull() ?: 0
     }
-    var selectedPodIndex by remember(squareX, squareY, defaultPodIdx) { mutableIntStateOf(defaultPodIdx) }
+    var selectedPodIndex by remember(squareX, squareY, defaultPodIdx, boardRevision) { mutableIntStateOf(defaultPodIdx) }
     val isEmptySquare = sq == null || sq.isEmpty
-    val turn = displayGame?.turn ?: OctiPlayer.PLAYER_A
-    val isTurn = canInteract && displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
+    val turn = synchronized(displayBoard) { displayGame?.turn ?: OctiPlayer.PLAYER_A }
+    val isTurn = synchronized(displayBoard) {
+        canInteract && displayGame != null && displayGame.isGameStarted && !displayGame.isGameOver
+    }
     val hasEnemy = sq?.hasEnemyOf(turn) == true
     val isOwnOccupied = sq?.isOccupiedBy(turn) == true
     val isFriendlyTurn = isTurn && !isEmptySquare && isOwnOccupied
 
-    val canPlaceReserve = isTurn && composer.canPlaceReservePodAt(squareX, squareY)
-    val canLiberateHere = isTurn && composer.canLiberateCapturedPodAt(squareX, squareY)
-    val canShowPodPlacement = isTurn && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (canPlaceReserve || canLiberateHere)
+    val canPlaceReserve = synchronized(displayBoard) { isTurn && composer.canPlaceReservePodAt(squareX, squareY) }
+    val canLiberateHere = synchronized(displayBoard) { isTurn && composer.canLiberateCapturedPodAt(squareX, squareY) }
+    val canShowPodPlacement = synchronized(displayBoard) {
+        isTurn && displayBoard.gameMode != OctiGameMode.GAME_MODE_OFK && (canPlaceReserve || canLiberateHere)
+    }
     var moveAllStack by remember(squareX, squareY) { mutableStateOf(false) }
 
-    val freeProngs = displayGame?.getFreeProngs(turn) ?: 0
-    val freeSuper = displayGame?.getFreeSuperProngs(turn) ?: 0
-    val useSuperProngs = displayGame?.useSuperProngs() == true
+    val freeProngs = synchronized(displayBoard) { displayGame?.getFreeProngs(turn) ?: 0 }
+    val freeSuper = synchronized(displayBoard) { displayGame?.getFreeSuperProngs(turn) ?: 0 }
+    val useSuperProngs = synchronized(displayBoard) { displayGame?.useSuperProngs() == true }
 
-    var selectedProngTray by remember(squareX, squareY) {
+    var selectedProngTray by remember(squareX, squareY, isFriendlyTurn, freeProngs) {
         mutableStateOf<String?>(if (isFriendlyTurn && freeProngs > 0) "NORMAL" else null)
     }
     var hoverSocketDir by remember(squareX, squareY) { mutableStateOf(-1) }
     var podBoxPxSize by remember { mutableStateOf(IntSize(480, 480)) }
 
-    val zoomedBitmap = remember(displayBoard, squareX, squareY, selectedPodIndex, rotation, themeId, hoverSocketDir, composer.stagedMoveNotation()) {
+    val zoomedBitmap = remember(
+        displayBoard,
+        boardRevision,
+        canInteract,
+        squareX,
+        squareY,
+        selectedPodIndex,
+        rotation,
+        themeId,
+        hoverSocketDir,
+        stagedNotation
+    ) {
         val sizePx = 480
-        val pixels = OctiBoardRenderer.renderZoomedPodPixels(
-            displayBoard,
-            squareX,
-            squareY,
-            selectedPodIndex,
-            rotation.degrees,
-            themeId,
-            sizePx,
-            hoverSocketDir
-        )
+        val pixels = synchronized(displayBoard) {
+            val safePodIdx = if (displayBoard.isValidCoord(squareX - 1, squareY - 1)) {
+                val curCount = displayBoard.squareAt(squareX - 1, squareY - 1).numPods
+                if (curCount > 0) Math.max(0, Math.min(curCount - 1, selectedPodIndex)) else 0
+            } else {
+                0
+            }
+            OctiBoardRenderer.renderZoomedPodPixels(
+                displayBoard,
+                squareX,
+                squareY,
+                safePodIdx,
+                rotation.degrees,
+                themeId,
+                sizePx,
+                hoverSocketDir
+            )
+        }
         Bitmap.createBitmap(pixels, sizePx, sizePx, Bitmap.Config.ARGB_8888).asImageBitmap()
     }
 
@@ -2767,20 +2807,18 @@ fun OctiThinkingDialog(
     val overlayText = OctiBoardRenderer.formatThinkingProgressOverlay(depth, nodes, elapsedMs, effBudgetMs)
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {}
-            )
-            .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
+        modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 8.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = OctiTheme.colors.panelCardBg.copy(alpha = 1.0f)),
             border = BorderStroke(1.5.dp, OctiTheme.colors.accentBrass)

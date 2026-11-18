@@ -1856,8 +1856,9 @@ TEST(DesktopAppIntegrationTest, ExportMoveHistoryTextAndThinkingSliderDialog)
     // Test OctiThinkingDialog (EMF-D02)
     OctiThinkingDialog thinkingDlg(BotDifficulty::TACTICAL, 8000, ThemeId::OBSIDIAN_BRASS, &win);
     CHECK_TRUE(thinkingDlg.isFrameless());
-    LONGS_EQUAL(static_cast<long>(Qt::ApplicationModal),
+    LONGS_EQUAL(static_cast<long>(Qt::NonModal),
                 static_cast<long>(thinkingDlg.windowModality()));
+    CHECK_TRUE(thinkingDlg.testAttribute(Qt::WA_ShowWithoutActivating));
     LONGS_EQUAL(0, thinkingDlg.sliderValue());
     CHECK_TRUE(thinkingDlg.statusText().contains("AI Thinking (Level 2)"));
     CHECK_TRUE(thinkingDlg.statusText().contains("8.0s remaining"));
@@ -1876,6 +1877,211 @@ TEST(DesktopAppIntegrationTest, ExportMoveHistoryTextAndThinkingSliderDialog)
     thinkingDlg.positionBelowBoard(&win, win.boardCanvas());
     CHECK_TRUE(thinkingDlg.y() > 0);
 
+    std::remove(cfgPath.c_str());
+}
+
+TEST(DesktopAppIntegrationTest, NonBlockingThinkingDialogReadOnlyZoomAndAutoCloseOnBotFinish)
+{
+    std::string cfgPath = "/tmp/octi_nonblocking_thinking_zoom_test.json";
+    std::remove(cfgPath.c_str());
+
+    OctiMainWindow win(nullptr, cfgPath, true);
+    win.setTelemetryConsentForTesting("decline");
+
+    LocalGameConfig cfg;
+    cfg.playType = LocalPlayType::VS_AI_BOT;
+    cfg.botDifficulty = BotDifficulty::CASUAL;
+    cfg.mode = GAME_MODE_2;
+    cfg.humanSeat = PLAYER_A;
+    // Call startNewLocalGame while hidden so _botEngine uses 25ms test budget
+    win.startNewLocalGame(cfg);
+
+    win.resize(1280, 840);
+    win.show();
+    win.pumpUiEvents();
+    win.boardCanvas()->syncGeometryToBoard(
+        win.boardCanvas()->width(), win.boardCanvas()->height());
+
+    // 1. OctiThinkingDialog is non-modal + WA_ShowWithoutActivating and leaves board unblocked
+    OctiThinkingDialog thinkingDlg(BotDifficulty::CASUAL, 5000, ThemeId::OBSIDIAN_BRASS, &win);
+    LONGS_EQUAL(static_cast<long>(Qt::NonModal),
+                static_cast<long>(thinkingDlg.windowModality()));
+    CHECK_TRUE(thinkingDlg.testAttribute(Qt::WA_ShowWithoutActivating));
+    thinkingDlg.positionBelowBoard(&win, win.boardCanvas());
+    thinkingDlg.show();
+    win.pumpUiEvents();
+    CHECK_TRUE(thinkingDlg.isVisible());
+    POINTERS_EQUAL(nullptr, QApplication::activeModalWidget());
+
+    win.boardCanvas()->setInteractiveEnabled(false);
+
+    int zoomOpens = 0;
+    int lastZoomX = -1;
+    int lastZoomY = -1;
+    win.boardCanvas()->setZoomedSquareOpenHook([&](int sx, int sy) {
+        ++zoomOpens;
+        lastZoomX = sx;
+        lastZoomY = sy;
+        return true;
+    });
+
+    // Fast stationary left-click on (3, 3) while !isInteractiveEnabled() and thinkingDlg visible
+    {
+        QPointF pt = win.boardCanvas()->geometry().squareCenter(3, 3);
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &release);
+    }
+    LONGS_EQUAL(1, zoomOpens);
+    LONGS_EQUAL(3, lastZoomX);
+    LONGS_EQUAL(3, lastZoomY);
+
+    // Stationary left-click held >= 220ms (past _holdRotateTimer) still opens ZoomedSquareDialog
+    {
+        QPointF pt = win.boardCanvas()->geometry().squareCenter(5, 3);
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &press);
+        QEventLoop holdLoop;
+        QTimer::singleShot(230, &holdLoop, &QEventLoop::quit);
+        holdLoop.exec();
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &release);
+    }
+    LONGS_EQUAL(2, zoomOpens);
+    LONGS_EQUAL(5, lastZoomX);
+    LONGS_EQUAL(3, lastZoomY);
+    LONGS_EQUAL(static_cast<long>(BoardRotation::ROT_0),
+                static_cast<long>(win.boardCanvas()->boardRotation()));
+
+    // Right-click on enemy pod (3, 7) also opens ZoomedSquareDialog
+    {
+        QPointF pt = win.boardCanvas()->geometry().squareCenter(3, 7);
+        QMouseEvent press(QEvent::MouseButtonPress, pt, pt, pt,
+                          Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, pt, pt, pt,
+                            Qt::RightButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(win.boardCanvas(), &release);
+    }
+    LONGS_EQUAL(3, zoomOpens);
+    LONGS_EQUAL(3, lastZoomX);
+    LONGS_EQUAL(7, lastZoomY);
+
+    thinkingDlg.hide();
+    win.boardCanvas()->setZoomedSquareOpenHook(nullptr);
+    win.boardCanvas()->setInteractiveEnabled(true);
+
+    // 2. End-to-end executeBotTurnIfNeeded() while visible: non-modal thinking,
+    //    mutating actions guarded, read-only ZoomedSquareDialog opens & auto-closes on finish
+    win.board()->fromPositionString(
+        "2:3:0:0:P:B:-:1:4,0,9,0:4,0,9,0:A33ac,A53b,A73h,B37eg,B57f,B77d");
+    win.moveComposer()->attachBoard(win.board());
+
+    bool checkedDuringBotSearch = false;
+    bool modalDuringThinking = true;
+    bool undoDisabledDuringThinking = false;
+    bool resignDisabledDuringThinking = false;
+    bool zoomDialogOpenedDuringThinking = false;
+    bool zoomDialogRemainedReadOnly = false;
+    bool watchdogClosedModal = false;
+
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, &win, [&]() {
+        if (QWidget *mw = QApplication::activeModalWidget()) {
+            watchdogClosedModal = true;
+            mw->close();
+        }
+    });
+    watchdog.start(1500);
+
+    QTimer::singleShot(0, &win, [&]() {
+        checkedDuringBotSearch = true;
+        CHECK_TRUE(win.isBotSearchActive());
+        modalDuringThinking = (QApplication::activeModalWidget() != nullptr);
+        undoDisabledDuringThinking = !win.actionUndo()->isEnabled();
+        resignDisabledDuringThinking = !win.actionResign()->isEnabled();
+        // Mutating calls during AI search must be safely ignored
+        int pliesBefore = win.board()->getGame()->getNumMoves();
+        win.vcrPrev();
+        win.resignCurrentGame();
+        win.startNewLocalGame(cfg);
+        LONGS_EQUAL(pliesBefore, win.board()->getGame()->getNumMoves());
+        CHECK_FALSE(win.board()->getGame()->isGameOver());
+
+        if (!modalDuringThinking) {
+            QTimer::singleShot(0, &win, [&]() {
+                CHECK_TRUE(win.boardCanvas()->hasActiveZoomDialog());
+                if (auto *zd = dynamic_cast<ZoomedSquareDialog *>(
+                        QApplication::activeModalWidget())) {
+                    zoomDialogOpenedDuringThinking = true;
+                    zd->renderToImage(560, 530);
+                    if (!zd->socketCenters().empty()) {
+                        QPointF pt = zd->socketCenters().begin()->second;
+                        QMouseEvent pEv(QEvent::MouseButtonPress, pt, pt, pt,
+                                        Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                        QApplication::sendEvent(zd, &pEv);
+                        QMouseEvent rEv(QEvent::MouseButtonRelease, pt, pt, pt,
+                                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+                        QApplication::sendEvent(zd, &rEv);
+                        zoomDialogRemainedReadOnly = !zd->actionCompleted() &&
+                            !win.moveComposer()->isAwaitingConfirmation();
+                    }
+                }
+            });
+            win.boardCanvas()->openZoomedSquareAt(3, 3);
+        }
+    });
+
+    CHECK_TRUE(win.executeBotTurnIfNeeded());
+    watchdog.stop();
+
+    CHECK_TRUE(checkedDuringBotSearch);
+    CHECK_FALSE(modalDuringThinking);
+    CHECK_TRUE(undoDisabledDuringThinking);
+    CHECK_TRUE(resignDisabledDuringThinking);
+    CHECK_TRUE(zoomDialogOpenedDuringThinking);
+    CHECK_TRUE(zoomDialogRemainedReadOnly);
+    CHECK_FALSE(watchdogClosedModal);
+    CHECK_FALSE(win.isBotSearchActive());
+    CHECK_FALSE(win.boardCanvas()->hasActiveZoomDialog());
+    POINTERS_EQUAL(nullptr, QApplication::activeModalWidget());
+    CHECK_TRUE(win.boardCanvas()->isInteractiveEnabled());
+    LONGS_EQUAL(static_cast<long>(PLAYER_A),
+                static_cast<long>(win.board()->getGame()->getTurn()));
+
+    // 3. Direct closeActiveZoomDialog() + closeEvent() abort while ZoomedSquareDialog is open
+    {
+        bool directZoomOpened = false;
+        QTimer::singleShot(0, &win, [&]() {
+            directZoomOpened = win.boardCanvas()->hasActiveZoomDialog();
+            win.boardCanvas()->closeActiveZoomDialog();
+        });
+        CHECK_TRUE(win.boardCanvas()->openZoomedSquareAt(3, 3));
+        CHECK_TRUE(directZoomOpened);
+        CHECK_FALSE(win.boardCanvas()->hasActiveZoomDialog());
+
+        win.board()->fromPositionString(
+            "2:3:0:0:P:B:-:1:4,0,9,0:4,0,9,0:A33ac,A53b,A73h,B37eg,B57f,B77d");
+        win.moveComposer()->attachBoard(win.board());
+        bool closedMidSearch = false;
+        QTimer::singleShot(0, &win, [&]() {
+            closedMidSearch = win.isBotSearchActive();
+            win.close();
+        });
+        CHECK_FALSE(win.executeBotTurnIfNeeded());
+        CHECK_TRUE(closedMidSearch);
+        CHECK_FALSE(win.isBotSearchActive());
+        LONGS_EQUAL(static_cast<long>(PLAYER_B),
+                    static_cast<long>(win.board()->getGame()->getTurn()));
+    }
+
+    win.hide();
     std::remove(cfgPath.c_str());
 }
 
@@ -3838,6 +4044,10 @@ TEST(DesktopAppIntegrationTest, TenThemesConfigRoundTripAndLegacyGoldenInvarianc
     // 5. Golden image comparison for OBSIDIAN_BRASS and ROSEWOOD_IVORY
     QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
     QString goldenDir = repoRootStr + "/plan/plan_gui_ten_themes.artifacts/golden";
+    if (!QFileInfo::exists(goldenDir + "/board_obsidian_brass.png") &&
+        QFileInfo::exists(repoRootStr + "/plan/done/plan_gui_ten_themes.artifacts/golden/board_obsidian_brass.png")) {
+        goldenDir = repoRootStr + "/plan/done/plan_gui_ten_themes.artifacts/golden";
+    }
 
     OctiBoard board(GAME_MODE_2, false, false, GAME_BASES_3);
     board.getGame()->start(PLAYER_A);
@@ -3944,7 +4154,12 @@ TEST(DesktopAppIntegrationTest, TenThemesRenderingContactSheetsLobbyRobotsAndBot
     OctiReservePanel reservePanel;
     reservePanel.attach(&board, &composer, &canvas);
 
-    QString artifactDir = QString::fromUtf8(OCTI_REPO_ROOT_DIR) + "/plan/plan_gui_ten_themes.artifacts";
+    QString repoRootStr = QString::fromUtf8(OCTI_REPO_ROOT_DIR);
+    QString artifactDir = repoRootStr + "/plan/plan_gui_ten_themes.artifacts";
+    if (!QFileInfo::exists(artifactDir + "/golden/board_obsidian_brass.png") &&
+        QFileInfo::exists(repoRootStr + "/plan/done/plan_gui_ten_themes.artifacts/golden/board_obsidian_brass.png")) {
+        artifactDir = repoRootStr + "/plan/done/plan_gui_ten_themes.artifacts";
+    }
     QDir().mkpath(artifactDir);
 
     std::vector<QImage> boardRenders;

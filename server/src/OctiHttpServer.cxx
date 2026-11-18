@@ -1139,6 +1139,16 @@ struct OctiHttpServer::Impl {
     bool allowExportAttempt(const Request &req, Response &res);
 
     /* json views needing the cache */
+    static void populateHumanEntitySummaryJson(Json &target,
+                                               const PlayerProfile &prof);
+    static void populateRobotEntitySummaryJson(
+        Json &target, const RobotRecord &rRec,
+        const std::string &fallbackAvatarUrl = "");
+    bool populateActorEntitySummaryJson(int64_t actorId,
+                                        const std::string &fallbackHandle,
+                                        const std::string &fallbackRobotUuid,
+                                        const std::string &fallbackAvatarUrl,
+                                        Json &target);
     Json tableJson(const TableSummary &t);
     Json seatJson(const SeatView &s);
     Json roomViewJson(const RoomView &v);
@@ -1975,6 +1985,105 @@ Json OctiHttpServer::Impl::roomEventJson(const RoomEvent &e)
     return j;
 }
 
+void OctiHttpServer::Impl::populateHumanEntitySummaryJson(
+    Json &target, const PlayerProfile &prof)
+{
+    target["is_robot"] = false;
+    target["player_uuid"] = prof.uuid;
+    target["uuid"] = prof.uuid;
+    target["handle"] = prof.handle;
+    target["display_name"] = prof.displayName;
+    target["avatar_url"] = prof.avatarUrl;
+    target["bio"] = prof.bio;
+    target["location"] = prof.location;
+    target["elo_2p_3b"] = prof.elo2p3b;
+    target["elo_2p_1b"] = prof.elo2p1b;
+    target["elo_ofk"] = prof.eloOfk;
+    target["games_2p_3b"] = prof.games2p3b;
+    target["games_2p_1b"] = prof.games2p1b;
+    target["games_ofk"] = prof.gamesOfk;
+    target["games_played"] = prof.gamesPlayed;
+    target["wins"] = prof.wins;
+    target["losses"] = prof.losses;
+    target["draws"] = prof.draws;
+    target["arena_elo_2p_3b"] = prof.arenaElo2p3b;
+    target["arena_elo_2p_1b"] = prof.arenaElo2p1b;
+    target["arena_elo_ofk"] = prof.arenaEloOfk;
+    target["arena_games_2p_3b"] = prof.arenaGames2p3b;
+    target["arena_games_2p_1b"] = prof.arenaGames2p1b;
+    target["arena_games_ofk"] = prof.arenaGamesOfk;
+    target["arena_games_played"] = prof.arenaGamesPlayed;
+    target["arena_wins"] = prof.arenaWins;
+    target["arena_losses"] = prof.arenaLosses;
+    target["arena_draws"] = prof.arenaDraws;
+    target["created_at"] = prof.createdAt;
+}
+
+void OctiHttpServer::Impl::populateRobotEntitySummaryJson(
+    Json &target, const RobotRecord &rRec,
+    const std::string &fallbackAvatarUrl)
+{
+    target["is_robot"] = true;
+    target["robot_uuid"] = rRec.robotUuid;
+    target["uuid"] = rRec.robotUuid;
+    target["handle"] = rRec.robotName;
+    target["robot_name"] = rRec.robotName;
+    target["display_name"] = rRec.robotName;
+    target["avatar_url"] =
+        !rRec.ownerAvatarUrl.empty() ? rRec.ownerAvatarUrl : fallbackAvatarUrl;
+    target["robot_url"] = rRec.robotUrl;
+    target["robot_description"] = rRec.description;
+    target["description"] = rRec.description;
+    target["owner_player_id"] = rRec.ownerPlayerId;
+    target["owner_uuid"] = rRec.ownerUuid;
+    target["owner_handle"] = rRec.ownerHandle;
+    target["owner_avatar_url"] = rRec.ownerAvatarUrl;
+    target["elo_2p_3b"] = rRec.elo2p3b;
+    target["elo_2p_1b"] = rRec.elo2p1b;
+    target["elo_ofk"] = rRec.eloOfk;
+    target["games_2p_3b"] = rRec.games2p3b;
+    target["games_2p_1b"] = rRec.games2p1b;
+    target["games_ofk"] = rRec.gamesOfk;
+    target["robot_games_played"] = rRec.gamesPlayed;
+    target["games_played"] = rRec.gamesPlayed;
+    target["robot_wins"] = rRec.wins;
+    target["wins"] = rRec.wins;
+    target["robot_losses"] = rRec.losses;
+    target["losses"] = rRec.losses;
+    target["robot_draws"] = rRec.draws;
+    target["draws"] = rRec.draws;
+    target["created_at"] = rRec.createdAt;
+}
+
+bool OctiHttpServer::Impl::populateActorEntitySummaryJson(
+    int64_t actorId, const std::string &fallbackHandle,
+    const std::string &fallbackRobotUuid,
+    const std::string &fallbackAvatarUrl, Json &target)
+{
+    (void)fallbackHandle;
+    if (isRobotActorId(actorId) || !fallbackRobotUuid.empty()) {
+        int64_t robotId =
+            isRobotActorId(actorId) ? robotIdFromActorId(actorId) : 0;
+        RobotRecord rRec;
+        bool found = (robotId > 0 && store.getRobotById(robotId, rRec)) ||
+                     (!fallbackRobotUuid.empty() &&
+                      store.getRobotByUuid(fallbackRobotUuid, rRec));
+        if (found) {
+            populateRobotEntitySummaryJson(target, rRec, fallbackAvatarUrl);
+            return true;
+        }
+        return false;
+    }
+    if (actorId > 0) {
+        PlayerProfile prof;
+        if (store.getProfileById(actorId, prof)) {
+            populateHumanEntitySummaryJson(target, prof);
+            return true;
+        }
+    }
+    return false;
+}
+
 Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
 {
     Json j = configJson(t.config);
@@ -1983,6 +2092,57 @@ Json OctiHttpServer::Impl::tableJson(const TableSummary &t)
     j["has_passcode"] = t.hasPasscode;
     j["host_uuid"] = t.hostPlayerId != 0 ? uuidOf(t.hostPlayerId) : "";
     j["host_handle"] = t.hostHandle;
+    if (t.hostPlayerId != 0) {
+        Json hostDetail = Json::object();
+        if (!populateActorEntitySummaryJson(t.hostPlayerId, t.hostHandle, "",
+                                            "", hostDetail)) {
+            const bool hostIsBot = isRobotActorId(t.hostPlayerId);
+            hostDetail["is_robot"] = hostIsBot;
+            hostDetail["handle"] = t.hostHandle;
+            hostDetail["display_name"] = t.hostHandle;
+            hostDetail["avatar_url"] = "";
+            if (hostIsBot) {
+                hostDetail["robot_uuid"] = j["host_uuid"];
+                hostDetail["robot_name"] = t.hostHandle;
+                hostDetail["robot_url"] = "";
+                hostDetail["robot_description"] = "";
+                hostDetail["owner_uuid"] = "";
+                hostDetail["owner_handle"] = "";
+                hostDetail["robot_games_played"] = 0;
+                hostDetail["robot_wins"] = 0;
+                hostDetail["robot_losses"] = 0;
+                hostDetail["robot_draws"] = 0;
+            } else {
+                hostDetail["player_uuid"] = j["host_uuid"];
+                hostDetail["bio"] = "";
+                hostDetail["location"] = "";
+                hostDetail["arena_elo_2p_3b"] = 1200;
+                hostDetail["arena_elo_2p_1b"] = 1200;
+                hostDetail["arena_elo_ofk"] = 1200;
+                hostDetail["arena_games_2p_3b"] = 0;
+                hostDetail["arena_games_2p_1b"] = 0;
+                hostDetail["arena_games_ofk"] = 0;
+                hostDetail["arena_games_played"] = 0;
+                hostDetail["arena_wins"] = 0;
+                hostDetail["arena_losses"] = 0;
+                hostDetail["arena_draws"] = 0;
+            }
+            hostDetail["elo_2p_3b"] = 1200;
+            hostDetail["elo_2p_1b"] = 1200;
+            hostDetail["elo_ofk"] = 1200;
+            hostDetail["games_2p_3b"] = 0;
+            hostDetail["games_2p_1b"] = 0;
+            hostDetail["games_ofk"] = 0;
+            hostDetail["games_played"] = 0;
+            hostDetail["wins"] = 0;
+            hostDetail["losses"] = 0;
+            hostDetail["draws"] = 0;
+            hostDetail["created_at"] = 0;
+        }
+        j["host_detail"] = hostDetail;
+    } else {
+        j["host_detail"] = nullptr;
+    }
     j["created_at_ms"] = t.createdAtMs;
     j["seats_total"] = t.seatsTotal;
     j["seats_filled"] = t.seatsFilled;
@@ -4272,18 +4432,24 @@ void OctiHttpServer::Impl::handleRobotsExportConf(const Request &req, Response &
 void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
                                              Response &res)
 {
-    std::string mode = "2P_3B";
+    std::string rawMode = "2P_3B";
     if (req.has_param("ladder")) {
-        mode = upper(req.get_param_value("ladder"));
+        rawMode = req.get_param_value("ladder");
     } else if (req.has_param("mode")) {
-        mode = upper(req.get_param_value("mode"));
+        rawMode = req.get_param_value("mode");
     }
-    if (mode != "2P" && mode != "2P_3B" && mode != "2P_1B" && mode != "OFK") {
+    const std::string modeUpper = upper(rawMode);
+    if (modeUpper != "OVERALL" && modeUpper != "2P" &&
+        modeUpper != "2P_3B" && modeUpper != "2P_1B" &&
+        modeUpper != "OFK") {
         sendError(res, 400, "INVALID_ARGUMENT",
-                  "mode must be 2P_3B, 2P_1B or OFK");
+                  "mode must be overall, 2P_3B, 2P_1B or OFK");
         return;
     }
-    const std::string ladder = (mode == "2P") ? "2P_3B" : mode;
+    const bool isOverall = (modeUpper == "OVERALL");
+    const std::string mode = isOverall ? "overall" : modeUpper;
+    const std::string ladder =
+        isOverall ? "OVERALL" : ((modeUpper == "2P") ? "2P_3B" : modeUpper);
 
     std::string pool = "human";
     if (req.has_param("pool")) {
@@ -4311,6 +4477,55 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
         return;
     }
 
+    std::string sortField;
+    if (req.has_param("sort") && !req.get_param_value("sort").empty()) {
+        sortField = lower(req.get_param_value("sort"));
+        if (sortField != "elo_2p_3b" && sortField != "elo_2p_1b" &&
+            sortField != "elo_ofk" && sortField != "wins" &&
+            sortField != "games_played" && sortField != "win_rate" &&
+            sortField != "name" && sortField != "handle" &&
+            sortField != "robot_name" && sortField != "created_at") {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "sort must be a valid leaderboard sort field");
+            return;
+        }
+    } else if (ladder == "2P_1B") {
+        sortField = "elo_2p_1b";
+    } else if (ladder == "OFK") {
+        sortField = "elo_ofk";
+    } else {
+        sortField = "elo_2p_3b";
+    }
+
+    bool sortAsc = false;
+    if (req.has_param("order") && !req.get_param_value("order").empty()) {
+        const std::string ord = lower(req.get_param_value("order"));
+        if (ord == "asc") {
+            sortAsc = true;
+        } else if (ord == "desc") {
+            sortAsc = false;
+        } else {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "order must be desc or asc");
+            return;
+        }
+    }
+
+    bool playedOnly = isOverall;
+    if (req.has_param("played_only") &&
+        !req.get_param_value("played_only").empty()) {
+        const std::string po = lower(req.get_param_value("played_only"));
+        if (po == "1" || po == "true") {
+            playedOnly = true;
+        } else if (po == "0" || po == "false") {
+            playedOnly = isOverall ? true : false;
+        } else {
+            sendError(res, 400, "INVALID_ARGUMENT",
+                      "played_only must be 0, 1, false or true");
+            return;
+        }
+    }
+
     int64_t limit = 50;
     if (req.has_param("limit") &&
         (!parseUnsignedClamped(req.get_param_value("limit"),
@@ -4328,14 +4543,10 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
         af.participantType = participantType;
         af.limit = static_cast<int>(limit);
         af.offset = 0;
-        af.sortAsc = false;
-        if (ladder == "2P_1B") {
-            af.sortField = "elo_2p_1b";
-        } else if (ladder == "OFK") {
-            af.sortField = "elo_ofk";
-        } else {
-            af.sortField = "elo_2p_3b";
-        }
+        af.sortAsc = sortAsc;
+        af.sortField = sortField;
+        af.ladder = isOverall ? "" : ladder;
+        af.playedOnly = playedOnly;
         std::vector<ArenaStandingEntry> arenaRows;
         if (!store.listArenaStandings(af, arenaRows, &total)) {
             sendError(res, 500, "INTERNAL_ERROR", "arena leaderboard query failed");
@@ -4344,17 +4555,27 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
         int rankedCount = 0;
         for (size_t i = 0; i < arenaRows.size(); ++i) {
             const ArenaStandingEntry &row = arenaRows[i];
-            int ladderGames = row.games2p3b;
+            int ladderGames = row.gamesPlayed;
             int ladderElo = row.elo2p3b;
-            if (ladder == "2P_1B") {
+            if (isOverall) {
+                if (sortField == "elo_2p_1b") {
+                    ladderElo = row.elo2p1b;
+                } else if (sortField == "elo_ofk") {
+                    ladderElo = row.eloOfk;
+                }
+            } else if (ladder == "2P_1B") {
                 ladderGames = row.games2p1b;
                 ladderElo = row.elo2p1b;
             } else if (ladder == "OFK") {
                 ladderGames = row.gamesOfk;
                 ladderElo = row.eloOfk;
+            } else {
+                ladderGames = row.games2p3b;
+                ladderElo = row.elo2p3b;
             }
             const bool ranked = (ladderGames > 0);
             const bool isRobot = (row.entryType == "robot");
+            const bool retired = isRobot && (row.revoked || row.tokenDeleted);
             Json e;
             e["rank"] = ranked ? (++rankedCount) : 0;
             e["ranked"] = ranked;
@@ -4368,8 +4589,11 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
             e["robot_name"] = isRobot ? row.name : "";
             e["display_name"] = row.displayName;
             e["avatar_url"] = row.avatarUrl;
+            e["description"] = row.description;
+            e["robot_url"] = row.robotUrl;
             e["owner_uuid"] = row.ownerUuid;
             e["owner_handle"] = row.ownerHandle;
+            e["owner_avatar_url"] = row.ownerAvatarUrl;
             e["elo"] = ranked ? ladderElo : 1200;
             e["elo_2p_3b"] = row.elo2p3b;
             e["elo_2p_1b"] = row.elo2p1b;
@@ -4378,21 +4602,41 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
             e["games_2p_3b"] = row.games2p3b;
             e["games_2p_1b"] = row.games2p1b;
             e["games_ofk"] = row.gamesOfk;
+            e["wins_2p_3b"] = row.wins2p3b;
+            e["losses_2p_3b"] = row.losses2p3b;
+            e["draws_2p_3b"] = row.draws2p3b;
+            e["wins_2p_1b"] = row.wins2p1b;
+            e["losses_2p_1b"] = row.losses2p1b;
+            e["draws_2p_1b"] = row.draws2p1b;
+            e["wins_ofk"] = row.winsOfk;
+            e["losses_ofk"] = row.lossesOfk;
+            e["draws_ofk"] = row.drawsOfk;
             e["games_played"] = row.gamesPlayed;
             e["wins"] = row.wins;
             e["losses"] = row.losses;
             e["draws"] = row.draws;
             e["win_rate"] = row.winRate;
             e["revoked"] = row.revoked;
+            e["token_deleted"] = row.tokenDeleted;
+            e["retired"] = retired;
+            e["status"] = (!retired) ? "active" : "retired";
             arr.push_back(e);
         }
     } else {
         std::vector<LeaderboardEntry> rows;
-        if (!store.leaderboard(mode, static_cast<int>(limit), rows)) {
+        bool ok = false;
+        if (isOverall) {
+            ok = store.leaderboardOverall(sortField, sortAsc,
+                                          static_cast<int>(limit), rows,
+                                          &total);
+        } else {
+            ok = store.leaderboard(modeUpper, static_cast<int>(limit), rows,
+                                   playedOnly, &total);
+        }
+        if (!ok) {
             sendError(res, 500, "INTERNAL_ERROR", "leaderboard query failed");
             return;
         }
-        total = static_cast<int64_t>(rows.size());
         for (size_t i = 0; i < rows.size(); ++i) {
             const bool ranked = (rows[i].ladderGames > 0);
             Json e;
@@ -4406,11 +4650,18 @@ void OctiHttpServer::Impl::handleLeaderboard(const Request &req,
             e["display_name"] = rows[i].displayName;
             e["avatar_url"] = rows[i].avatarUrl;
             e["elo"] = ranked ? rows[i].elo : 1200;
+            e["elo_2p_3b"] = rows[i].elo2p3b;
+            e["elo_2p_1b"] = rows[i].elo2p1b;
+            e["elo_ofk"] = rows[i].eloOfk;
             e["ladder_games"] = rows[i].ladderGames;
+            e["games_2p_3b"] = rows[i].games2p3b;
+            e["games_2p_1b"] = rows[i].games2p1b;
+            e["games_ofk"] = rows[i].gamesOfk;
             e["games_played"] = rows[i].gamesPlayed;
             e["wins"] = rows[i].wins;
             e["losses"] = rows[i].losses;
             e["draws"] = rows[i].draws;
+            e["win_rate"] = rows[i].winRate;
             arr.push_back(e);
         }
     }
@@ -4464,18 +4715,22 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
     Json players = Json::array();
     for (size_t i = 0; i < snap.players.size(); ++i) {
         PlayerProfile pProf;
+        bool hasHumanProf = false;
         std::string avatarUrl;
         if (snap.players[i].isRobot) {
             avatarUrl = snap.players[i].avatarUrl;
-        } else if (snap.players[i].playerId > 0 && store.getProfileById(snap.players[i].playerId, pProf)) {
+        } else if (snap.players[i].playerId > 0 &&
+                   store.getProfileById(snap.players[i].playerId, pProf)) {
+            hasHumanProf = true;
             avatarUrl = pProf.avatarUrl;
         }
         Json clientsArr = Json::array();
         for (size_t ci = 0; ci < snap.players[i].clients.size(); ++ci) {
             clientsArr.push_back(snap.players[i].clients[ci]);
         }
+        const std::string resolvedPlayerUuid = uuidOf(snap.players[i].playerId);
         Json pj = {
-            {"player_uuid", uuidOf(snap.players[i].playerId)},
+            {"player_uuid", resolvedPlayerUuid},
             {"handle", snap.players[i].handle},
             {"avatar_url", avatarUrl},
             {"status", toString(snap.players[i].status)},
@@ -4485,16 +4740,64 @@ void OctiHttpServer::Impl::handleLobbyState(const Request &req, Response &res)
             {"idle_sec", snap.players[i].idleSec},
             {"is_robot", snap.players[i].isRobot}
         };
-        if (snap.players[i].isRobot) {
+        if (snap.players[i].isRobot ||
+            isRobotActorId(snap.players[i].playerId)) {
             pj["robot_uuid"] = snap.players[i].robotUuid;
+            pj["robot_name"] = snap.players[i].handle;
+            pj["robot_url"] = "";
             pj["robot_description"] = snap.players[i].robotDescription;
             pj["owner_player_id"] = snap.players[i].ownerPlayerId;
             pj["owner_uuid"] = snap.players[i].ownerUuid;
             pj["owner_handle"] = snap.players[i].ownerHandle;
+            pj["elo_2p_3b"] = 1200;
+            pj["elo_2p_1b"] = 1200;
+            pj["elo_ofk"] = 1200;
+            pj["games_2p_3b"] = 0;
+            pj["games_2p_1b"] = 0;
+            pj["games_ofk"] = 0;
             pj["robot_games_played"] = snap.players[i].robotGamesPlayed;
+            pj["games_played"] = snap.players[i].robotGamesPlayed;
             pj["robot_wins"] = snap.players[i].robotWins;
+            pj["wins"] = snap.players[i].robotWins;
             pj["robot_losses"] = snap.players[i].robotLosses;
+            pj["losses"] = snap.players[i].robotLosses;
             pj["robot_draws"] = snap.players[i].robotDraws;
+            pj["draws"] = snap.players[i].robotDraws;
+            pj["created_at"] = 0;
+            populateActorEntitySummaryJson(snap.players[i].playerId,
+                                           snap.players[i].handle,
+                                           snap.players[i].robotUuid,
+                                           snap.players[i].avatarUrl, pj);
+            pj["player_uuid"] = resolvedPlayerUuid;
+        } else if (hasHumanProf) {
+            populateHumanEntitySummaryJson(pj, pProf);
+            pj["player_uuid"] = resolvedPlayerUuid;
+            pj["handle"] = snap.players[i].handle;
+        } else {
+            pj["display_name"] = "";
+            pj["bio"] = "";
+            pj["location"] = "";
+            pj["elo_2p_3b"] = 1200;
+            pj["elo_2p_1b"] = 1200;
+            pj["elo_ofk"] = 1200;
+            pj["games_2p_3b"] = 0;
+            pj["games_2p_1b"] = 0;
+            pj["games_ofk"] = 0;
+            pj["games_played"] = 0;
+            pj["wins"] = 0;
+            pj["losses"] = 0;
+            pj["draws"] = 0;
+            pj["arena_elo_2p_3b"] = 1200;
+            pj["arena_elo_2p_1b"] = 1200;
+            pj["arena_elo_ofk"] = 1200;
+            pj["arena_games_2p_3b"] = 0;
+            pj["arena_games_2p_1b"] = 0;
+            pj["arena_games_ofk"] = 0;
+            pj["arena_games_played"] = 0;
+            pj["arena_wins"] = 0;
+            pj["arena_losses"] = 0;
+            pj["arena_draws"] = 0;
+            pj["created_at"] = 0;
         }
         players.push_back(pj);
     }

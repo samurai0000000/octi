@@ -119,8 +119,16 @@ OctiBoardCanvas::OctiBoardCanvas(QWidget *parent)
 
 OctiBoardCanvas::~OctiBoardCanvas()
 {
+    closeActiveZoomDialog();
     _animTimer.stop();
     _holdRotateTimer.stop();
+}
+
+void OctiBoardCanvas::closeActiveZoomDialog()
+{
+    if (_activeZoomDialog) {
+        _activeZoomDialog->reject();
+    }
 }
 
 void OctiBoardCanvas::cancelHandRotateHold()
@@ -1744,7 +1752,12 @@ bool OctiBoardCanvas::openZoomedSquareAt(int sx, int sy)
         }
     }
     ZoomedSquareDialog dlg(_board, activeComposer, sx, sy, _rotation, _theme, this);
-    if (dlg.exec() == QDialog::Accepted && activeComposer) {
+    _activeZoomDialog = &dlg;
+    const int dlgResult = dlg.exec();
+    if (_activeZoomDialog == &dlg) {
+        _activeZoomDialog.clear();
+    }
+    if (dlgResult == QDialog::Accepted && activeComposer) {
         if (dlg.shouldMovePod()) {
             activeComposer->beginGuidedPodMove(sx, sy, dlg.selectedPodIndex(), dlg.moveAllMatchingStack());
         } else if (dlg.actionCompleted() && activeComposer->isAwaitingConfirmation()) {
@@ -2276,6 +2289,19 @@ void OctiBoardCanvas::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     if (_handRotateActive) {
+        if (!_interactiveEnabled && event && event->button() == Qt::LeftButton && _board) {
+            QPointF curRaw = rawMousePosF(event);
+            double rawDist = std::hypot(curRaw.x() - _pressRawPos.x(),
+                                        curRaw.y() - _pressRawPos.y());
+            if (rawDist < 6.0 && std::abs(_liveRotationOffsetDeg) < 2.0) {
+                cancelHandRotateHold();
+                int rx = -1, ry = -1;
+                if (_geometry.screenToSquare(mousePosF(event), rx, ry)) {
+                    openZoomedSquareAt(rx, ry);
+                }
+                return;
+            }
+        }
         auto norm360 = [](double a) {
             while (a < 0.0) a += 360.0;
             while (a >= 360.0) a -= 360.0;

@@ -4863,7 +4863,16 @@ TEST(OctiHttpServerIntegrationTest, WebPlayerBotProfilesQuiescenceAndRulesValida
     // 1. Bot tuning & profiles
     CHECK_TRUE(rUi.body.find("DEFAULT_BOT_TUNING") != std::string::npos);
     CHECK_TRUE(rUi.body.find("BOT_PROFILES") != std::string::npos);
-    CHECK_TRUE(rUi.body.find("AI_Casual") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_L1") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_L2") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_L3") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_L4") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_L5") != std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Casual") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Tactical") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Master") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Expert") == std::string::npos);
+    CHECK_TRUE(rUi.body.find("AI_Grandmaster") == std::string::npos);
 
     // 2. AI search engine functions
     CHECK_TRUE(rUi.body.find("dfsJumpChains") != std::string::npos);
@@ -5953,8 +5962,18 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("OCTI v" + std::string(OCTI_APP_VERSION)) != std::string::npos);
     CHECK_TRUE(rIndex.body.find("Official Platform") == std::string::npos);
     CHECK_TRUE(rIndex.body.find("OFFICIAL PLATFORM") == std::string::npos);
-    CHECK_TRUE(rIndex.body.find("Lv4: Expert (40s)") != std::string::npos);
-    CHECK_TRUE(rIndex.body.find("Lv5: Grandmaster (60s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv1: AI_L1 (5s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv2: AI_L2 (10s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv3: AI_L3 (20s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv4: AI_L4 (40s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv5: AI_L5 (60s)") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv4: Expert") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("Lv5: Grandmaster") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("explore grandmaster replays") == std::string::npos);
+    CHECK_TRUE(rIndex.body.find("explore archived replays") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-roster-entity-modal\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"web-host-hover-card\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("openOnlineEntityDialog") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("timeBudgetMs: 40000") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("timeBudgetMs: 60000") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("hasOtherMovablePodAtOrigin") != std::string::npos);
@@ -9492,7 +9511,7 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     EXPECT_STATUS(200, ui);
     CHECK_TRUE(ui.body == std::string(octi::webUiHtml()));
     CHECK_TRUE(ui.body.find("OCTIUI") == std::string::npos);
-    CHECK_TRUE(ui.body.find("OCTI v2.6.1") != std::string::npos);
+    CHECK_TRUE(ui.body.find("OCTI v2.6.2") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"robots-participant-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_3b\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("value=\"elo_2p_1b\"") != std::string::npos);
@@ -9501,6 +9520,25 @@ TEST(OctiHttpServerIntegrationTest, DualPoolLeaderboardUsersArenaDirectoryAndWeb
     CHECK_TRUE(ui.body.find("id=\"lb-arena-type\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"lb-arena-msg\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"lb-arena-table\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("value=\"overall\" selected>Overall (All Ladders)</option>") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-sort-wrap\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-sort\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"lb-order\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("played_only=1") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Lv1: AI_L1 (5s)") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Lv5: AI_L5 (60s)") != std::string::npos);
+    CHECK_TRUE(ui.body.find("AI_Grandmaster") == std::string::npos);
+    CHECK_TRUE(ui.body.find("AI_Expert") == std::string::npos);
+    CHECK_TRUE(ui.body.find("AI_Master") == std::string::npos);
+    CHECK_TRUE(ui.body.find("AI_Tactical") == std::string::npos);
+    CHECK_TRUE(ui.body.find("AI_Casual") == std::string::npos);
+    CHECK_TRUE(ui.body.find("Lv4: Expert") == std::string::npos);
+    CHECK_TRUE(ui.body.find("Lv5: Grandmaster") == std::string::npos);
+    CHECK_TRUE(ui.body.find("explore grandmaster replays") == std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"web-roster-entity-modal\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("id=\"web-host-hover-card\"") != std::string::npos);
+    CHECK_TRUE(ui.body.find("openOnlineEntityDialog") != std::string::npos);
+    CHECK_TRUE(ui.body.find("Click or tap for details") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"btn-admin-recompute-ratings\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("id=\"admin-recompute-msg\"") != std::string::npos);
     CHECK_TRUE(ui.body.find("function fmtElo(elo, gamesCount)") != std::string::npos);
@@ -10346,6 +10384,315 @@ assert.ok(elements["web-play-turn-badge"].textContent.includes("Draw"), "Expecte
     std::remove(webJsPath.c_str());
     std::remove(runnerJsPath.c_str());
     CHECK_EQUAL(0, rcNode);
+}
+
+TEST(OctiHttpServerIntegrationTest, LeaderboardOverallVariantIsolationPlayedOnlyAndLobbyEntityDetails)
+{
+    User alice = signIn("google", "sub-lbov-alice", "Alice Strategist");
+    User bob = signIn("google", "sub-lbov-bob", "Bob Tactician");
+    User carol = signIn("google", "sub-lbov-carol", "Carol Builder");
+    User daveUnplayed = signIn("google", "sub-lbov-dave", "Dave Idle");
+    (void)daveUnplayed;
+
+    /* Enrich Alice's human profile with display_name, bio, and location */
+    EXPECT_STATUS(200, http().patch("/api/v1/profile/me", alice.token,
+                                    Json{{"display_name", "Alice Strategist"},
+                                         {"bio", "Endgame specialist"},
+                                         {"location", "Taipei"}}));
+
+    /* Create two robots owned by Carol: one active Arena bot and one 0-game lobby/host bot */
+    setenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST", "1", 1);
+    std::string validBotUrl =
+        "http://127.0.0.1:" + std::to_string(http().port()) + "/api/v1/health";
+    Reply rBotAlpha = http().post(
+        "/api/v1/robots", carol.token,
+        Json{{"robot_name", "alpha-arena-bot"},
+             {"description", "Active multi-variant Arena bot"},
+             {"robot_url", validBotUrl}});
+    Reply rBotZero = http().post(
+        "/api/v1/robots", carol.token,
+        Json{{"robot_name", "zero-game-host-bot"},
+             {"description", "Fresh zero-game connected robot"},
+             {"robot_url", validBotUrl}});
+    unsetenv("OCTI_ALLOW_LOOPBACK_ROBOT_URL_FOR_TEST");
+
+    EXPECT_STATUS(201, rBotAlpha);
+    EXPECT_STATUS(201, rBotZero);
+    std::string botAlphaUuid = rBotAlpha.json.value("robot_uuid", "");
+    std::string botAlphaToken = rBotAlpha.json.value("robot_token", "");
+    std::string botZeroUuid = rBotZero.json.value("robot_uuid", "");
+    std::string botZeroToken = rBotZero.json.value("robot_token", "");
+
+    User botAlphaUser;
+    botAlphaUser.uuid = botAlphaUuid;
+    botAlphaUser.handle = "alpha-arena-bot";
+    botAlphaUser.token = botAlphaToken;
+
+    /* 1. Pool 1 2P_1B rated win: Alice beats Bob (8 plies + resign) */
+    std::vector<User> aliceBob = {alice, bob};
+    std::string room1b =
+        startGame(aliceBob, Json{{"mode", "2P"}, {"bases", 1}, {"rated", true}});
+    CHECK_EQUAL(8, playPlies(room1b, aliceBob, GAME_MODE_2, 8, Json{{"bases", 1}}));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + room1b + "/resign",
+                                   bob.token, Json::object()));
+
+    /* 2. Pool 1 OFK rated draw: Alice and Carol agree to draw */
+    std::vector<User> aliceCarol = {alice, carol};
+    std::string roomOfk =
+        startGame(aliceCarol, Json{{"mode", "OFK"}, {"bases", 1}, {"rated", true}});
+    EXPECT_STATUS(200, act(roomOfk, alice, "offer_draw"));
+    EXPECT_STATUS(200, act(roomOfk, carol, "accept_draw"));
+
+    /* 3. Pool 2 2P_3B rated win: Alice beats botAlpha (8 plies + resign) */
+    Reply hostArena3b = http().post(
+        "/api/v1/tables", alice.token,
+        Json{{"mode", "2P"}, {"bases", 3}, {"rated", true}, {"allow_robots", true}});
+    EXPECT_STATUS(201, hostArena3b);
+    std::string arena3bRoom = hostArena3b.json.value("room_id", "");
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + arena3bRoom + "/join",
+                                   botAlphaToken, Json{{"seat", 2}}));
+    std::vector<User> aliceBot = {alice, botAlphaUser};
+    CHECK_EQUAL(8, playPlies(arena3bRoom, aliceBot, GAME_MODE_2, 8, Json{{"bases", 3}}));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + arena3bRoom + "/resign",
+                                   botAlphaToken, Json::object()));
+
+    /* 4. Pool 2 OFK rated R7 NO_PROGRESS_DRAW archived between Bob and botAlpha */
+    {
+        octi::PlayerProfile bobProf;
+        CHECK_TRUE(env->store.getProfileByUuid(bob.uuid, bobProf));
+        octi::RobotRecord botRec;
+        CHECK_TRUE(env->store.getRobotByUuid(botAlphaUuid, botRec));
+
+        octi::GameRecord gR7;
+        gR7.gameId = "g-arena-ofk-r7draw";
+        gR7.gameMode = "OFK";
+        gR7.gameBases = 1;
+        gR7.timeControl = "untimed";
+        gR7.p1PlayerId = bobProf.playerId;
+        gR7.p1Handle = bobProf.handle;
+        gR7.p2PlayerId = 0;
+        gR7.p2RobotId = botRec.robotId;
+        gR7.p2Handle = botRec.robotName;
+        gR7.result = "DRAW";
+        gR7.winnerSeat = 0;
+        gR7.winner = "NONE";
+        gR7.termination = "NO_PROGRESS_DRAW";
+        gR7.status = "GAME_OVER";
+        gR7.plyCount = 30;
+        gR7.octiTranscript = "{\"format\":\"octi-transcript-v1\",\"plies\":[]}";
+        gR7.finalFen = "K:1:0:0:O:-:-:0:4,0,23,0:4,0,23,0:A22,B26";
+        gR7.startedAt = 1700000100;
+        gR7.endedAt = 1700000200;
+        gR7.source = "online";
+        gR7.rated = 1;
+        gR7.eloPool = 2;
+        std::string archErr;
+        CHECK_EQUAL(static_cast<int>(octi::ArchiveStatus::OK),
+                    static_cast<int>(env->store.archiveGameWithRatings(
+                        gR7,
+                        {{bobProf.playerId, 0, 1200, octi::GameOutcome::DRAW},
+                         {0, botRec.robotId, 1200, octi::GameOutcome::DRAW}},
+                        {{botRec.robotId, octi::GameOutcome::DRAW}}, archErr)));
+    }
+
+    /* 5. Fault cases -> 400 INVALID_ARGUMENT */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=overall&sort=invalid"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=overall&order=sideways"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=2P_3B&played_only=maybe"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=overall&pool=human&participant_type=robots"));
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().get("/api/v1/leaderboard?mode=bogus"));
+
+    /* 6. Variant-scoped Pool 1 + played_only=1 (SQL-level filtering before LIMIT) */
+    Reply lb1bPlayed =
+        http().get("/api/v1/leaderboard?mode=2P_1B&pool=human&played_only=1");
+    EXPECT_STATUS(200, lb1bPlayed);
+    CHECK_EQUAL(2, lb1bPlayed.json.value("total", -1));
+    CHECK_EQUAL(2, static_cast<int>(lb1bPlayed.json["entries"].size()));
+    STRCMP_EQUAL(alice.uuid.c_str(),
+                 lb1bPlayed.json["entries"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1, lb1bPlayed.json["entries"][0].value("games_played", -1));
+    CHECK_EQUAL(1, lb1bPlayed.json["entries"][0].value("wins", -1));
+    CHECK_EQUAL(0, lb1bPlayed.json["entries"][0].value("losses", -1));
+    CHECK_EQUAL(0, lb1bPlayed.json["entries"][0].value("draws", -1));
+    DOUBLES_EQUAL(100.0, lb1bPlayed.json["entries"][0].value("win_rate", -1.0), 0.01);
+
+    STRCMP_EQUAL(bob.uuid.c_str(),
+                 lb1bPlayed.json["entries"][1].value("uuid", "").c_str());
+    CHECK_EQUAL(1, lb1bPlayed.json["entries"][1].value("games_played", -1));
+    CHECK_EQUAL(0, lb1bPlayed.json["entries"][1].value("wins", -1));
+    CHECK_EQUAL(1, lb1bPlayed.json["entries"][1].value("losses", -1));
+    CHECK_EQUAL(0, lb1bPlayed.json["entries"][1].value("draws", -1));
+    DOUBLES_EQUAL(0.0, lb1bPlayed.json["entries"][1].value("win_rate", -1.0), 0.01);
+
+    Reply lb3bPlayed =
+        http().get("/api/v1/leaderboard?mode=2P_3B&pool=human&played_only=1");
+    EXPECT_STATUS(200, lb3bPlayed);
+    CHECK_EQUAL(0, lb3bPlayed.json.value("total", -1));
+    CHECK_EQUAL(0, static_cast<int>(lb3bPlayed.json["entries"].size()));
+
+    /* Default played_only=0 preserves backward compatibility (returns all 4 unplayed 2P_3B accounts) */
+    Reply lb3bCompat = http().get("/api/v1/leaderboard?mode=2P_3B&pool=human");
+    EXPECT_STATUS(200, lb3bCompat);
+    CHECK_EQUAL(4, static_cast<int>(lb3bCompat.json["entries"].size()));
+
+    /* 7. Variant-scoped Pool 2 + played_only=1 + limit=1 check */
+    Reply lbArena3bPlayed =
+        http().get("/api/v1/leaderboard?mode=2P_3B&pool=arena&played_only=1");
+    EXPECT_STATUS(200, lbArena3bPlayed);
+    CHECK_EQUAL(2, lbArena3bPlayed.json.value("total", -1));
+    CHECK_EQUAL(2, static_cast<int>(lbArena3bPlayed.json["entries"].size()));
+    /* botAlpha played 1 2P_3B loss and 1 OFK NO_PROGRESS_DRAW -> in 2P_3B must show 1 game (0-1-0), NOT 2! */
+    STRCMP_EQUAL(botAlphaUuid.c_str(),
+                 lbArena3bPlayed.json["entries"][1].value("robot_uuid", "").c_str());
+    CHECK_EQUAL(1, lbArena3bPlayed.json["entries"][1].value("games_played", -1));
+    CHECK_EQUAL(0, lbArena3bPlayed.json["entries"][1].value("wins", -1));
+    CHECK_EQUAL(1, lbArena3bPlayed.json["entries"][1].value("losses", -1));
+    CHECK_EQUAL(0, lbArena3bPlayed.json["entries"][1].value("draws", -1));
+
+    Reply lbArenaOfkLim1 =
+        http().get("/api/v1/leaderboard?mode=OFK&pool=arena&played_only=1&limit=1");
+    EXPECT_STATUS(200, lbArenaOfkLim1);
+    CHECK_EQUAL(2, lbArenaOfkLim1.json.value("total", -1));
+    CHECK_EQUAL(1, static_cast<int>(lbArenaOfkLim1.json["entries"].size()));
+    CHECK_EQUAL(1, lbArenaOfkLim1.json["entries"][0].value("games_played", -1));
+    CHECK_EQUAL(0, lbArenaOfkLim1.json["entries"][0].value("wins", -1));
+    CHECK_EQUAL(0, lbArenaOfkLim1.json["entries"][0].value("losses", -1));
+    CHECK_EQUAL(1, lbArenaOfkLim1.json["entries"][0].value("draws", -1));
+
+    /* 8. mode=overall (Pool 1 & Pool 2) excludes 0-game accounts & orders active ladder players ahead of 1200 defaults */
+    Reply lbOverallHuman =
+        http().get("/api/v1/leaderboard?mode=overall&pool=human&sort=elo_2p_1b&order=desc");
+    EXPECT_STATUS(200, lbOverallHuman);
+    STRCMP_EQUAL("OVERALL", lbOverallHuman.json.value("ladder", "").c_str());
+    CHECK_EQUAL(3, lbOverallHuman.json.value("total", -1));
+    CHECK_EQUAL(3, static_cast<int>(lbOverallHuman.json["entries"].size()));
+    /* Alice (1216, 1 game in 2P_1B) and Bob (1184, 1 game in 2P_1B) sort ahead of Carol (1200, 0 games in 2P_1B); Dave (0 games total) excluded */
+    STRCMP_EQUAL(alice.uuid.c_str(),
+                 lbOverallHuman.json["entries"][0].value("uuid", "").c_str());
+    CHECK_EQUAL(1216, lbOverallHuman.json["entries"][0].value("elo_2p_1b", 0));
+    CHECK_EQUAL(1, lbOverallHuman.json["entries"][0].value("games_2p_1b", -1));
+    CHECK_EQUAL(1, lbOverallHuman.json["entries"][0].value("games_ofk", -1));
+    CHECK_EQUAL(2, lbOverallHuman.json["entries"][0].value("games_played", -1));
+    CHECK_EQUAL(1, lbOverallHuman.json["entries"][0].value("wins", -1));
+    CHECK_EQUAL(1, lbOverallHuman.json["entries"][0].value("draws", -1));
+    STRCMP_EQUAL(bob.uuid.c_str(),
+                 lbOverallHuman.json["entries"][1].value("uuid", "").c_str());
+    STRCMP_EQUAL(carol.uuid.c_str(),
+                 lbOverallHuman.json["entries"][2].value("uuid", "").c_str());
+
+    Reply lbOverallHumanAsc =
+        http().get("/api/v1/leaderboard?mode=overall&pool=human&sort=elo_2p_1b&order=asc");
+    EXPECT_STATUS(200, lbOverallHumanAsc);
+    STRCMP_EQUAL(bob.uuid.c_str(),
+                 lbOverallHumanAsc.json["entries"][0].value("uuid", "").c_str());
+    STRCMP_EQUAL(alice.uuid.c_str(),
+                 lbOverallHumanAsc.json["entries"][1].value("uuid", "").c_str());
+    STRCMP_EQUAL(carol.uuid.c_str(),
+                 lbOverallHumanAsc.json["entries"][2].value("uuid", "").c_str());
+
+    Reply lbOverallArena =
+        http().get("/api/v1/leaderboard?mode=overall&pool=arena&participant_type=all&sort=games_played&order=desc");
+    EXPECT_STATUS(200, lbOverallArena);
+    STRCMP_EQUAL("OVERALL", lbOverallArena.json.value("ladder", "").c_str());
+    /* Active Pool 2 participants: botAlpha (2 games), Alice (1 game), Bob (1 game); botZero (0 games) excluded */
+    CHECK_EQUAL(3, lbOverallArena.json.value("total", -1));
+    STRCMP_EQUAL(botAlphaUuid.c_str(),
+                 lbOverallArena.json["entries"][0].value("robot_uuid", "").c_str());
+    CHECK_EQUAL(2, lbOverallArena.json["entries"][0].value("games_played", -1));
+    CHECK_EQUAL(1, lbOverallArena.json["entries"][0].value("games_2p_3b", -1));
+    CHECK_EQUAL(1, lbOverallArena.json["entries"][0].value("games_ofk", -1));
+    CHECK_EQUAL(1, lbOverallArena.json["entries"][0].value("losses_2p_3b", -1));
+    CHECK_EQUAL(1, lbOverallArena.json["entries"][0].value("draws_ofk", -1));
+
+    /* 9. /api/v1/lobby/state (players[] + tables[].host_detail) and /api/v1/tables (host_detail), including 0-game bot */
+    EXPECT_STATUS(404, http().get("/api/v1/robots/profile/" + botZeroUuid));
+
+    Reply aliceHostTab = http().post(
+        "/api/v1/tables", alice.token, Json{{"mode", "2P"}, {"bases", 3}});
+    EXPECT_STATUS(201, aliceHostTab);
+    std::string aliceTabId = aliceHostTab.json.value("room_id", "");
+
+    Reply botZeroHostTab = http().post(
+        "/api/v1/tables", botZeroToken,
+        Json{{"mode", "OFK"}, {"bases", 1}, {"allow_robots", true}});
+    EXPECT_STATUS(201, botZeroHostTab);
+    std::string botZeroTabId = botZeroHostTab.json.value("room_id", "");
+
+    EXPECT_STATUS(200, http().get("/api/v1/lobby/state", alice.token));
+    Reply lobby = http().get("/api/v1/lobby/state", botZeroToken);
+    EXPECT_STATUS(200, lobby);
+
+    bool foundAliceInLobby = false;
+    bool foundBotZeroInLobby = false;
+    for (size_t i = 0; i < lobby.json["players"].size(); ++i) {
+        const Json &p = lobby.json["players"][i];
+        if (!p.value("is_robot", false) && p.value("player_uuid", "") == alice.uuid) {
+            foundAliceInLobby = true;
+            STRCMP_EQUAL("Alice Strategist", p.value("display_name", "").c_str());
+            STRCMP_EQUAL("Endgame specialist", p.value("bio", "").c_str());
+            STRCMP_EQUAL("Taipei", p.value("location", "").c_str());
+            CHECK_EQUAL(1216, p.value("elo_2p_1b", 0));
+            CHECK_EQUAL(1, p.value("games_2p_1b", -1));
+            CHECK_EQUAL(1216, p.value("arena_elo_2p_3b", 0));
+            CHECK_EQUAL(1, p.value("arena_games_2p_3b", -1));
+        } else if (p.value("is_robot", false) &&
+                   p.value("robot_uuid", "") == botZeroUuid) {
+            foundBotZeroInLobby = true;
+            STRCMP_EQUAL(validBotUrl.c_str(), p.value("robot_url", "").c_str());
+            STRCMP_EQUAL("Fresh zero-game connected robot",
+                         p.value("robot_description", "").c_str());
+            STRCMP_EQUAL(carol.handle.c_str(), p.value("owner_handle", "").c_str());
+            CHECK_EQUAL(1200, p.value("elo_2p_3b", 0));
+            CHECK_EQUAL(1200, p.value("elo_2p_1b", 0));
+            CHECK_EQUAL(1200, p.value("elo_ofk", 0));
+            CHECK_EQUAL(0, p.value("games_played", -1));
+        }
+    }
+    CHECK_TRUE(foundAliceInLobby);
+    CHECK_TRUE(foundBotZeroInLobby);
+
+    /* Check host_detail in BOTH /api/v1/lobby/state tables[] and /api/v1/tables tables[] */
+    Reply tablesResp = http().get("/api/v1/tables");
+    EXPECT_STATUS(200, tablesResp);
+    const Json *tableLists[2] = {&lobby.json["tables"], &tablesResp.json["tables"]};
+    for (int li = 0; li < 2; ++li) {
+        bool sawAliceHost = false;
+        bool sawBotZeroHost = false;
+        for (size_t ti = 0; ti < tableLists[li]->size(); ++ti) {
+            const Json &t = (*tableLists[li])[ti];
+            CHECK_TRUE(t.contains("host_detail") && t["host_detail"].is_object());
+            const Json &hd = t["host_detail"];
+            if (t.value("room_id", "") == aliceTabId) {
+                sawAliceHost = true;
+                CHECK_FALSE(hd.value("is_robot", true));
+                STRCMP_EQUAL("Alice Strategist", hd.value("display_name", "").c_str());
+                STRCMP_EQUAL("Endgame specialist", hd.value("bio", "").c_str());
+                STRCMP_EQUAL("Taipei", hd.value("location", "").c_str());
+                CHECK_EQUAL(1216, hd.value("elo_2p_1b", 0));
+                CHECK_EQUAL(1216, hd.value("arena_elo_2p_3b", 0));
+            } else if (t.value("room_id", "") == botZeroTabId) {
+                sawBotZeroHost = true;
+                CHECK_TRUE(hd.value("is_robot", false));
+                STRCMP_EQUAL(botZeroUuid.c_str(), hd.value("robot_uuid", "").c_str());
+                STRCMP_EQUAL(validBotUrl.c_str(), hd.value("robot_url", "").c_str());
+                STRCMP_EQUAL("Fresh zero-game connected robot",
+                             hd.value("robot_description", "").c_str());
+                STRCMP_EQUAL(carol.handle.c_str(), hd.value("owner_handle", "").c_str());
+                CHECK_EQUAL(1200, hd.value("elo_2p_3b", 0));
+                CHECK_EQUAL(0, hd.value("games_played", -1));
+            }
+        }
+        CHECK_TRUE(sawAliceHost);
+        CHECK_TRUE(sawBotZeroHost);
+    }
+
+    /* And /api/v1/robots/profile/:id MUST still return 404 for 0-game botZero! */
+    EXPECT_STATUS(404, http().get("/api/v1/robots/profile/" + botZeroUuid));
 }
 
 int main(int argc, char **argv)

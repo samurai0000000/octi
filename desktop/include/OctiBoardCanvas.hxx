@@ -16,6 +16,7 @@
 #include <QPainter>
 #include <QPoint>
 #include <QPointF>
+#include <QPointer>
 #include <QRectF>
 #include <QResizeEvent>
 #include <QTimer>
@@ -87,6 +88,8 @@ public:
 
     bool openZoomedSquareAt(int sx, int sy);
     bool openZoomedSquareDialog(int sx, int sy) { return openZoomedSquareAt(sx, sy); }
+    void closeActiveZoomDialog();
+    bool hasActiveZoomDialog() const { return !_activeZoomDialog.isNull(); }
     void setZoomedSquareOpenHook(std::function<bool(int, int)> hook) { _zoomedSquareOpenHook = std::move(hook); }
 
     static constexpr qint64 LAST_MOVE_INDICATOR_DURATION_MS = 5000;
@@ -209,6 +212,7 @@ private:
     bool _interactiveEnabled;
     qint64 _renderTimeOverrideMs = -1;
     std::function<bool(int, int)> _zoomedSquareOpenHook;
+    QPointer<class ZoomedSquareDialog> _activeZoomDialog;
 };
 
 } // namespace octi

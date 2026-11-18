@@ -262,6 +262,123 @@ public class OctiAndroidUiSmokeTest {
         assertEquals("Player B card displays 2 captured A pods",
                 2, OctiBoardRenderer.getDisplayedCapturedPodsForPlayerCard(game, OctiPlayer.PLAYER_B));
     }
+
+    @Test
+    public void testBoardZoomInspectUnblockedAndRefreshedDuringBotThinking() throws Exception {
+        com.selfso.octi.ui.OctiAppViewModel vm = new com.selfso.octi.ui.OctiAppViewModel();
+        try {
+            vm.startNewLocalGame(
+                    OctiGameMode.GAME_MODE_2,
+                    false,
+                    false,
+                    OctiGameBases.GAME_BASES_3,
+                    true,
+                    OctiBotEngine.BotDifficulty.CASUAL,
+                    OctiPlayer.PLAYER_A);
+
+            assertTrue(vm.applyMoveNotation("33+a"));
+            assertTrue(vm.applyMoveNotation("37+e"));
+            assertTrue(vm.applyMoveNotation("33a-34"));
+            assertEquals(OctiPlayer.PLAYER_B, vm.getBoard().getGame().getTurn());
+            assertTrue(vm.getBoard().squareAt(2, 2).isEmpty());
+
+            vm.updateBotThinkingProgressForTest(true, 0.40f, 3.0f);
+            assertTrue(vm.isBotThinking().getValue());
+
+            // Empty square (4, 4) and vacated home square (3, 3) cannot place pods while AI thinks
+            assertFalse(vm.handleBoardSquareSingleTap(4, 4));
+            assertFalse(vm.handleBoardSquareSingleTap(3, 3));
+            assertFalse(vm.handleBoardSquareZoomInspect(3, 3));
+            assertEquals(null, vm.getZoomedSquare().getValue());
+
+            // Single-tap on occupied friendly square (3, 4) opens read-only zoomedSquare while AI thinks
+            assertTrue(vm.handleBoardSquareSingleTap(3, 4));
+            kotlin.Pair<Integer, Integer> zs1 = vm.getZoomedSquare().getValue();
+            assertNotNull("Single-tap must open zoomedSquare while isBotThinking == true", zs1);
+            assertEquals(Integer.valueOf(3), zs1.getFirst());
+            assertEquals(Integer.valueOf(4), zs1.getSecond());
+            assertFalse(vm.getComposer().isAwaitingConfirmation());
+            assertFalse(vm.getComposer().isGuidedMoveActive());
+
+            vm.closeZoomedSquare();
+            assertEquals(null, vm.getZoomedSquare().getValue());
+
+            // Long-press / double-tap zoom inspect on enemy pod (3, 7) opens zoomedSquare while AI thinks
+            assertTrue(vm.handleBoardSquareZoomInspect(3, 7));
+            kotlin.Pair<Integer, Integer> zs2 = vm.getZoomedSquare().getValue();
+            assertNotNull("Zoom-inspect must open zoomedSquare while isBotThinking == true", zs2);
+            assertEquals(Integer.valueOf(3), zs2.getFirst());
+            assertEquals(Integer.valueOf(7), zs2.getSecond());
+
+            // When AI finishes thinking and commits move on (3, 7), boardRevision advances
+            // while zoomedSquare stays open for thread-safe live refresh
+            long revBefore = vm.getBoardRevision().getValue();
+            assertTrue(vm.applyMoveNotation("37e+f"));
+            vm.updateBotThinkingProgressForTest(false, 1.0f, 0.0f);
+            assertFalse(vm.isBotThinking().getValue());
+            assertTrue("boardRevision must increment when AI move lands",
+                    vm.getBoardRevision().getValue() > revBefore);
+            kotlin.Pair<Integer, Integer> zsAfter = vm.getZoomedSquare().getValue();
+            assertNotNull(zsAfter);
+            assertEquals(Integer.valueOf(3), zsAfter.getFirst());
+            assertEquals(Integer.valueOf(7), zsAfter.getSecond());
+            assertEquals(2, vm.getBoard().squareAt(2, 6).getPodAt(0).getNumProngs());
+        } finally {
+            vm.close();
+        }
+
+        // Verify ZoomedSquareDialog takes boardRevision: Long and synchronizes on displayBoard,
+        // and OctiThinkingDialog does not swallow full-screen board touches
+        Class<?> dialogsKt = null;
+        try {
+            dialogsKt = Class.forName("com.selfso.octi.ui.OctiDialogsKt");
+        } catch (ClassNotFoundException ignored) {
+        }
+        assertNotNull("Expected OctiDialogsKt class", dialogsKt);
+        boolean foundZoomWithBoardRev = false;
+        for (Method m : dialogsKt.getDeclaredMethods()) {
+            if (m.getName().equals("ZoomedSquareDialog")) {
+                for (Class<?> p : m.getParameterTypes()) {
+                    if (p == long.class || p == Long.class) {
+                        foundZoomWithBoardRev = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assertTrue("ZoomedSquareDialog must accept boardRevision: Long parameter",
+                foundZoomWithBoardRev);
+
+        java.io.File dialogsFile = new java.io.File("src/main/java/com/selfso/octi/ui/OctiDialogs.kt");
+        if (!dialogsFile.exists()) {
+            dialogsFile = new java.io.File("android/app/src/main/java/com/selfso/octi/ui/OctiDialogs.kt");
+        }
+        assertTrue("OctiDialogs.kt should exist", dialogsFile.exists());
+        String dialogsSrc = new String(
+                java.nio.file.Files.readAllBytes(dialogsFile.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+        int thinkingIdx = dialogsSrc.indexOf("fun OctiThinkingDialog(");
+        assertTrue("Expected OctiThinkingDialog in OctiDialogs.kt", thinkingIdx >= 0);
+        int cardIdx = dialogsSrc.indexOf("Card(", thinkingIdx);
+        assertTrue("Expected Card( inside OctiThinkingDialog", cardIdx > thinkingIdx);
+        String beforeCard = dialogsSrc.substring(thinkingIdx, cardIdx);
+        assertFalse("OctiThinkingDialog outer wrapper must not use .fillMaxSize() touch blocker",
+                beforeCard.contains(".fillMaxSize()"));
+        assertTrue("ZoomedSquareDialog must synchronize reads on displayBoard",
+                dialogsSrc.contains("synchronized(displayBoard)"));
+
+        java.io.File mainActivityFile = new java.io.File("src/main/java/com/selfso/octi/MainActivity.kt");
+        if (!mainActivityFile.exists()) {
+            mainActivityFile = new java.io.File("android/app/src/main/java/com/selfso/octi/MainActivity.kt");
+        }
+        assertTrue("MainActivity.kt should exist", mainActivityFile.exists());
+        String mainActivitySrc = new String(
+                java.nio.file.Files.readAllBytes(mainActivityFile.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("MainActivity.kt must pass boardRevision = currentBoardRev to ZoomedSquareDialog",
+                mainActivitySrc.contains("boardRevision = currentBoardRev"));
+    }
 }
 
 /*

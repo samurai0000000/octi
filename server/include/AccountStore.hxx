@@ -336,10 +336,17 @@ struct LeaderboardEntry {
     std::string displayName;
     std::string avatarUrl;
     int elo = 1200;
+    int elo2p3b = 1200;
+    int elo2p1b = 1200;
+    int eloOfk = 1200;
+    int games2p3b = 0;
+    int games2p1b = 0;
+    int gamesOfk = 0;
     int gamesPlayed = 0;
     int wins = 0;
     int losses = 0;
     int draws = 0;
+    double winRate = 0.0;
 };
 
 /* Archived game row. listArchivedGames() leaves octiTranscript empty. */
@@ -523,9 +530,12 @@ struct ArenaStandingsFilter {
     bool sortAsc = false;
     int limit = kDefaultUsersPageLimit; // 1..100
     int offset = 0;
+    std::string ladder;     // "" (overall) | "2P_3B" | "2P_1B" | "OFK"
+    bool playedOnly = false;
 };
 
 struct ArenaStandingEntry {
+    int rank = 0;
     std::string entryType = "robot";    // "robot" | "human"
     int64_t robotId = 0;
     int64_t playerId = 0;
@@ -546,6 +556,15 @@ struct ArenaStandingEntry {
     int games2p3b = 0;
     int games2p1b = 0;
     int gamesOfk = 0;
+    int wins2p3b = 0;
+    int losses2p3b = 0;
+    int draws2p3b = 0;
+    int wins2p1b = 0;
+    int losses2p1b = 0;
+    int draws2p1b = 0;
+    int winsOfk = 0;
+    int lossesOfk = 0;
+    int drawsOfk = 0;
     int gamesPlayed = 0;
     int wins = 0;
     int losses = 0;
@@ -732,9 +751,14 @@ public:
     bool recomputeAllRatings(RecomputeRatingsResult &outResult,
                              std::string &errorOut);
 
-    /* mode: '2P' | '4P' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
+    /* mode: '2P' | '2P_3B' | '2P_1B' | 'OFK'; limit clamped to 1..kMaxLeaderboardLimit. */
     bool leaderboard(const std::string &mode, int limit,
-                     std::vector<LeaderboardEntry> &out);
+                     std::vector<LeaderboardEntry> &out,
+                     bool playedOnly = false,
+                     int64_t *total = nullptr);
+    bool leaderboardOverall(const std::string &sortField, bool sortAsc,
+                            int limit, std::vector<LeaderboardEntry> &out,
+                            int64_t *total = nullptr);
 
     /* Atomic: either every update is applied or none is. */
     bool applyRatingUpdates(const std::string &mode,

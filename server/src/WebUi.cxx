@@ -1478,7 +1478,7 @@ tr.active-ply {
         <h1>OCTI &amp; OCTI for Kids (OFK)</h1>
         <p>
           The timeless strategy game of tactical growth, prong directional control, multi-hop chain jumping, and home base infiltration.
-          Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore grandmaster replays, or register automated bots.
+          Compete directly in your browser against client-side minimax JS robots, join real-time multiplayer tables, explore archived replays, or register automated bots.
         </p>
         <div class="row" style="gap:10px;margin-bottom:10px;flex-wrap:wrap;">
           <button type="button" class="btn btn-primary" id="home-cta-play" style="padding:10px 18px;font-size:14px;background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Play in Browser</button>
@@ -2176,7 +2176,7 @@ tr.active-ply {
         <div id="web-online-users-section" class="panel" style="margin-top:12px;padding:12px;">
           <div class="web-online-users-header">
             <h4 style="margin:0;font-size:14px;">Connected Users (<span id="web-online-users-count">0</span>)</h4>
-            <span class="web-online-users-mobile-hint dim">Tap avatar to show @handle</span>
+            <span class="web-online-users-mobile-hint dim">Click or tap for details</span>
           </div>
           <div id="web-online-users-list">
             <div class="dim" style="font-size:12.5px;">No connected users right now.</div>
@@ -2186,7 +2186,7 @@ tr.active-ply {
         <div id="web-online-robots-section" class="panel" style="margin-top:12px;padding:12px;">
           <div class="web-online-users-header">
             <h4 style="margin:0;font-size:14px;">Connected Robots (<span id="web-online-robots-count">0</span>)</h4>
-            <span class="web-online-users-mobile-hint dim">Tap avatar to show @handle</span>
+            <span class="web-online-users-mobile-hint dim">Click or tap for details</span>
           </div>
           <div id="web-online-robots-list">
             <div class="dim" style="font-size:12.5px;">No connected robots right now.</div>
@@ -2414,11 +2414,24 @@ tr.active-ply {
 <section id="tab-board" class="tab">
   <div class="panel" style="margin-bottom:16px;">
     <div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0;">
-      <div class="row" style="align-items:center;gap:10px;margin:0;">
+      <div class="row" style="align-items:center;gap:10px;margin:0;flex-wrap:wrap;">
         <label style="font-weight:700;">Ladder <select id="lb-mode">
-          <option value="2P_3B" selected>2P_3B (9x9 3-Base)</option>
+          <option value="overall" selected>Overall (All Ladders)</option>
+          <option value="2P_3B">2P_3B (9x9 3-Base)</option>
           <option value="2P_1B">2P_1B (9x9 1-Base)</option>
           <option value="OFK">OFK (6x7 Kids)</option></select></label>
+        <span id="lb-sort-wrap" style="display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-weight:700;">Sort <select id="lb-sort">
+            <option value="elo_2p_3b" selected>2P_3B ELO</option>
+            <option value="elo_2p_1b">2P_1B ELO</option>
+            <option value="elo_ofk">OFK ELO</option>
+            <option value="wins">Wins</option>
+            <option value="games_played">Games Played</option>
+            <option value="win_rate">Win Rate</option></select></label>
+          <label style="font-weight:700;">Order <select id="lb-order">
+            <option value="desc" selected>Descending</option>
+            <option value="asc">Ascending</option></select></label>
+        </span>
         <button type="button" class="btn" id="lb-go">Refresh</button>
       </div>
       <span class="dim" style="font-size:12.5px;">Official 1v1 Competitive Ladders &bull; Unplayed ladders display <code>-</code> and sort below ranked participants</span>
@@ -2431,8 +2444,8 @@ tr.active-ply {
       <span class="dim" style="font-size:12.5px;">100% insulated from robot matches</span>
     </div>
     <div id="lb-msg" class="dim" style="margin-bottom:8px;"></div>
-    <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>Elo</th>
-      <th>Games</th><th>W</th><th>L</th><th>D</th></tr></thead>
+    <table id="lb-table"><thead><tr><th>#</th><th>Player</th><th>2P_3B</th><th>2P_1B</th><th>OFK</th>
+      <th>Games</th><th>Record (W-L-D)</th><th>Win Rate</th></tr></thead>
       <tbody></tbody></table>
   </div>
 
@@ -2446,8 +2459,8 @@ tr.active-ply {
     </div>
     <div class="dim" style="font-size:12.5px;margin-bottom:10px;">Human-vs-Robot unlimited (K = 32) &bull; Bot-vs-Bot max 4 rated / 24h per unordered bot pair (K = 32 cross-owner, K = 16 same-owner)</div>
     <div id="lb-arena-msg" class="dim" style="margin-bottom:8px;"></div>
-    <table id="lb-arena-table"><thead><tr><th>#</th><th>Participant</th><th>Type</th><th>Elo</th>
-      <th>Games</th><th>W</th><th>L</th><th>D</th><th>Win Rate</th></tr></thead>
+    <table id="lb-arena-table"><thead><tr><th>#</th><th>Participant</th><th>Type</th><th>Owner</th><th>2P_3B</th><th>2P_1B</th><th>OFK</th>
+      <th>Status</th><th>Games</th><th>Record (W-L-D)</th><th>Win Rate</th></tr></thead>
       <tbody></tbody></table>
   </div>
 </section>
@@ -3085,11 +3098,11 @@ tr.active-ply {
       </label>
       <label style="display:flex;justify-content:space-between;align-items:center;">Bot Difficulty:
         <select id="setup-bot-difficulty" style="background:#161D26;color:#fff;border-color:#2D3A54;">
-          <option value="1">Lv1: Fast (5s)</option>
-          <option value="2" selected>Lv2: Balanced (10s)</option>
-          <option value="3">Lv3: Deep (20s)</option>
-          <option value="4">Lv4: Expert (40s)</option>
-          <option value="5">Lv5: Grandmaster (60s)</option>
+          <option value="1">Lv1: AI_L1 (5s)</option>
+          <option value="2" selected>Lv2: AI_L2 (10s)</option>
+          <option value="3">Lv3: AI_L3 (20s)</option>
+          <option value="4">Lv4: AI_L4 (40s)</option>
+          <option value="5">Lv5: AI_L5 (60s)</option>
         </select>
       </label>
       <label style="display:flex;justify-content:space-between;align-items:center;">Human Seat:
@@ -3220,6 +3233,50 @@ tr.active-ply {
     </div>
   </div>
 </div>
+
+<!-- Connected Roster Entity Detail Modal -->
+<div id="web-roster-entity-modal" style="display:none;position:fixed;inset:0;background:rgba(6,9,14,0.72);z-index:9996;align-items:center;justify-content:center;padding:16px;">
+  <div id="web-roster-entity-card" style="background:#101622;border:2px solid #C8A253;border-radius:14px;max-width:520px;width:100%;padding:20px;color:#F8FAFC;box-shadow:0 18px 52px rgba(0,0,0,0.75);max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <div style="display:flex;align-items:center;gap:14px;min-width:0;">
+        <div id="web-roster-entity-avatar" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#1E293B;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <h3 id="web-roster-entity-name" style="margin:0;font-size:18px;color:#F8FAFC;word-break:break-word;">Player</h3>
+            <span id="web-roster-entity-badge" class="badge">HUMAN</span>
+          </div>
+          <div id="web-roster-entity-handle" style="font-size:13px;font-weight:700;color:#C8A253;margin-top:2px;">@player</div>
+          <div id="web-roster-entity-status" style="font-size:12px;color:#94A3B8;margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <button type="button" class="btn" id="btn-web-roster-entity-close" title="Close [Esc]" style="padding:4px 10px;font-size:14px;background:#161D26;border:1px solid #334155;color:#E2E8F0;cursor:pointer;">&#x2715;</button>
+    </div>
+
+    <p id="web-roster-entity-bio" style="margin:12px 0 8px 0;font-size:13px;color:#CBD5E1;line-height:1.5;word-break:break-word;"></p>
+    <div id="web-roster-entity-meta" style="font-size:12.5px;color:#94A3B8;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:12px;"></div>
+
+    <div id="web-roster-entity-url-row" style="display:none;font-size:12.5px;margin-bottom:6px;">
+      <span style="color:#94A3B8;">External URL: </span>
+      <a id="web-roster-entity-url-link" href="#" target="_blank" rel="nofollow ugc noopener noreferrer" style="color:#38BDF8;word-break:break-all;"></a>
+    </div>
+
+    <div id="web-roster-entity-profile-row" style="font-size:12.5px;margin-bottom:12px;">
+      <span style="color:#94A3B8;">OCTI Profile: </span>
+      <a id="web-roster-entity-profile-link" href="#" style="color:#FDE047;word-break:break-all;"></a>
+    </div>
+
+    <div id="web-roster-entity-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;margin-bottom:12px;"></div>
+    <div id="web-roster-entity-note" style="display:none;font-size:12px;color:#94A3B8;margin-bottom:12px;"></div>
+
+    <div class="row" style="margin:14px 0 0 0;justify-content:flex-end;gap:10px;">
+      <button type="button" class="btn" id="btn-web-roster-entity-footer-close" style="background:#161D26;border-color:#334155;color:#E2E8F0;">Close</button>
+      <button type="button" class="btn btn-primary" id="btn-web-roster-entity-open-profile" style="background:#C8A253;border-color:#E5C158;color:#0B0F17;font-weight:700;">Open Full Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- Play Online Table Host Hover Card -->
+<div id="web-host-hover-card" style="position:fixed;z-index:9990;display:none;background:#101622;border:1.5px solid #C8A253;border-radius:10px;padding:12px 14px;width:min(360px,calc(100vw - 24px));color:#F8FAFC;box-shadow:0 14px 36px rgba(0,0,0,0.68);font-size:12.5px;line-height:1.45;pointer-events:auto;"></div>
 
 </main>
 
@@ -7219,7 +7276,7 @@ var DEFAULT_BOT_TUNING = {
 
 var BOT_PROFILES = {
   1: Object.assign({}, DEFAULT_BOT_TUNING, {
-    name: "Fast",
+    name: "AI_L1",
     timeBudgetMs: 5000,
     maxSearchDepth: 3,
     useOpeningBook: false,
@@ -7250,7 +7307,7 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 2000
   }),
   2: Object.assign({}, DEFAULT_BOT_TUNING, {
-    name: "Balanced",
+    name: "AI_L2",
     timeBudgetMs: 10000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -7262,7 +7319,7 @@ var BOT_PROFILES = {
     rootScoreJitter: 0
   }),
   3: Object.assign({}, DEFAULT_BOT_TUNING, {
-    name: "Deep",
+    name: "AI_L3",
     timeBudgetMs: 20000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -7293,7 +7350,7 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 11000
   }),
   4: Object.assign({}, DEFAULT_BOT_TUNING, {
-    name: "Expert",
+    name: "AI_L4",
     timeBudgetMs: 40000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -7324,7 +7381,7 @@ var BOT_PROFILES = {
     moveOrderBlunderPenalty: 11000
   }),
   5: Object.assign({}, DEFAULT_BOT_TUNING, {
-    name: "Grandmaster",
+    name: "AI_L5",
     timeBudgetMs: 60000,
     maxSearchDepth: 64,
     useOpeningBook: true,
@@ -42803,6 +42860,9 @@ if ($("btn-toggle-robots-section")) {
 }
 
 function switchTab(name) {
+  if (typeof hideHostHoverCard === "function") {
+    hideHostHoverCard();
+  }
   if (name === "play" || name === "online") {
     Array.prototype.forEach.call($("nav").querySelectorAll("button"), function (b) {
       b.classList.toggle("on", b.getAttribute("data-tab") === name);
@@ -49211,13 +49271,13 @@ function generateOctiTranscriptV3() {
   var playersArr = [];
   if (s.mode === "4" || s.mode === "4P") {
     playersArr = [
-      makeSeatMeta(1, "A", "AI_Casual"),
-      makeSeatMeta(2, "B", "AI_Tactical"),
-      makeSeatMeta(3, "C", "AI_Master"),
-      makeSeatMeta(4, "D", "AI_Tactical")
+      makeSeatMeta(1, "A", "AI_L1"),
+      makeSeatMeta(2, "B", "AI_L2"),
+      makeSeatMeta(3, "C", "AI_L3"),
+      makeSeatMeta(4, "D", "AI_L2")
     ];
   } else {
-    var botName2P = (diff === 1) ? "AI_Casual" : ((diff === 2) ? "AI_Tactical" : ((diff === 3) ? "AI_Master" : ((diff === 4) ? "AI_Expert" : "AI_Grandmaster")));
+    var botName2P = "AI_L" + diff;
     playersArr = [
       makeSeatMeta(1, "A", botName2P),
       makeSeatMeta(2, "B", botName2P)
@@ -49506,6 +49566,7 @@ function triggerAiBotTurn() {
         elapsedMs: res.elapsedMs
       };
       onLocalMoveCommitted(res.bestMove, nextState, aiMeta);
+      if (zoomSq) { updateZoomOverlayControls(); renderZoomCanvas(); }
     }
   }
 
@@ -50935,6 +50996,587 @@ function leaveTableById(roomId) {
 }
 
 var expandedOnlineUserUuid = "";
+var latestLobbyPlayers = [];
+var onlineEntityDialogReqSeq = 0;
+var hostHoverHideTimer = null;
+
+function isSafeExternalHttpUrl(u) {
+  return typeof u === "string" && /^https?:\/\//i.test(u.trim());
+}
+
+function resolveHostEntityForTable(t) {
+  var base = {};
+  if (t && t.host_detail && typeof t.host_detail === "object") {
+    Object.keys(t.host_detail).forEach(function (k) {
+      base[k] = t.host_detail[k];
+    });
+  }
+  var hostHandle = (t && t.host_handle) ? String(t.host_handle).replace(/^@/, "") : (base.handle || base.robot_name || "unknown");
+  var hostUuid = (t && t.host_uuid) ? String(t.host_uuid) : (base.robot_uuid || base.player_uuid || base.uuid || "");
+  if (!base.handle) base.handle = hostHandle;
+  if (base.is_robot) {
+    if (!base.robot_name) base.robot_name = hostHandle;
+    if (!base.robot_uuid && hostUuid) base.robot_uuid = hostUuid;
+  } else {
+    if (!base.player_uuid && hostUuid) base.player_uuid = hostUuid;
+  }
+  for (var i = 0; i < latestLobbyPlayers.length; i++) {
+    var lp = latestLobbyPlayers[i];
+    if (!lp) continue;
+    var lpHandle = String(lp.handle || lp.robot_name || "").replace(/^@/, "");
+    var lpUuid = lp.robot_uuid || lp.player_uuid || lp.uuid || "";
+    if ((hostUuid && lpUuid && hostUuid === lpUuid) ||
+        (hostHandle && lpHandle && hostHandle.toLowerCase() === lpHandle.toLowerCase())) {
+      Object.keys(lp).forEach(function (k) {
+        if (base[k] === undefined || base[k] === "" || base[k] === 0) {
+          base[k] = lp[k];
+        }
+      });
+      if (lp.online_sec !== undefined) base.online_sec = lp.online_sec;
+      if (lp.idle_sec !== undefined) base.idle_sec = lp.idle_sec;
+      if (Array.isArray(lp.clients)) base.clients = lp.clients;
+      if (lp.room_id) base.room_id = lp.room_id;
+      if (lp.status) base.status = lp.status;
+      break;
+    }
+  }
+  if (!base.room_id && t && (t.room_id || t.table_id)) {
+    base.room_id = t.room_id || t.table_id;
+  }
+  return base;
+}
+
+function closeOnlineEntityDialog() {
+  onlineEntityDialogReqSeq++;
+  var modal = $("web-roster-entity-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function renderOnlineEntityDialogState(p) {
+  if (!p) return;
+  var isRobot = Boolean(p.is_robot || p.robot_uuid || p.entry_type === "robot");
+  var rawHandle = String(p.robot_name || p.handle || p.name || "player").replace(/^@/, "");
+  var displayName = isRobot
+    ? (p.robot_name || p.display_name || rawHandle)
+    : (p.display_name || rawHandle);
+  var entityUuid = isRobot
+    ? (p.robot_uuid || p.uuid || rawHandle)
+    : (p.player_uuid || p.uuid || rawHandle);
+
+  var avEl = $("web-roster-entity-avatar");
+  if (avEl) {
+    clear(avEl);
+    avEl.appendChild(createAvatarEl(p.avatar_url || p.owner_avatar_url || "", rawHandle, 56));
+  }
+  var nameEl = $("web-roster-entity-name");
+  if (nameEl) nameEl.textContent = displayName;
+
+  var badgeEl = $("web-roster-entity-badge");
+  if (badgeEl) {
+    badgeEl.textContent = isRobot ? "BOT" : "HUMAN";
+    badgeEl.className = isRobot ? "badge badge-active" : "badge";
+  }
+
+  var handleEl = $("web-roster-entity-handle");
+  if (handleEl) handleEl.textContent = "@" + rawHandle;
+
+  var statusEl = $("web-roster-entity-status");
+  if (statusEl) {
+    clear(statusEl);
+    var hasLiveTime = (p.online_sec !== undefined || p.idle_sec !== undefined);
+    var statusLabel = hasLiveTime
+      ? ((Number(p.idle_sec || 0) < 10 ? "Online (Active)" : ("Idle " + formatCompactDuration(p.idle_sec))) +
+         " \u2022 On " + formatCompactDuration(p.online_sec || 0))
+      : (p.status ? String(p.status) : "Online");
+    statusEl.appendChild(el("span", statusLabel));
+    if (p.room_id) {
+      var roomLink = el("a", "#" + p.room_id, "web-user-room");
+      roomLink.href = "#online/" + encodeURIComponent(p.room_id);
+      roomLink.style.textDecoration = "none";
+      roomLink.style.cursor = "pointer";
+      roomLink.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        closeOnlineEntityDialog();
+        enterOnlineTable(p.room_id);
+      });
+      statusEl.appendChild(roomLink);
+    }
+    var clients = Array.isArray(p.clients) ? p.clients : [];
+    if (clients.length) {
+      var clientsSpan = el("span", null, "web-user-clients");
+      var iconsHtml = "";
+      clients.forEach(function (c) {
+        iconsHtml += renderClientTypeIconSvg(c);
+      });
+      clientsSpan.innerHTML = iconsHtml;
+      statusEl.appendChild(clientsSpan);
+    }
+  }
+
+  var bioEl = $("web-roster-entity-bio");
+  if (bioEl) {
+    var bioText = (isRobot ? (p.robot_description || p.description || p.bio) : (p.bio || p.description)) || "";
+    bioEl.textContent = bioText ? bioText : (isRobot ? "No robot description provided." : "No bio written yet.");
+  }
+
+  var metaEl = $("web-roster-entity-meta");
+  if (metaEl) {
+    clear(metaEl);
+    if (isRobot) {
+      if (p.owner_handle) {
+        var ownerSpan = el("span");
+        ownerSpan.appendChild(document.createTextNode("Owner: "));
+        var ownerTarget = p.owner_uuid || p.owner_handle;
+        var ownerLink = el("a", "@" + String(p.owner_handle).replace(/^@/, ""));
+        ownerLink.href = "#users/" + encodeURIComponent(ownerTarget);
+        ownerLink.style.color = "#38BDF8";
+        ownerLink.style.fontWeight = "600";
+        ownerLink.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          closeOnlineEntityDialog();
+          switchTab("users");
+          openUserProfile(ownerTarget);
+        });
+        ownerSpan.appendChild(ownerLink);
+        metaEl.appendChild(ownerSpan);
+      }
+    } else {
+      if (p.location) {
+        metaEl.appendChild(el("span", "Location: " + p.location));
+      }
+      if (Array.isArray(p.robots)) {
+        metaEl.appendChild(el("span", "Registered Robots: " + p.robots.length));
+      }
+    }
+    if (p.created_at) {
+      metaEl.appendChild(el("span", (isRobot ? "Registered: " : "Joined: ") + fmtTime(p.created_at)));
+    }
+  }
+
+  var urlRow = $("web-roster-entity-url-row");
+  var urlLink = $("web-roster-entity-url-link");
+  if (urlRow && urlLink) {
+    var rawUrl = (p.robot_url || "").trim();
+    if (isSafeExternalHttpUrl(rawUrl)) {
+      urlLink.href = rawUrl;
+      urlLink.textContent = rawUrl;
+      urlRow.style.display = "block";
+    } else {
+      urlRow.style.display = "none";
+      urlLink.removeAttribute("href");
+      urlLink.textContent = "";
+    }
+  }
+
+  var gp = isRobot
+    ? Number(p.robot_games_played !== undefined ? p.robot_games_played : (p.games_played || 0))
+    : Number(p.games_played || 0);
+  var w = isRobot
+    ? Number(p.robot_wins !== undefined ? p.robot_wins : (p.wins || 0))
+    : Number(p.wins || 0);
+  var l = isRobot
+    ? Number(p.robot_losses !== undefined ? p.robot_losses : (p.losses || 0))
+    : Number(p.losses || 0);
+  var d = isRobot
+    ? Number(p.robot_draws !== undefined ? p.robot_draws : (p.draws || 0))
+    : Number(p.draws || 0);
+  var wrStr = (p.win_rate !== undefined && p.win_rate !== null)
+    ? (Number(p.win_rate).toFixed(1) + "%")
+    : ((gp > 0 ? ((w / gp) * 100).toFixed(1) : "0.0") + "%");
+
+  var profRow = $("web-roster-entity-profile-row");
+  var profLink = $("web-roster-entity-profile-link");
+  var profHash = (isRobot ? "#robots/" : "#users/") + encodeURIComponent(entityUuid);
+  if (profRow && profLink) {
+    profLink.href = profHash;
+    profLink.textContent = profHash;
+    profLink.onclick = function (ev) {
+      ev.preventDefault();
+      if (isRobot && gp <= 0) {
+        if (p.owner_uuid || p.owner_handle) {
+          closeOnlineEntityDialog();
+          switchTab("users");
+          openUserProfile(p.owner_uuid || p.owner_handle);
+        }
+        return;
+      }
+      closeOnlineEntityDialog();
+      if (isRobot) {
+        switchTab("robots");
+        viewRobotProfile(entityUuid);
+      } else {
+        switchTab("users");
+        openUserProfile(entityUuid);
+      }
+    };
+  }
+
+  var statsEl = $("web-roster-entity-stats");
+  if (statsEl) {
+    clear(statsEl);
+    function addStatBox(lbl, val) {
+      var box = el("div");
+      box.style.background = "#0B0F17";
+      box.style.border = "1px solid #1E293B";
+      box.style.borderRadius = "6px";
+      box.style.padding = "8px 10px";
+      box.style.textAlign = "center";
+      var lDiv = el("div", lbl);
+      lDiv.style.fontSize = "11px";
+      lDiv.style.color = "#94A3B8";
+      var vDiv = el("div", String(val));
+      vDiv.style.fontSize = "14px";
+      vDiv.style.fontWeight = "700";
+      vDiv.style.color = "#FDE047";
+      vDiv.style.marginTop = "2px";
+      box.appendChild(lDiv);
+      box.appendChild(vDiv);
+      statsEl.appendChild(box);
+    }
+    if (isRobot) {
+      addStatBox("Arena 2P_3B", fmtElo(p.elo_2p_3b, p.games_2p_3b !== undefined ? p.games_2p_3b : gp));
+      addStatBox("Arena 2P_1B", fmtElo(p.elo_2p_1b, p.games_2p_1b));
+      addStatBox("Arena OFK", fmtElo(p.elo_ofk, p.games_ofk));
+      addStatBox("Games", gp);
+      addStatBox("Record (W-L-D)", w + " - " + l + " - " + d);
+      addStatBox("Win Rate", wrStr);
+    } else {
+      addStatBox("Pool 1 2P_3B", fmtElo(p.elo_2p_3b, p.games_2p_3b !== undefined ? p.games_2p_3b : gp));
+      addStatBox("Pool 1 2P_1B", fmtElo(p.elo_2p_1b, p.games_2p_1b));
+      addStatBox("Pool 1 OFK", fmtElo(p.elo_ofk, p.games_ofk));
+      addStatBox("Pool 1 W-L-D", w + "-" + l + "-" + d + " (" + wrStr + ")");
+      var agp = Number(p.arena_games_played || 0);
+      var aw = Number(p.arena_wins || 0), al = Number(p.arena_losses || 0), ad = Number(p.arena_draws || 0);
+      addStatBox("Pool 2 (3B/1B/OFK)",
+        fmtElo(p.arena_elo_2p_3b, p.arena_games_2p_3b) + " / " +
+        fmtElo(p.arena_elo_2p_1b, p.arena_games_2p_1b) + " / " +
+        fmtElo(p.arena_elo_ofk, p.arena_games_ofk));
+      addStatBox("Pool 2 W-L-D", aw + "-" + al + "-" + ad + " (" + agp + "g)");
+    }
+  }
+
+  var noteEl = $("web-roster-entity-note");
+  var openBtn = $("btn-web-roster-entity-open-profile");
+  if (noteEl && openBtn) {
+    if (isRobot && gp <= 0) {
+      noteEl.style.display = "block";
+      noteEl.textContent = "Newly registered robot (0 archived games played yet). Full #robots profile page unlocks after completing its first game.";
+      openBtn.disabled = true;
+      openBtn.title = "Public robot profile page unlocks after 1st completed game";
+      openBtn.onclick = null;
+    } else {
+      noteEl.style.display = "none";
+      noteEl.textContent = "";
+      openBtn.disabled = false;
+      openBtn.title = "";
+      openBtn.onclick = function () {
+        closeOnlineEntityDialog();
+        if (isRobot) {
+          switchTab("robots");
+          viewRobotProfile(entityUuid);
+        } else {
+          switchTab("users");
+          openUserProfile(entityUuid);
+        }
+      };
+    }
+  }
+}
+
+function openOnlineEntityDialog(p) {
+  if (!p) return;
+  hideHostHoverCard();
+  var modal = $("web-roster-entity-modal");
+  if (!modal) return;
+  var reqSeq = ++onlineEntityDialogReqSeq;
+  var snap = {};
+  Object.keys(p).forEach(function (k) { snap[k] = p[k]; });
+  renderOnlineEntityDialogState(snap);
+  modal.style.display = "flex";
+
+  var isRobot = Boolean(snap.is_robot || snap.robot_uuid || snap.entry_type === "robot");
+  var gp = isRobot
+    ? Number(snap.robot_games_played !== undefined ? snap.robot_games_played : (snap.games_played || 0))
+    : Number(snap.games_played || 0);
+  if (isRobot) {
+    var botId = snap.robot_uuid || snap.uuid || snap.robot_name || snap.handle || "";
+    if (botId && gp > 0) {
+      api("/api/v1/robots/profile/" + encodeURIComponent(botId)).then(function (fullBot) {
+        if (reqSeq !== onlineEntityDialogReqSeq || modal.style.display === "none") return;
+        var merged = {};
+        Object.keys(snap).forEach(function (k) { merged[k] = snap[k]; });
+        Object.keys(fullBot || {}).forEach(function (k) {
+          if (fullBot[k] !== undefined && fullBot[k] !== "") merged[k] = fullBot[k];
+        });
+        renderOnlineEntityDialogState(merged);
+      }).catch(function () {});
+    }
+  } else {
+    var userId = snap.player_uuid || snap.uuid || snap.handle || "";
+    if (userId) {
+      api("/api/v1/users/" + encodeURIComponent(userId)).then(function (fullUser) {
+        if (reqSeq !== onlineEntityDialogReqSeq || modal.style.display === "none") return;
+        var merged = {};
+        Object.keys(snap).forEach(function (k) { merged[k] = snap[k]; });
+        Object.keys(fullUser || {}).forEach(function (k) {
+          if (fullUser[k] !== undefined && fullUser[k] !== "") merged[k] = fullUser[k];
+        });
+        renderOnlineEntityDialogState(merged);
+      }).catch(function () {});
+    }
+  }
+}
+
+if ($("btn-web-roster-entity-close")) {
+  $("btn-web-roster-entity-close").addEventListener("click", closeOnlineEntityDialog);
+}
+if ($("btn-web-roster-entity-footer-close")) {
+  $("btn-web-roster-entity-footer-close").addEventListener("click", closeOnlineEntityDialog);
+}
+if ($("web-roster-entity-modal")) {
+  $("web-roster-entity-modal").addEventListener("click", function (ev) {
+    if (ev.target === $("web-roster-entity-modal")) {
+      closeOnlineEntityDialog();
+    }
+  });
+}
+
+function cancelHideHostHoverCard() {
+  if (hostHoverHideTimer) {
+    clearTimeout(hostHoverHideTimer);
+    hostHoverHideTimer = null;
+  }
+}
+
+function hideHostHoverCard() {
+  cancelHideHostHoverCard();
+  var card = $("web-host-hover-card");
+  if (card) {
+    card.style.display = "none";
+  }
+}
+
+function scheduleHideHostHoverCard(delayMs) {
+  cancelHideHostHoverCard();
+  hostHoverHideTimer = setTimeout(function () {
+    hostHoverHideTimer = null;
+    hideHostHoverCard();
+  }, delayMs !== undefined ? delayMs : 120);
+}
+
+function showHostHoverCard(t, anchorEl) {
+  cancelHideHostHoverCard();
+  var card = $("web-host-hover-card");
+  if (!card || !t || !anchorEl) return;
+  var h = resolveHostEntityForTable(t);
+  var isRobot = Boolean(h.is_robot || h.robot_uuid || h.entry_type === "robot");
+  var rawHandle = String(h.robot_name || h.handle || t.host_handle || "host").replace(/^@/, "");
+  var displayName = isRobot
+    ? (h.robot_name || h.display_name || rawHandle)
+    : (h.display_name || rawHandle);
+  var entityUuid = isRobot
+    ? (h.robot_uuid || h.uuid || rawHandle)
+    : (h.player_uuid || h.uuid || rawHandle);
+
+  clear(card);
+
+  var topRow = el("div");
+  topRow.style.display = "flex";
+  topRow.style.alignItems = "center";
+  topRow.style.gap = "10px";
+  topRow.appendChild(createAvatarEl(h.avatar_url || h.owner_avatar_url || "", rawHandle, 38));
+
+  var titleCol = el("div");
+  titleCol.style.minWidth = "0";
+  titleCol.style.flex = "1";
+  var nameLine = el("div");
+  nameLine.style.display = "flex";
+  nameLine.style.alignItems = "center";
+  nameLine.style.gap = "6px";
+  nameLine.style.flexWrap = "wrap";
+  var nameStrong = el("strong", displayName);
+  nameStrong.style.color = "#F8FAFC";
+  nameStrong.style.fontSize = "13.5px";
+  nameLine.appendChild(nameStrong);
+  var typeBadge = el("span", isRobot ? "BOT" : "HUMAN", isRobot ? "badge badge-active" : "badge");
+  typeBadge.style.fontSize = "10px";
+  typeBadge.style.padding = "1px 6px";
+  nameLine.appendChild(typeBadge);
+  titleCol.appendChild(nameLine);
+
+  var handleLine = el("div", "@" + rawHandle);
+  handleLine.style.color = "#C8A253";
+  handleLine.style.fontWeight = "700";
+  handleLine.style.fontSize = "12px";
+  titleCol.appendChild(handleLine);
+  topRow.appendChild(titleCol);
+  card.appendChild(topRow);
+
+  if (isRobot && h.owner_handle) {
+    var ownerRow = el("div");
+    ownerRow.style.marginTop = "6px";
+    ownerRow.style.color = "#94A3B8";
+    ownerRow.appendChild(document.createTextNode("Owner: "));
+    var ownerTarget = h.owner_uuid || h.owner_handle;
+    var ownerLink = el("a", "@" + String(h.owner_handle).replace(/^@/, ""));
+    ownerLink.href = "#users/" + encodeURIComponent(ownerTarget);
+    ownerLink.style.color = "#38BDF8";
+    ownerLink.style.fontWeight = "600";
+    ownerLink.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      hideHostHoverCard();
+      switchTab("users");
+      openUserProfile(ownerTarget);
+    });
+    ownerRow.appendChild(ownerLink);
+    card.appendChild(ownerRow);
+  } else if (!isRobot && h.location) {
+    var locRow = el("div", "Location: " + h.location);
+    locRow.style.marginTop = "6px";
+    locRow.style.color = "#94A3B8";
+    card.appendChild(locRow);
+  }
+
+  var bioText = (isRobot ? (h.robot_description || h.description || h.bio) : (h.bio || h.description)) || "";
+  if (bioText) {
+    var bioRow = el("div", bioText);
+    bioRow.style.marginTop = "6px";
+    bioRow.style.color = "#CBD5E1";
+    bioRow.style.wordBreak = "break-word";
+    card.appendChild(bioRow);
+  }
+
+  var rawUrl = (h.robot_url || "").trim();
+  if (isSafeExternalHttpUrl(rawUrl)) {
+    var urlDiv = el("div");
+    urlDiv.style.marginTop = "5px";
+    urlDiv.appendChild(document.createTextNode("URL: "));
+    var uLink = el("a", rawUrl);
+    uLink.href = rawUrl;
+    uLink.target = "_blank";
+    uLink.rel = "nofollow ugc noopener noreferrer";
+    uLink.style.color = "#38BDF8";
+    uLink.style.wordBreak = "break-all";
+    urlDiv.appendChild(uLink);
+    card.appendChild(urlDiv);
+  }
+
+  var gp = isRobot
+    ? Number(h.robot_games_played !== undefined ? h.robot_games_played : (h.games_played || 0))
+    : Number(h.games_played || 0);
+  var w = isRobot
+    ? Number(h.robot_wins !== undefined ? h.robot_wins : (h.wins || 0))
+    : Number(h.wins || 0);
+  var l = isRobot
+    ? Number(h.robot_losses !== undefined ? h.robot_losses : (h.losses || 0))
+    : Number(h.losses || 0);
+  var d = isRobot
+    ? Number(h.robot_draws !== undefined ? h.robot_draws : (h.draws || 0))
+    : Number(h.draws || 0);
+  var wrStr = (gp > 0 ? ((w / gp) * 100).toFixed(1) : "0.0") + "%";
+
+  var profHash = (isRobot ? "#robots/" : "#users/") + encodeURIComponent(entityUuid);
+  var profDiv = el("div");
+  profDiv.style.marginTop = "4px";
+  profDiv.appendChild(document.createTextNode("Profile: "));
+  var pLink = el("a", profHash);
+  pLink.href = profHash;
+  pLink.style.color = "#FDE047";
+  pLink.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    hideHostHoverCard();
+    openOnlineEntityDialog(h);
+  });
+  profDiv.appendChild(pLink);
+  card.appendChild(profDiv);
+
+  var statsBox = el("div");
+  statsBox.style.background = "#0B0F17";
+  statsBox.style.border = "1px solid #1E293B";
+  statsBox.style.borderRadius = "6px";
+  statsBox.style.padding = "6px 8px";
+  statsBox.style.marginTop = "8px";
+  if (isRobot) {
+    statsBox.appendChild(el("div",
+      "Arena Elo (2P_3B / 2P_1B / OFK): " +
+      fmtElo(h.elo_2p_3b, h.games_2p_3b !== undefined ? h.games_2p_3b : gp) + " / " +
+      fmtElo(h.elo_2p_1b, h.games_2p_1b) + " / " +
+      fmtElo(h.elo_ofk, h.games_ofk)));
+    statsBox.appendChild(el("div",
+      "Record: " + gp + " games (" + w + "W - " + l + "L - " + d + "D \u2022 " + wrStr + ")"));
+  } else {
+    statsBox.appendChild(el("div",
+      "Pool 1 Elo (2P_3B / 2P_1B / OFK): " +
+      fmtElo(h.elo_2p_3b, h.games_2p_3b !== undefined ? h.games_2p_3b : gp) + " / " +
+      fmtElo(h.elo_2p_1b, h.games_2p_1b) + " / " +
+      fmtElo(h.elo_ofk, h.games_ofk)));
+    statsBox.appendChild(el("div",
+      "Pool 1 Record: " + gp + " games (" + w + "W - " + l + "L - " + d + "D \u2022 " + wrStr + ")"));
+    if (Number(h.arena_games_played || 0) > 0) {
+      statsBox.appendChild(el("div",
+        "Pool 2 Arena: " +
+        fmtElo(h.arena_elo_2p_3b, h.arena_games_2p_3b) + " / " +
+        fmtElo(h.arena_elo_2p_1b, h.arena_games_2p_1b) + " / " +
+        fmtElo(h.arena_elo_ofk, h.arena_games_ofk) + " (" +
+        (h.arena_wins || 0) + "W-" + (h.arena_losses || 0) + "L-" + (h.arena_draws || 0) + "D)"));
+    }
+  }
+  card.appendChild(statsBox);
+
+  var seatsTotal = t.seats_total || (t.mode === "4P" ? 4 : 2);
+  var seatsArr = Array.isArray(t.seats) ? t.seats : [];
+  var seatsFilled = 0;
+  seatsArr.forEach(function (s) {
+    if (s && (s.occupied || s.handle || s.player_uuid)) seatsFilled++;
+  });
+  var tblBox = el("div",
+    "Table #" + (t.room_id || t.table_id || "") + " \u2022 " +
+    formatTableRulesetSummary(t) + " \u2022 Robots: " +
+    (t.allow_robots !== false ? "Allowed" : "Humans Only") +
+    " \u2022 Seats: " + seatsFilled + "/" + seatsTotal);
+  tblBox.style.marginTop = "6px";
+  tblBox.style.paddingTop = "6px";
+  tblBox.style.borderTop = "1px solid #1E293B";
+  tblBox.style.color = "#94A3B8";
+  tblBox.style.fontSize = "11.5px";
+  card.appendChild(tblBox);
+
+  card.style.display = "block";
+  var rect = anchorEl.getBoundingClientRect();
+  var cardRect = card.getBoundingClientRect();
+  var cw = cardRect.width || 340;
+  var ch = cardRect.height || 180;
+  var vw = window.innerWidth || 1024;
+  var vh = window.innerHeight || 768;
+  var left = Math.max(8, Math.min(rect.left, vw - cw - 8));
+  var top = rect.bottom + 6;
+  if (top + ch > vh - 8 && rect.top - ch - 6 >= 8) {
+    top = rect.top - ch - 6;
+  }
+  card.style.left = Math.round(left) + "px";
+  card.style.top = Math.round(Math.max(8, top)) + "px";
+}
+
+if ($("web-host-hover-card")) {
+  $("web-host-hover-card").addEventListener("mouseenter", cancelHideHostHoverCard);
+  $("web-host-hover-card").addEventListener("mouseleave", function () {
+    hideHostHoverCard();
+  });
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("scroll", function () {
+    hideHostHoverCard();
+  }, true);
+  window.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") {
+      hideHostHoverCard();
+      var entityModal = $("web-roster-entity-modal");
+      if (entityModal && entityModal.style.display !== "none") {
+        closeOnlineEntityDialog();
+      }
+    }
+  });
+}
 
 function renderClientTypeIconSvg(type) {
   if (type === "web") {
@@ -50977,6 +51619,7 @@ function renderOnlineUsersRoster(players) {
   var pl = (Array.isArray(players) ? players : []).filter(function (p) {
     return p && p.handle !== "anonymous-127.0.0.1" && p.handle !== "anonymous-::1";
   });
+  latestLobbyPlayers = pl.slice();
 
   var humanPlayers = pl.filter(function (p) { return !p.is_robot && !p.robot_uuid; });
   var robotPlayers = pl.filter(function (p) { return Boolean(p.is_robot || p.robot_uuid); });
@@ -51034,8 +51677,8 @@ function renderOnlineUsersRoster(players) {
     }
 
     chip.addEventListener("click", function () {
-      expandedOnlineUserUuid = (expandedOnlineUserUuid === playerKey) ? "" : playerKey;
-      renderOnlineUsersRoster(pl);
+      expandedOnlineUserUuid = playerKey;
+      openOnlineEntityDialog(p);
     });
 
     container.appendChild(chip);
@@ -51143,6 +51786,26 @@ function refreshLobbyTables() {
       tdHost.appendChild(idLine);
       var hostSub = el("div", "Host: @" + (t.host_handle || "unknown"), "dim");
       hostSub.style.fontSize = "12px";
+      hostSub.style.cursor = "pointer";
+      hostSub.style.textDecoration = "underline dotted";
+      tdHost.tabIndex = 0;
+      tdHost.addEventListener("mouseenter", function () {
+        showHostHoverCard(t, tdHost);
+      });
+      tdHost.addEventListener("mouseleave", function () {
+        scheduleHideHostHoverCard(120);
+      });
+      tdHost.addEventListener("focusin", function () {
+        showHostHoverCard(t, tdHost);
+      });
+      tdHost.addEventListener("focusout", function () {
+        scheduleHideHostHoverCard(120);
+      });
+      hostSub.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        hideHostHoverCard();
+        openOnlineEntityDialog(resolveHostEntityForTable(t));
+      });
       tdHost.appendChild(hostSub);
       tr.appendChild(tdHost);
 
@@ -51848,11 +52511,44 @@ window.addEventListener("keydown", function (ev) {
 });
 
 /* ---- leaderboard ---- */
+function syncLbModeControls() {
+  var mode = $("lb-mode") ? $("lb-mode").value : "overall";
+  var isOverall = (mode === "overall");
+  var sortWrap = $("lb-sort-wrap");
+  if (sortWrap) {
+    sortWrap.style.display = isOverall ? "inline-flex" : "none";
+  }
+}
+
+function setTableHeaderColumns(tableEl, cols) {
+  if (!tableEl) return;
+  var tr = tableEl.querySelector("thead tr");
+  if (!tr) return;
+  clear(tr);
+  cols.forEach(function (c) {
+    tr.appendChild(el("th", c));
+  });
+}
+
 function lbLoadHuman() {
-  var mode = $("lb-mode") ? $("lb-mode").value : "2P_3B";
-  return api("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
-      "&limit=50").then(function (j) {
-    var body = $("lb-table").querySelector("tbody");
+  syncLbModeControls();
+  var mode = $("lb-mode") ? $("lb-mode").value : "overall";
+  var isOverall = (mode === "overall");
+  var sortField = $("lb-sort") ? $("lb-sort").value : "elo_2p_3b";
+  var sortOrder = $("lb-order") ? $("lb-order").value : "desc";
+  var lbTable = $("lb-table");
+  if (isOverall) {
+    setTableHeaderColumns(lbTable, ["#", "Player", "2P_3B", "2P_1B", "OFK", "Games", "Record (W-L-D)", "Win Rate"]);
+  } else {
+    setTableHeaderColumns(lbTable, ["#", "Player", "Elo", "Games", "W", "L", "D", "Win Rate"]);
+  }
+  var url = isOverall
+    ? ("/api/v1/leaderboard?mode=overall&pool=human&sort=" + encodeURIComponent(sortField) +
+       "&order=" + encodeURIComponent(sortOrder) + "&limit=100")
+    : ("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
+       "&pool=human&played_only=1&limit=100");
+  return api(url).then(function (j) {
+    var body = lbTable.querySelector("tbody");
     clear(body);
     var entries = j.entries || [];
     $("lb-msg").textContent = entries.length ? "" : "No ranked players yet.";
@@ -51895,11 +52591,29 @@ function lbLoadHuman() {
       tdPlayer.appendChild(pWrap);
       tr.appendChild(tdPlayer);
 
-      var ladderGames = (e.ladder_games !== undefined) ? e.ladder_games : e.games_played;
-      var eloStr = fmtElo(e.elo, ladderGames);
-      [eloStr, e.games_played, e.wins, e.losses, e.draws].forEach(function (v) {
-        tr.appendChild(el("td", v));
-      });
+      var gp = e.games_played || 0;
+      var w = e.wins || 0;
+      var l = e.losses || 0;
+      var d = e.draws || 0;
+      var wrStr = (e.win_rate !== undefined
+        ? Number(e.win_rate).toFixed(1)
+        : (gp > 0 ? ((w / gp) * 100).toFixed(1) : "0.0")) + "%";
+
+      if (isOverall) {
+        var elo3b = fmtElo(e.elo_2p_3b, e.games_2p_3b);
+        var elo1b = fmtElo(e.elo_2p_1b, e.games_2p_1b);
+        var eloOfk = fmtElo(e.elo_ofk, e.games_ofk);
+        var recStr = w + " - " + l + " - " + d;
+        [elo3b, elo1b, eloOfk, gp, recStr, wrStr].forEach(function (v) {
+          tr.appendChild(el("td", v));
+        });
+      } else {
+        var ladderGames = (e.ladder_games !== undefined) ? e.ladder_games : gp;
+        var eloStr = fmtElo(e.elo, ladderGames);
+        [eloStr, gp, w, l, d, wrStr].forEach(function (v) {
+          tr.appendChild(el("td", v));
+        });
+      }
       tr.addEventListener("click", function () {
         switchTab("users");
         openUserProfile(targetId);
@@ -51910,13 +52624,25 @@ function lbLoadHuman() {
 }
 
 function lbLoadArena() {
+  syncLbModeControls();
   var arenaTable = $("lb-arena-table");
   if (!arenaTable) return Promise.resolve();
-  var mode = $("lb-mode") ? $("lb-mode").value : "2P_3B";
+  var mode = $("lb-mode") ? $("lb-mode").value : "overall";
+  var isOverall = (mode === "overall");
+  var sortField = $("lb-sort") ? $("lb-sort").value : "elo_2p_3b";
+  var sortOrder = $("lb-order") ? $("lb-order").value : "desc";
   var ptype = $("lb-arena-type") ? $("lb-arena-type").value : "all";
-  return api("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
-      "&pool=arena&participant_type=" + encodeURIComponent(ptype) +
-      "&limit=100").then(function (j) {
+  if (isOverall) {
+    setTableHeaderColumns(arenaTable, ["#", "Participant", "Type", "Owner", "2P_3B", "2P_1B", "OFK", "Status", "Games", "Record (W-L-D)", "Win Rate"]);
+  } else {
+    setTableHeaderColumns(arenaTable, ["#", "Participant", "Type", "Elo", "Games", "W", "L", "D", "Win Rate"]);
+  }
+  var url = isOverall
+    ? ("/api/v1/leaderboard?mode=overall&pool=arena&participant_type=" + encodeURIComponent(ptype) +
+       "&sort=" + encodeURIComponent(sortField) + "&order=" + encodeURIComponent(sortOrder) + "&limit=100")
+    : ("/api/v1/leaderboard?mode=" + encodeURIComponent(mode) +
+       "&pool=arena&participant_type=" + encodeURIComponent(ptype) + "&played_only=1&limit=100");
+  return api(url).then(function (j) {
     var body = arenaTable.querySelector("tbody");
     clear(body);
     var entries = j.entries || [];
@@ -51960,7 +52686,7 @@ function lbLoadArena() {
           viewRobotProfile(botId);
         });
         nameCol.appendChild(pLink);
-        if (e.owner_handle) {
+        if (!isOverall && e.owner_handle) {
           var ownerWrap = el("span", "by ", "dim");
           ownerWrap.style.fontSize = "12px";
           var ownerTarget = e.owner_uuid || e.owner_handle;
@@ -52002,20 +52728,58 @@ function lbLoadArena() {
       tdPart.appendChild(pWrap);
       tr.appendChild(tdPart);
 
+      var isRetired = isRobot && Boolean(e.retired || e.status === "retired" || e.revoked || e.token_deleted);
       var tdType = el("td");
       tdType.appendChild(el("span", isRobot ? "BOT" : "HUMAN", isRobot ? "badge badge-active" : "badge"));
-      if (isRobot && (e.retired || e.status === "retired" || e.revoked || e.token_deleted)) {
+      if (!isOverall && isRetired) {
         var retBadge = el("span", "Retired", "badge badge-revoked");
         retBadge.style.marginLeft = "6px";
         tdType.appendChild(retBadge);
       }
       tr.appendChild(tdType);
 
-      var eloStr = fmtElo(e.elo, e.ladder_games);
+      var gp = e.games_played || 0;
+      var w = e.wins || 0;
+      var l = e.losses || 0;
+      var d = e.draws || 0;
       var wrStr = (e.win_rate !== undefined ? Number(e.win_rate).toFixed(1) : "0.0") + "%";
-      [eloStr, e.games_played || 0, e.wins || 0, e.losses || 0, e.draws || 0, wrStr].forEach(function (v) {
-        tr.appendChild(el("td", v));
-      });
+
+      if (isOverall) {
+        var tdOwner = el("td");
+        if (isRobot && e.owner_handle) {
+          var oTarget = e.owner_uuid || e.owner_handle;
+          var oLink = el("a", "@" + e.owner_handle);
+          oLink.href = "#users/" + encodeURIComponent(oTarget);
+          oLink.style.cursor = "pointer";
+          oLink.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            switchTab("users");
+            openUserProfile(oTarget);
+          });
+          tdOwner.appendChild(oLink);
+        } else {
+          tdOwner.textContent = "\u2014";
+        }
+        tr.appendChild(tdOwner);
+
+        tr.appendChild(el("td", fmtElo(e.elo_2p_3b, e.games_2p_3b)));
+        tr.appendChild(el("td", fmtElo(e.elo_2p_1b, e.games_2p_1b)));
+        tr.appendChild(el("td", fmtElo(e.elo_ofk, e.games_ofk)));
+
+        var tdStatus = el("td");
+        tdStatus.appendChild(el("span", isRetired ? "Retired" : "Active", isRetired ? "badge badge-revoked" : "badge badge-active"));
+        tr.appendChild(tdStatus);
+
+        tr.appendChild(el("td", String(gp)));
+        tr.appendChild(el("td", w + " - " + l + " - " + d));
+        tr.appendChild(el("td", wrStr));
+      } else {
+        var eloStr = fmtElo(e.elo, e.ladder_games);
+        [eloStr, gp, w, l, d, wrStr].forEach(function (v) {
+          tr.appendChild(el("td", v));
+        });
+      }
 
       tr.addEventListener("click", function () {
         if (isRobot) {
@@ -52036,18 +52800,29 @@ function lbLoadArena() {
 }
 
 function lbLoad() {
+  syncLbModeControls();
   lbLoadHuman();
   lbLoadArena();
 }
 
 $("lb-go").addEventListener("click", lbLoad);
 $("lb-mode").addEventListener("change", lbLoad);
+if ($("lb-sort")) {
+  $("lb-sort").addEventListener("change", lbLoad);
+}
+if ($("lb-order")) {
+  $("lb-order").addEventListener("change", lbLoad);
+}
 if ($("lb-arena-type")) {
   $("lb-arena-type").addEventListener("change", lbLoadArena);
 }
 window.fmtElo = fmtElo;
 window.lbLoad = lbLoad;
 window.lbLoadArena = lbLoadArena;
+window.openOnlineEntityDialog = openOnlineEntityDialog;
+window.closeOnlineEntityDialog = closeOnlineEntityDialog;
+window.showHostHoverCard = showHostHoverCard;
+window.hideHostHoverCard = hideHostHoverCard;
 
 
 /* =========================================================================

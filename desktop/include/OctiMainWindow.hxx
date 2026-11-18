@@ -13,8 +13,10 @@
 #include <string>
 #include <vector>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
+#include <QEventLoop>
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
@@ -137,6 +139,7 @@ public:
     bool isLocalBotGame() const;
     const LocalGameConfig &localGameConfig() const;
     bool executeBotTurnIfNeeded();
+    bool isBotSearchActive() const { return _botSearchActive; }
     void showHint();
     bool isAwaitingMatchStart() const { return _awaitingMatchStart; }
     void beginAwaitingMatchStart();
@@ -313,6 +316,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -355,6 +359,10 @@ private:
     QImage _cachedAvatarImage;
 
     bool _isLocalBotGame;
+    bool _botSearchActive = false;
+    bool _abortBotSearch = false;
+    QEventLoop *_activeThinkingLoop = nullptr;
+    QPointer<OctiThinkingDialog> _activeThinkingDialog;
     LocalGameConfig _localConfig;
     bool _awaitingMatchStart;
     qint64 _currentTurnStartedEpochMs;

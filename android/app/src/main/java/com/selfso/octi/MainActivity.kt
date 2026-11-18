@@ -892,7 +892,10 @@ fun OctiMainAppContent(
                     remainingSec = botThinkingRemainingSec,
                     depth = botThinkingDepth,
                     nodes = botThinkingNodes,
-                    budgetMs = viewModel.botEngine.timeBudgetMs
+                    budgetMs = viewModel.botEngine.timeBudgetMs,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
                 )
             }
 
@@ -975,6 +978,7 @@ fun OctiMainAppContent(
                 rotation = viewModel.boardRotation.collectAsState().value,
                 themeId = themeId,
                 canInteract = canEditSquare,
+                boardRevision = currentBoardRev,
                 onDismiss = { viewModel.closeZoomedSquare() },
                 onBeginGuidedMove = { podIndex, moveAllStack ->
                     viewModel.clearLastMoveIndicators()
