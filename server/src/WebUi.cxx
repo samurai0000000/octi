@@ -3309,6 +3309,33 @@ tr.active-ply {
     </div>
   </div>
 
+  <div class="journal-card" id="journal-issue-2-card" style="margin-bottom:18px;border:1.5px solid #c8a253;">
+    <div class="journal-feature-grid" id="journal-issue-2-grid">
+      <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="journal-cover-wrap" id="journal-issue-2-cover-link" title="Read Issue #2 Full Feature">
+        <img id="journal-issue-2-cover" src="/journal/2026-11-20/img/cover_architecture_of_octi.jpg" loading="lazy" alt="A young OCTI player plugging wooden prongs into octagonal pods on an authentic cloth OCTI board — The OCTI Journal Issue #2 Cover">
+      </a>
+      <div id="journal-issue-2-copy">
+        <div class="journal-meta-strip" id="journal-issue-2-meta">
+          <span class="journal-meta-pill gold">ISSUE #2 &bull; NOV 20, 2026</span>
+          <span class="journal-meta-pill">HANDS-ON STRATEGY GUIDE</span>
+          <span class="journal-meta-pill">3-BASE &bull; EDGELESS BOARD &bull; SUPERPRONGS</span>
+        </div>
+        <h2 id="journal-issue-2-headline"><a href="/journal/2026-11-20/the-architecture-of-octi.html" style="color:var(--fg);text-decoration:none;">The Architecture of OCTI: Customizing Your Squad, Prong Directions, and Winning All Three Bases</a></h2>
+        <p id="journal-issue-2-brief-1">
+          In games like chess, your pieces start the match with all their moves already locked in. In OCTI, your pieces&mdash;called <strong>pods</strong>&mdash;start on your home bases as completely blank wooden octagons waiting to be upgraded from your stash of 25 wooden prongs. Written as a friendly, visual tabletop guide for players of all ages, Issue #2 walks through the four ways to spend your turn (<em>Add a Prong</em>, <em>Step or Hop</em>, <em>Jump &amp; Seize</em>, and <em>Deploy a Reserve Pod</em>), why two nimble 2-prong buddy pods beat one overloaded &ldquo;walking jackpot,&rdquo; and how a quick 1-square step puts your pod on the right track for a 2-square jump.
+        </p>
+        <p id="journal-issue-2-brief-2">
+          Through six illustrated board positions and four interactive <strong>&ldquo;Pause &amp; Read the Board&rdquo;</strong> puzzles, the guide introduces the three favorite 3-prong pod builds (<em>The Sprinter</em>, <em>The Side-Stepper</em>, and <em>The Boomerang</em> with one backward prong), shows why stacking pods on a safe home base creates a one-turn surprise launch while leaving a stack out in the open invites a whole-stack capture, and explains how to turn one captured enemy base into a forward staging base for liberating captured pods, split two stacked pods onto the last two enemy bases on the exact same turn, and master Edgeless Board wraparound edges and SuperProng bonus prelude moves.
+        </p>
+        <div class="row" style="gap:10px;margin:8px 0 0 0;flex-wrap:wrap;">
+          <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="btn btn-primary" id="journal-issue-2-read-link" style="background:#c8a253;border-color:#e5c158;color:#0b0f17;font-weight:700;padding:9px 16px;">Read Full Strategy Guide &rarr;</a>
+          <a href="/journal/2026-11-20/the-architecture-of-octi.html#five-maxims" class="btn" id="journal-issue-2-maxims-link" style="padding:9px 16px;">Cheat-Sheet &amp; 5 Rules of Thumb</a>
+          <a href="/journal/" class="btn" id="journal-issue-2-index-link" style="padding:9px 14px;">All Journal Issues</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="journal-card" id="journal-issue-1-card" style="margin-bottom:18px;border:1.5px solid #c8a253;">
     <div class="journal-feature-grid" id="journal-issue-1-grid">
       <a href="/journal/2026-11-18/g-20261118-2165.html" class="journal-cover-wrap" id="journal-issue-1-cover-link" title="Read Issue #1 Full Feature">
