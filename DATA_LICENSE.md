@@ -16,7 +16,7 @@ Under the CC-BY 4.0 license, you are free to share (copy and redistribute the ma
 
 **Attribution notice:**
 ```text
-Octi game data, Charles Chiou (selfso.com)
+octi.selfso.com
 ```
 
 When citing, redistributing, or publishing datasets, derivative AI models, neural network evaluations, opening books, or research papers incorporating OCTI game transcripts, you must include the attribution string above along with a link to the CC-BY 4.0 license and the OCTI repository:

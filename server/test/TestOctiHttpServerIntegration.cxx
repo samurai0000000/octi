@@ -2779,7 +2779,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveUploadNominalWonAndResigned)
     STRCMP_EQUAL("2.1.1", rGet.json.value("app_version", "").c_str());
     STRCMP_EQUAL("linux-x86_64", rGet.json.value("platform", "").c_str());
     STRCMP_EQUAL("CC-BY-4.0", rGet.json.value("license", "").c_str());
-    STRCMP_EQUAL("Octi game data, Charles Chiou (selfso.com)",
+    STRCMP_EQUAL("octi.selfso.com",
                  rGet.json.value("attribution", "").c_str());
 
     /* Privacy check: installId and client.extended never leak in public response */
@@ -3106,6 +3106,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
     CHECK_EQUAL(1, rStats.json["by_winner"].value("A", 0));
     CHECK_EQUAL(1, rStats.json["by_winner"].value("B", 0));
     CHECK_TRUE(rStats.json.contains("ai_win_rates") && rStats.json["ai_win_rates"].is_array());
+    STRCMP_EQUAL("octi.selfso.com", rStats.json.value("attribution", "").c_str());
 
     /* Test /api/v1/archive/export (NDJSON streaming requires Bearer auth) */
     EXPECT_ERROR(401, "UNAUTHORIZED", http().get("/api/v1/archive/export"));
@@ -3125,7 +3126,7 @@ TEST(OctiHttpServerIntegrationTest, ArchiveFilteringSortingStatsAndNdjsonExport)
         auto jRow = Json::parse(line);
         STRCMP_EQUAL("octi.transcript.v3", jRow.value("format", "").c_str());
         STRCMP_EQUAL("CC-BY-4.0", jRow.value("license", "").c_str());
-        STRCMP_EQUAL("Octi game data, Charles Chiou (selfso.com)",
+        STRCMP_EQUAL("octi.selfso.com",
                      jRow.value("attribution", "").c_str());
         CHECK_TRUE(line.find("inst-filt") == std::string::npos);
         CHECK_TRUE(line.find("\"extended\"") == std::string::npos);
@@ -5206,6 +5207,7 @@ TEST(OctiHttpServerIntegrationTest, DatabaseArchiveCorpusReplayAndInvalidGameRej
             EXPECT_STATUS(404, rGet);
         } else {
             EXPECT_STATUS(200, rGet);
+            STRCMP_EQUAL("octi.selfso.com", rGet.json.value("attribution", "").c_str());
             STRCMP_EQUAL(entry.expectedWinner, rGet.json.value("winner", "").c_str());
             STRCMP_EQUAL(entry.finalFen, rGet.json.value("final_fen", "").c_str());
             if (std::string(entry.expectedRuleTermination) == "TOTAL_CAPTURE") {
@@ -13007,6 +13009,192 @@ TEST(OctiHttpServerIntegrationTest,
     Reply rMatchAfter = http().get("/api/v1/matchmaking/status", queuedRestored.token);
     EXPECT_STATUS(200, rMatchAfter);
     CHECK_FALSE(rMatchAfter.json.value("queued", true));
+}
+
+TEST(OctiHttpServerIntegrationTest, Ply0AbortAndStandUpEndpointsAcrossVariantsRejectionsAndLegacyCompat)
+{
+    User alice = signIn("google", "sub-ply0-alice", "Ply0 Alice");
+    User bob = signIn("apple", "sub-ply0-bob", "Ply0 Bob");
+    User carol = signIn("microsoft", "sub-ply0-carol", "Ply0 Carol");
+    User dave = signIn("facebook", "sub-ply0-dave", "Ply0 Dave");
+    User erin = signIn("line", "sub-ply0-erin", "Ply0 Erin");
+
+    Reply rBotCreate = http().post(
+        "/api/v1/robots", alice.token,
+        Json{{"robot_name", "ply0_http_bot"}, {"description", "Ply0 HTTP bot"}});
+    EXPECT_STATUS(201, rBotCreate);
+    const std::string botToken = rBotCreate.json.value("robot_token", "");
+    const std::string botUuid = rBotCreate.json.value("robot_uuid", "");
+    CHECK_FALSE(botToken.empty());
+
+    /* 1. Rated 2P Human vs Robot: POST /api/v1/games/:id/action {"action":"abort"} */
+    std::string room2p = createTable(
+        alice, Json{{"mode", "2P"}, {"bases", 3}, {"rated", true}, {"allow_robots", true}});
+    Reply rBotJoin = http().post("/api/v1/tables/" + room2p + "/join", botToken, Json::object());
+    EXPECT_STATUS(200, rBotJoin);
+    CHECK_TRUE(rBotJoin.json.value("game_started", false));
+    STRCMP_EQUAL("IN_PROGRESS", view(room2p, alice.token).value("phase", "").c_str());
+
+    Reply rAbort = http().post("/api/v1/games/" + room2p + "/action", botToken,
+                               Json{{"action", "abort"}});
+    EXPECT_STATUS(200, rAbort);
+    CHECK_TRUE(rAbort.json.value("ok", false));
+    STRCMP_EQUAL("abort", rAbort.json.value("action", "").c_str());
+    STRCMP_EQUAL(room2p.c_str(), rAbort.json.value("room_id", "").c_str());
+    CHECK_FALSE(rAbort.json.value("game_over", true));
+    CHECK_TRUE(rAbort.json.value("stood_up_ply0", false));
+    STRCMP_EQUAL("ply0_standup", rAbort.json.value("detail", "").c_str());
+    CHECK_TRUE(rAbort.json.value("seq", 0LL) > 0);
+
+    Json v2p = view(room2p, alice.token);
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", v2p.value("phase", "").c_str());
+    STRCMP_EQUAL(alice.uuid.c_str(), v2p.value("host_uuid", "").c_str());
+    CHECK_EQUAL(0, v2p.value("ply_count", -1));
+    CHECK_TRUE(v2p["seats"][1]["player_uuid"].is_null());
+
+    /* Events poll delivers SEAT_LEFT with detail="ply0_standup" */
+    Reply rEvs = http().get("/api/v1/games/" + room2p + "/events?since_seq=0", alice.token);
+    EXPECT_STATUS(200, rEvs);
+    bool foundPly0Ev = false;
+    for (size_t i = 0; i < rEvs.json["events"].size(); ++i) {
+        const Json &ev = rEvs.json["events"][i];
+        if (ev.value("type", "") == "SEAT_LEFT" &&
+            ev.value("detail", "") == "ply0_standup" &&
+            ev.value("seat", 0) == 2) {
+            foundPly0Ev = true;
+        }
+    }
+    CHECK_TRUE(foundPly0Ev);
+
+    /* Zero archived game and zero robot losses */
+    Reply rBotList = http().get("/api/v1/robots", alice.token);
+    EXPECT_STATUS(200, rBotList);
+    for (size_t i = 0; i < rBotList.json["robots"].size(); ++i) {
+        if (rBotList.json["robots"][i].value("robot_uuid", "") == botUuid) {
+            CHECK_EQUAL(0, rBotList.json["robots"][i].value("games_played", -1));
+            CHECK_EQUAL(0, rBotList.json["robots"][i].value("losses", -1));
+        }
+    }
+
+    /* Bob immediately fills Seat 2 of the SAME room2p; host Alice stands up via {"abort_if_ply0": true} */
+    Reply rBobJoin = http().post("/api/v1/tables/" + room2p + "/join", bob.token, Json::object());
+    EXPECT_STATUS(200, rBobJoin);
+    CHECK_TRUE(rBobJoin.json.value("game_started", false));
+
+    /* Invalid abort_if_ply0 type -> 400 INVALID_ARGUMENT */
+    EXPECT_ERROR(400, "INVALID_ARGUMENT",
+                 http().post("/api/v1/tables/" + room2p + "/leave", alice.token,
+                             Json{{"abort_if_ply0", "yes"}}));
+
+    Reply rAliceLeavePly0 = http().post("/api/v1/tables/" + room2p + "/leave", alice.token,
+                                        Json{{"abort_if_ply0", true}});
+    EXPECT_STATUS(200, rAliceLeavePly0);
+    CHECK_TRUE(rAliceLeavePly0.json.value("ok", false));
+    CHECK_TRUE(rAliceLeavePly0.json.value("stood_up_ply0", false));
+    STRCMP_EQUAL("ply0_standup", rAliceLeavePly0.json.value("detail", "").c_str());
+
+    Json vAfterAlice = view(room2p, bob.token);
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", vAfterAlice.value("phase", "").c_str());
+    STRCMP_EQUAL(bob.uuid.c_str(), vAfterAlice.value("host_uuid", "").c_str());
+
+    /* 2. OFK uppercase "STAND_UP" & 4P uppercase "ABORT" normalization */
+    std::string roomOfk = startGame({alice, carol}, Json{{"mode", "OFK"}});
+    Reply rOfkStandUp = http().post("/api/v1/games/" + roomOfk + "/action", carol.token,
+                                    Json{{"action", "STAND_UP"}});
+    EXPECT_STATUS(200, rOfkStandUp);
+    STRCMP_EQUAL("stand_up", rOfkStandUp.json.value("action", "").c_str());
+    CHECK_TRUE(rOfkStandUp.json.value("stood_up_ply0", false));
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", view(roomOfk, alice.token).value("phase", "").c_str());
+    EXPECT_STATUS(200, http().post("/api/v1/tables/" + roomOfk + "/leave", alice.token, Json::object()));
+
+    std::string room4p = startGame({alice, carol, dave, erin}, Json{{"mode", "4P"}});
+    Reply r4pAbort = http().post("/api/v1/games/" + room4p + "/action", dave.token,
+                                 Json{{"action", "ABORT"}});
+    EXPECT_STATUS(200, r4pAbort);
+    STRCMP_EQUAL("abort", r4pAbort.json.value("action", "").c_str());
+    CHECK_TRUE(r4pAbort.json.value("stood_up_ply0", false));
+    Json v4p = view(room4p, alice.token);
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", v4p.value("phase", "").c_str());
+    CHECK_TRUE(v4p["seats"][2]["player_uuid"].is_null());
+
+    /* 3. Strict Ply > 0 rejection & empty-body /leave backwards compatibility */
+    Reply rDaveRejoin = http().post("/api/v1/tables/" + room4p + "/join", dave.token, Json::object());
+    EXPECT_STATUS(200, rDaveRejoin);
+    CHECK_TRUE(rDaveRejoin.json.value("game_started", false));
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + room4p + "/move", alice.token,
+                                   Json{{"move", "33+a"}}));
+
+    EXPECT_ERROR(409, "INVALID_STATE",
+                 http().post("/api/v1/games/" + room4p + "/action", alice.token,
+                             Json{{"action", "abort"}}));
+    EXPECT_ERROR(409, "INVALID_STATE",
+                 http().post("/api/v1/games/" + room4p + "/action", carol.token,
+                             Json{{"action", "stand_up"}}));
+    EXPECT_ERROR(409, "INVALID_STATE",
+                 http().post("/api/v1/tables/" + room4p + "/leave", erin.token,
+                             Json{{"abort_if_ply0", true}}));
+
+    Json v4pAfterReject = view(room4p, alice.token);
+    STRCMP_EQUAL("IN_PROGRESS", v4pAfterReject.value("phase", "").c_str());
+    CHECK_EQUAL(1, v4pAfterReject.value("ply_count", 0));
+    CHECK_TRUE(v4pAfterReject["seats"][3].value("connected", false));
+
+    /* Cleanly finish room4p via resignation, then verify finished-room abort rejection */
+    EXPECT_STATUS(200, http().post("/api/v1/games/" + room4p + "/resign", carol.token,
+                                   Json::object()));
+    EXPECT_ERROR(409, "INVALID_STATE",
+                 http().post("/api/v1/games/" + room4p + "/action", alice.token,
+                             Json{{"action", "abort"}}));
+
+    /* Empty-body POST /leave (no Content-Type) preserves legacy detach */
+    Reply rEmptyLeave = http().raw("POST", "/api/v1/tables/" + room2p + "/leave", bob.token, "", "");
+    EXPECT_STATUS(200, rEmptyLeave);
+    CHECK_FALSE(rEmptyLeave.json.value("stood_up_ply0", true));
+    STRCMP_EQUAL("waiting_left", rEmptyLeave.json.value("detail", "").c_str());
+
+    std::string roomLegacy = startGame({alice, bob}, Json{{"mode", "2P"}});
+    Reply rLegacyInProg = http().raw("POST", "/api/v1/tables/" + roomLegacy + "/leave", bob.token, "", "");
+    EXPECT_STATUS(200, rLegacyInProg);
+    CHECK_FALSE(rLegacyInProg.json.value("stood_up_ply0", true));
+    STRCMP_EQUAL("in_progress_disconnected", rLegacyInProg.json.value("detail", "").c_str());
+    Json vLegacy = view(roomLegacy, alice.token);
+    STRCMP_EQUAL("IN_PROGRESS", vLegacy.value("phase", "").c_str());
+    CHECK_FALSE(vLegacy["seats"][1].value("connected", true));
+}
+
+TEST(OctiHttpServerIntegrationTest, Ply0AbortWebUiControlsPhaseSyncAndEventFormatting)
+{
+    Reply rIndex = http().get("/");
+    EXPECT_STATUS(200, rIndex);
+
+    /* Preserve exact DOM order invariants alongside new Ply-0 JS logic */
+    size_t posSideTopHalf = rIndex.body.find("id=\"web-side-top-half\"");
+    size_t posBoardLobbyChat = rIndex.body.find("id=\"web-board-lobby-chat-panel\"");
+    size_t posBoardChatPanel = rIndex.body.find("id=\"web-board-chat-panel\"");
+    size_t posLeaveTableBtn = rIndex.body.find("id=\"btn-web-leave-table\"");
+    size_t posMatchActionsCard = rIndex.body.find("id=\"web-match-actions-card\"");
+    size_t posResignBtn = rIndex.body.find("id=\"btn-web-resign\"");
+
+    CHECK_TRUE(posSideTopHalf != std::string::npos);
+    CHECK_TRUE(posBoardLobbyChat != std::string::npos);
+    CHECK_TRUE(posBoardChatPanel != std::string::npos);
+    CHECK_TRUE(posLeaveTableBtn != std::string::npos);
+    CHECK_TRUE(posMatchActionsCard != std::string::npos);
+    CHECK_TRUE(posResignBtn != std::string::npos);
+    CHECK_TRUE(posSideTopHalf < posBoardLobbyChat);
+    CHECK_TRUE(posBoardLobbyChat < posBoardChatPanel);
+    CHECK_TRUE(posBoardChatPanel < posLeaveTableBtn);
+    CHECK_TRUE(posLeaveTableBtn < posMatchActionsCard);
+    CHECK_TRUE(posMatchActionsCard < posResignBtn);
+
+    CHECK_TRUE(rIndex.body.find("resignBtn.textContent = \"Abort\";") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("leaveTableBtn.textContent = \"Stand Up\";") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("body: { abort_if_ply0: true }") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("body: { action: \"abort\" }") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("activeOnlinePrevPhase") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("ev.detail === \"ply0_standup\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("stood up before move 1 (") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("table reopened for players)") != std::string::npos);
 }
 
 int main(int argc, char **argv)

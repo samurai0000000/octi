@@ -6288,24 +6288,25 @@ OctiTelemetryConsentDialog::OctiTelemetryConsentDialog(ThemeId theme, QWidget *p
     monoFont.setPointSize(10);
     _sampleJsonEdit->setFont(monoFont);
     _sampleJsonEdit->setPlainText(
-        "{\n"
-        "  \"format\": \"octi.transcript.v3\",\n"
-        "  \"license\": \"CC-BY-4.0\",\n"
-        "  \"attribution\": \"Octi game data, Charles Chiou (selfso.com)\",\n"
-        "  \"client\": {\n"
-        "    \"appVersion\": \"" OCTI_VERSION_STRING "\",\n"
-        "    \"buildType\": \"release\",\n"
-        "    \"platform\": \"desktop-qt6\",\n"
-        "    \"extended\": {\n"
-        "      \"startedAt\": 1730246400,\n"
-        "      \"endedAt\": 1730246720,\n"
-        "      \"utcOffsetMin\": 480,\n"
-        "      \"locale\": \"en_US\",\n"
-        "      \"osVersion\": \"Linux 6.8\",\n"
-        "      \"installId\": \"3b24fc09-a7e8-42f0-9a25-c6bf2e987154\"\n"
-        "    }\n"
-        "  }\n"
-        "}");
+        QString::fromStdString(
+            std::string("{\n"
+                        "  \"format\": \"octi.transcript.v3\",\n"
+                        "  \"license\": \"CC-BY-4.0\",\n") +
+            (std::string("  \"attribution\": \"") + OCTI_DATA_ATTRIBUTION + "\",\n") +
+            "  \"client\": {\n"
+            "    \"appVersion\": \"" OCTI_VERSION_STRING "\",\n"
+            "    \"buildType\": \"release\",\n"
+            "    \"platform\": \"desktop-qt6\",\n"
+            "    \"extended\": {\n"
+            "      \"startedAt\": 1730246400,\n"
+            "      \"endedAt\": 1730246720,\n"
+            "      \"utcOffsetMin\": 480,\n"
+            "      \"locale\": \"en_US\",\n"
+            "      \"osVersion\": \"Linux 6.8\",\n"
+            "      \"installId\": \"3b24fc09-a7e8-42f0-9a25-c6bf2e987154\"\n"
+            "    }\n"
+            "  }\n"
+            "}"));
     _sampleJsonEdit->setFixedHeight(130);
     _sampleJsonEdit->setVisible(false);
     layout->addWidget(_sampleJsonEdit);

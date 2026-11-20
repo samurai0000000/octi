@@ -951,7 +951,14 @@ OctiMainWindow::OctiMainWindow(
         claimOpponentForfeit();
     });
     QObject::connect(_resignBtn, &QPushButton::clicked, [this]() {
-        resignCurrentGame();
+        if (_inOnlineRoom && _onlineViewerSeat > 0 &&
+            _onlineGameView.phase == "IN_PROGRESS" &&
+            _onlineGameView.plyCount == 0 &&
+            _onlineGameView.moves.empty()) {
+            abortPly0OnlineGame();
+        } else {
+            resignCurrentGame();
+        }
     });
     QObject::connect(_leaveTableBtn, &QPushButton::clicked, [this]() {
         leaveActiveOnlineTable(_onlineRoomId);
@@ -1835,7 +1842,14 @@ void OctiMainWindow::setupMenuBar()
     _actResign = gameMenu->addAction(createMenuIcon(MenuIconKind::RESIGN, _theme), "Resign Game");
     _actResign->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
     QObject::connect(_actResign, &QAction::triggered, this, [this]() {
-        resignCurrentGame();
+        if (_inOnlineRoom && _onlineViewerSeat > 0 &&
+            _onlineGameView.phase == "IN_PROGRESS" &&
+            _onlineGameView.plyCount == 0 &&
+            _onlineGameView.moves.empty()) {
+            abortPly0OnlineGame();
+        } else {
+            resignCurrentGame();
+        }
     });
 
     _actExportMoves = gameMenu->addAction("Export Move History (JSON v3.0)");
@@ -2373,6 +2387,10 @@ void OctiMainWindow::updateMenuActionsState()
         _actClaimForfeit->setEnabled(forfeitEnabled);
     }
     if (_actResign) {
+        bool onlinePly0Abort =
+            (canActInMatch && _onlineGameView.plyCount == 0 &&
+             _onlineGameView.moves.empty());
+        _actResign->setText(onlinePly0Abort ? "Abort Game" : "Resign Game");
         bool resignEnabled = !_botSearchActive &&
             (online ? canActInMatch : (localGameActive && !_awaitingMatchStart && !gameOver));
         _actResign->setEnabled(resignEnabled);
@@ -3428,7 +3446,13 @@ void OctiMainWindow::handleGameSseEvent(const SseEvent &ev)
     } else if (ev.event == "SEAT_LEFT") {
         std::string h = j.value("handle", "Player");
         int s = j.value("seat", 0);
-        sysMsg = "[System] @" + h + " left Seat " + std::to_string(s);
+        std::string detail = j.value("detail", "");
+        if (detail == "ply0_standup") {
+            sysMsg = "[System] @" + h + " stood up before move 1 (Seat " +
+                     std::to_string(s) + "; table reopened for players)";
+        } else {
+            sysMsg = "[System] @" + h + " left Seat " + std::to_string(s);
+        }
     } else if (ev.event == "OBSERVER_JOINED") {
         std::string h = j.value("handle", "Spectator");
         sysMsg = "[System] @" + h + " joined as observer";
@@ -3963,6 +3987,45 @@ ApiResult<GameActionData> OctiMainWindow::claimOpponentForfeit()
     }
     res = _netClient->submitGameAction(_onlineRoomId, "claim_forfeit");
     refreshOnlineGameView();
+    return res;
+}
+
+ApiResult<GameActionData> OctiMainWindow::abortPly0OnlineGame()
+{
+    ApiResult<GameActionData> res;
+    if (_botSearchActive) {
+        res.errorMessage = "AI search in progress";
+        return res;
+    }
+    if (!_netClient || !_inOnlineRoom || _onlineRoomId.empty()) {
+        res.errorMessage = "Not in an online room";
+        return res;
+    }
+    if (_onlineViewerSeat <= 0 ||
+        _onlineGameView.phase != "IN_PROGRESS" ||
+        _onlineGameView.plyCount > 0 ||
+        !_onlineGameView.moves.empty()) {
+        res.httpStatus = 409;
+        res.errorCode = "INVALID_STATE";
+        res.errorMessage =
+            "Ply-0 abort is only available for a seated player in an IN_PROGRESS game before Move 1";
+        return res;
+    }
+    res = _netClient->abortGame(_onlineRoomId);
+    if (!res.ok) {
+        if (res.errorCode == "UPGRADE_REQUIRED" || res.httpStatus == 426) {
+            showProtocolUpgradeRequired(res.errorMessage);
+        }
+        refreshOnlineGameView();
+        return res;
+    }
+    leaveOnlineRoom();
+    if (_lobbyView) {
+        _lobbyView->setActiveRoomState(
+            _inOnlineRoom, _onlineRoomId, _onlineViewerSeat, _onlineGameView);
+        _lobbyView->refreshLobby();
+    }
+    showLobbyView();
     return res;
 }
 
@@ -4694,6 +4757,10 @@ void OctiMainWindow::updateMatchActionsVisibility()
         _actUndo->setEnabled(!online && localGameActive && !_botSearchActive);
     }
     if (_resignBtn) {
+        bool onlinePly0Abort =
+            (canActInMatch && _onlineGameView.plyCount == 0 &&
+             _onlineGameView.moves.empty());
+        _resignBtn->setText(onlinePly0Abort ? "Abort" : "Resign");
         if (online) {
             _resignBtn->setEnabled(canActInMatch && !_botSearchActive);
         } else {

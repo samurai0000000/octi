@@ -2518,7 +2518,7 @@ tr.active-ply {
       </div>
     </div>
     <div class="license-box">
-      Archived game data is published under Creative Commons Attribution 4.0 International (CC-BY 4.0). Attribution: <strong>Octi game data, Charles Chiou (selfso.com)</strong>.
+      Archived game data is published under Creative Commons Attribution 4.0 International (CC-BY 4.0). Attribution: <strong>octi.selfso.com</strong>.
     </div>
   </div>
 </section>
@@ -46139,6 +46139,7 @@ var activeOnlineLastSyncedPlyCount = -1;
 var activeOnlineLastSyncedFen = "";
 var activeOnlinePendingLocalMove = "";
 var activeOnlinePrevFinished = false;
+var activeOnlinePrevPhase = "";
 var activeBoardContextMode = "local";
 var localPlayContext = null;
 var onlinePlayContext = {
@@ -46152,6 +46153,7 @@ var onlinePlayContext = {
   lastSyncedFen: "",
   pendingLocalMove: "",
   prevFinished: false,
+  prevPhase: "",
   state: null,
   plies: [],
   vcrIndex: 0,
@@ -46256,6 +46258,7 @@ function saveOnlinePlayContext() {
   onlinePlayContext.lastSyncedFen = activeOnlineLastSyncedFen;
   onlinePlayContext.pendingLocalMove = activeOnlinePendingLocalMove;
   onlinePlayContext.prevFinished = activeOnlinePrevFinished;
+  onlinePlayContext.prevPhase = activeOnlinePrevPhase;
   onlinePlayContext.state = activePlayState ? cloneState(activePlayState) : null;
   onlinePlayContext.plies = Array.isArray(playMatchPlies) ? playMatchPlies.slice() : [];
   onlinePlayContext.vcrIndex = playVcrIndex;
@@ -46285,6 +46288,7 @@ function restoreOnlinePlayContext() {
   activeOnlineLastSyncedFen = onlinePlayContext.lastSyncedFen || "";
   activeOnlinePendingLocalMove = onlinePlayContext.pendingLocalMove || "";
   activeOnlinePrevFinished = Boolean(onlinePlayContext.prevFinished);
+  activeOnlinePrevPhase = onlinePlayContext.prevPhase || "";
   if (onlinePlayContext.state) {
     activePlayState = cloneState(onlinePlayContext.state);
   }
@@ -50441,14 +50445,34 @@ if (btnDraw) {
   });
 }
 
-// Resign
+// Resign / Ply-0 Abort
 var btnResign = document.getElementById("btn-web-resign");
 if (btnResign) {
   btnResign.addEventListener("click", function () {
     if (!activePlayState || activePlayState.status === "O" || activePlayState.status === "R") return;
-    if (!confirm("Are you sure you want to resign the game?")) return;
     if (activeOnlineGameId) {
       var targetRoom = activeOnlineGameId;
+      var onlinePlyCount = (activeOnlineRoomView && typeof activeOnlineRoomView.ply_count === "number")
+        ? activeOnlineRoomView.ply_count
+        : ((activeOnlineRoomView && Array.isArray(activeOnlineRoomView.moves)) ? activeOnlineRoomView.moves.length : 0);
+      var canAbortPly0 = (activeOnlineViewerSeat > 0 && activeOnlineRoomView &&
+        activeOnlineRoomView.phase === "IN_PROGRESS" && onlinePlyCount === 0);
+      if (canAbortPly0) {
+        if (!confirm("Abort and stand up before Move 1 without resigning? The table will reopen for players with zero rating change.")) return;
+        api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/action", {
+          method: "POST",
+          body: { action: "abort" }
+        }).then(function () {
+          stopOnlineGameSync();
+          switchTab("online");
+          refreshLobbyTables();
+        }).catch(function (e) {
+          alert("Abort failed: " + e.message);
+          syncOnlineGameRoom(targetRoom, true);
+        });
+        return;
+      }
+      if (!confirm("Are you sure you want to resign the game?")) return;
       api("/api/v1/games/" + encodeURIComponent(targetRoom) + "/resign", {
         method: "POST"
       }).then(function () {
@@ -50459,6 +50483,7 @@ if (btnResign) {
       });
       return;
     }
+    if (!confirm("Are you sure you want to resign the game?")) return;
     cancelPendingAiSearch();
     var turn = activePlayState.turn;
     if (clockInterval) {
@@ -50513,6 +50538,7 @@ function stopOnlineGameSync(preserveOnlineContext) {
   activeOnlineLastSyncedFen = "";
   activeOnlinePendingLocalMove = "";
   activeOnlinePrevFinished = false;
+  activeOnlinePrevPhase = "";
   if (!preserveOnlineContext) {
     activeOnlineTableRoomId = "";
     if (onlinePlayContext) {
@@ -50521,6 +50547,7 @@ function stopOnlineGameSync(preserveOnlineContext) {
       onlinePlayContext.roomView = null;
       onlinePlayContext.pendingLocalMove = "";
       onlinePlayContext.prevFinished = false;
+      onlinePlayContext.prevPhase = "";
       onlinePlayContext.state = null;
       onlinePlayContext.plies = [];
     }
@@ -50550,7 +50577,11 @@ function updateOnlineTableControls() {
 
     var isSeated = (activeOnlineViewerSeat > 0);
     var isProgress = !!(activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
+    var plyCount = (activeOnlineRoomView && typeof activeOnlineRoomView.ply_count === "number")
+      ? activeOnlineRoomView.ply_count
+      : ((activeOnlineRoomView && Array.isArray(activeOnlineRoomView.moves)) ? activeOnlineRoomView.moves.length : 0);
     var showPlayerActions = isSeated && isProgress;
+    var isPly0StandUp = showPlayerActions && (plyCount === 0);
 
     if (drawBtn) {
       drawBtn.style.display = "";
@@ -50559,10 +50590,30 @@ function updateOnlineTableControls() {
     if (resignBtn) {
       resignBtn.style.display = "";
       resignBtn.disabled = !showPlayerActions;
+      if (isPly0StandUp) {
+        resignBtn.textContent = "Abort";
+        resignBtn.style.borderColor = "#d97706";
+        resignBtn.style.color = "#f59e0b";
+      } else {
+        resignBtn.textContent = "Resign";
+        resignBtn.style.borderColor = "#dc2626";
+        resignBtn.style.color = "#dc2626";
+      }
     }
 
     if (actRow) actRow.style.display = "flex";
-    if (leaveTableBtn) leaveTableBtn.style.display = "inline-block";
+    if (leaveTableBtn) {
+      leaveTableBtn.style.display = "inline-block";
+      if (isPly0StandUp) {
+        leaveTableBtn.textContent = "Stand Up";
+        leaveTableBtn.style.borderColor = "#d97706";
+        leaveTableBtn.style.color = "#f59e0b";
+      } else {
+        leaveTableBtn.textContent = "Leave Table";
+        leaveTableBtn.style.borderColor = "#dc2626";
+        leaveTableBtn.style.color = "#dc2626";
+      }
+    }
 
     var isAdmin = isWebAdminPurgeActive();
     if (purgeBtn) {
@@ -50583,9 +50634,17 @@ function updateOnlineTableControls() {
     if (resignBtn) {
       resignBtn.style.display = "";
       resignBtn.disabled = false;
+      resignBtn.textContent = "Resign";
+      resignBtn.style.borderColor = "#dc2626";
+      resignBtn.style.color = "#dc2626";
     }
     if (actRow) actRow.style.display = "none";
-    if (leaveTableBtn) leaveTableBtn.style.display = "none";
+    if (leaveTableBtn) {
+      leaveTableBtn.style.display = "none";
+      leaveTableBtn.textContent = "Leave Table";
+      leaveTableBtn.style.borderColor = "#dc2626";
+      leaveTableBtn.style.color = "#dc2626";
+    }
     if (purgeBtn) purgeBtn.style.display = "none";
   }
 }
@@ -50754,7 +50813,11 @@ function formatRoomEventForChat(ev) {
   }
   if (type === "SEAT_LEFT") {
     base.handle = ev.handle || "player";
-    base.text = "has left the table" + (ev.seat ? (" (Seat " + ev.seat + ")") : "");
+    if (ev.detail === "ply0_standup") {
+      base.text = "stood up before move 1 (" + (ev.seat ? ("Seat " + ev.seat + "; ") : "") + "table reopened for players)";
+    } else {
+      base.text = "has left the table" + (ev.seat ? (" (Seat " + ev.seat + ")") : "");
+    }
     return base;
   }
   if (type === "SEAT_KICKED") {
@@ -50941,7 +51004,8 @@ function pollOnlineGameEvents(roomId) {
           ev.type === "GAME_PAUSED" || ev.type === "GAME_RESUMED" ||
           ev.type === "REMATCH_CREATED" ||
           ev.type === "PROPOSAL_OFFERED" || ev.type === "PROPOSAL_ACCEPTED" ||
-          ev.type === "PROPOSAL_DECLINED" || ev.type === "UNDO_APPLIED") {
+          ev.type === "PROPOSAL_DECLINED" || ev.type === "PROPOSAL_EXPIRED" ||
+          ev.type === "UNDO_APPLIED") {
         needsRoomRefresh = true;
       }
       if (ev.type === "MOVE" || ev.type === "UNDO_APPLIED") {
@@ -51033,9 +51097,10 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
     var isStaging = moveComposer && (moveComposer.stagedNotation || moveComposer.isGuidedMoveActive || moveComposer.isAwaitingConfirmation);
     var srvMoves = Array.isArray(res.moves) ? res.moves : [];
     var srvFen = res.fen || "";
-    var srvPhaseFinished = (res.phase === "FINISHED");
+    var srvPhase = res.phase || "";
+    var srvPhaseFinished = (srvPhase === "FINISHED");
 
-    if (!isStaging && (forceRebuild || srvPhaseFinished !== activeOnlinePrevFinished || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
+    if (!isStaging && (forceRebuild || srvPhase !== activeOnlinePrevPhase || srvPhaseFinished !== activeOnlinePrevFinished || srvFen !== activeOnlineLastSyncedFen || srvMoves.length !== activeOnlineLastSyncedPlyCount)) {
       var prevSyncedPlyCount = activeOnlineLastSyncedPlyCount;
       var wasOnlineFinished = activeOnlinePrevFinished;
       if (prevSyncedPlyCount >= 0 && srvMoves.length !== prevSyncedPlyCount) {
@@ -51093,6 +51158,7 @@ function syncOnlineGameRoom(roomId, forceRebuild) {
       }
 
       var isNowOnlineFinished = (res.phase === "FINISHED" || Boolean(activePlayState && (activePlayState.status === "O" || activePlayState.status === "R")));
+      activeOnlinePrevPhase = srvPhase;
       activeOnlinePrevFinished = isNowOnlineFinished;
 
       var goOverlay = document.getElementById("web-gameover-overlay");
@@ -51178,6 +51244,7 @@ function openOnlineTableBoard(roomId) {
   activeOnlineLastSyncedFen = "";
   activeOnlinePendingLocalMove = "";
   activeOnlinePrevFinished = false;
+  activeOnlinePrevPhase = "";
   if (switchedRoom) {
     activeOnlineEventSeq = 0;
     activeOnlineChatMessages = [];
@@ -51373,6 +51440,26 @@ if ($("btn-web-leave-table")) {
     }
     var isSeated = (activeOnlineViewerSeat > 0);
     var isProgress = (activeOnlineRoomView && activeOnlineRoomView.phase === "IN_PROGRESS");
+    var plyCount = (activeOnlineRoomView && typeof activeOnlineRoomView.ply_count === "number")
+      ? activeOnlineRoomView.ply_count
+      : ((activeOnlineRoomView && Array.isArray(activeOnlineRoomView.moves)) ? activeOnlineRoomView.moves.length : 0);
+    if (isSeated && isProgress && plyCount === 0) {
+      if (!window.confirm("Stand up from this table before Move 1 without resigning? The table will reopen for players with zero rating change.")) {
+        return;
+      }
+      api("/api/v1/tables/" + encodeURIComponent(rid) + "/leave", {
+        method: "POST",
+        body: { abort_if_ply0: true }
+      }).then(function () {
+        stopOnlineGameSync();
+        switchTab("online");
+        refreshLobbyTables();
+      }).catch(function (e) {
+        alert("Stand up failed: " + e.message);
+        syncOnlineGameRoom(rid, true);
+      });
+      return;
+    }
     if (isSeated && isProgress) {
       if (!window.confirm("Are you sure you want to leave the table? You may rejoin this table to resume this game before the timer expires!")) {
         return;
@@ -52783,7 +52870,7 @@ function loadArchiveStats() {
     var ai = $("ar-stats-ai");
     if (!sm) { return; }
     sm.textContent = "License: " + (s.license || "CC-BY-4.0") + " — " +
-      (s.attribution || "Octi game data, Charles Chiou (selfso.com)");
+      (s.attribution || "octi.selfso.com");
     if (cards) {
       clear(cards);
       var items = [

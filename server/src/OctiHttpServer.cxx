@@ -7641,7 +7641,22 @@ void OctiHttpServer::Impl::handleTableLeave(const Request &req, Response &res)
         !allowMutationAttempt(req, res, auth.playerId)) {
         return;
     }
-    finishRoom(res, rooms.leaveTable(id, auth.playerId), Json::object());
+    Json body;
+    if (!readJsonBody(req, res, body, true)) {
+        return;
+    }
+    bool abortIfPly0 = false;
+    std::string err;
+    if (!fieldBool(body, "abort_if_ply0", false, abortIfPly0, err)) {
+        sendError(res, 400, "INVALID_ARGUMENT", err);
+        return;
+    }
+    RoomResult r = rooms.leaveTable(id, auth.playerId, abortIfPly0);
+    Json j;
+    j["stood_up_ply0"] = (r.detail == "ply0_standup");
+    j["detail"] = r.detail;
+    j["seq"] = r.seq;
+    finishRoom(res, r, j);
 }
 
 void OctiHttpServer::Impl::handleTablePurge(const Request &req, Response &res)
@@ -7933,6 +7948,10 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
         action = "accept_rematch";
     } else if (action == "DECLINE_REMATCH") {
         action = "decline_rematch";
+    } else if (action == "ABORT") {
+        action = "abort";
+    } else if (action == "STAND_UP") {
+        action = "stand_up";
     }
 
     const int64_t pid = auth.playerId;
@@ -7965,6 +7984,8 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
         r = rooms.respondProposal(id, pid, ProposalType::REMATCH_REQUEST, false);
     } else if (action == "claim_forfeit") {
         r = rooms.claimDisconnectForfeit(id, pid);
+    } else if (action == "abort" || action == "stand_up") {
+        r = rooms.standUpAtPly0(id, pid);
     } else {
         sendError(res, 400, "INVALID_ARGUMENT", "unknown action");
         return;
@@ -7973,6 +7994,11 @@ void OctiHttpServer::Impl::handleAction(const Request &req, Response &res)
     j["action"] = action;
     j["room_id"] = r.roomId.empty() ? id : r.roomId;
     j["game_over"] = r.gameOver;
+    if (action == "abort" || action == "stand_up") {
+        j["stood_up_ply0"] = (r.detail == "ply0_standup");
+        j["detail"] = r.detail;
+        j["seq"] = r.seq;
+    }
     finishRoom(res, r, j);
 }
 
@@ -8170,7 +8196,7 @@ static std::string sanitizeTranscriptJson(const std::string &rawJsonStr, bool pr
                 j["client"].erase("extended");
             }
             j["license"] = "CC-BY-4.0";
-            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            j["attribution"] = OCTI_DATA_ATTRIBUTION;
             return pretty ? j.dump(2) : j.dump();
         }
     } catch (...) {}
@@ -8796,7 +8822,7 @@ void OctiHttpServer::Impl::handleArchiveUpload(const Request &req, Response &res
     storedJson["gameId"] = serverGameId;
     storedJson["finalFen"] = replayedFinalFen;
     storedJson["license"] = "CC-BY-4.0";
-    storedJson["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+    storedJson["attribution"] = OCTI_DATA_ATTRIBUTION;
     storedJson["winner"] = replayedWinner;
     storedJson["status"] = statusStr;
 
@@ -9705,7 +9731,7 @@ void OctiHttpServer::Impl::handleArchiveGet(const Request &req, Response &res)
     j["transcript_json"] = sanitized;
     j["octi_transcript"] = sanitized;
     j["license"] = "CC-BY-4.0";
-    j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+    j["attribution"] = OCTI_DATA_ATTRIBUTION;
     sendJson(res, 200, j);
 }
 
@@ -9921,7 +9947,7 @@ void OctiHttpServer::Impl::handleArchiveStats(const Request &req, Response &res)
     j["average_plies"] = stats.averagePlies;
     j["uploads_by_day"] = stats.uploadsByDay;
     j["license"] = "CC-BY-4.0";
-    j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+    j["attribution"] = OCTI_DATA_ATTRIBUTION;
     CachedPayload statsStored = archiveStatsCache.put(
         "stats", statsRev, 15000, statsNowMs, "ast-", dumpJson(j));
     sendCachedSnapshot(req, res, statsStored, "no-cache");

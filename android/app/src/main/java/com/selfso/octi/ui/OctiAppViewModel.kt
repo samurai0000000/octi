@@ -1965,7 +1965,7 @@ class OctiAppViewModel @JvmOverloads constructor(
             this.platform = "android-$abi"
             this.buildType = "release"
             this.license = "CC-BY-4.0"
-            this.attribution = "Octi game data, Charles Chiou (selfso.com)"
+            this.attribution = OctiDefs.OCTI_DATA_ATTRIBUTION
 
             val signedInHandle = _currentProfile.value?.handle?.trim()?.takeIf { it.isNotEmpty() }
                 ?: configStore.preferences().handle?.trim()?.takeIf { it.isNotEmpty() && _isAuthenticated.value }

@@ -181,6 +181,7 @@ public:
     QPushButton *sitSeatButton() const { return _sitSeatBtn; }
     QPushButton *undoButton() const { return _undoRequestBtn; }
     QPushButton *undoRequestButton() const { return _undoRequestBtn; }
+    QPushButton *resignButton() const { return _resignBtn; }
     QAction *undoAction() const { return _actUndo; }
     QLabel *matchTurnStatusLabel() const { return _matchTurnStatusLabel; }
     bool isGameOverDialogShownForCurrentMatch() const { return _gameOverDialogShownForCurrentMatch; }
@@ -258,6 +259,7 @@ public:
     ApiResult<GameActionData> proposeUndo();
     ApiResult<GameActionData> proposeRematch();
     ApiResult<GameActionData> claimOpponentForfeit();
+    ApiResult<GameActionData> abortPly0OnlineGame();
     ApiResult<bool> resignCurrentGame();
     ApiResult<GameActionData> acceptActiveProposal();
     ApiResult<GameActionData> declineActiveProposal();

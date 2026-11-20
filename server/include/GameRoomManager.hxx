@@ -149,6 +149,7 @@ struct RoomResult {
     std::string move;           // submitMove: canonical move text
     int64_t clockMs = -1;       // submitMove: mover's clock after the move
     int64_t elapsedMs = 0;      // submitMove: time the mover spent
+    std::string detail;         // leave/standUp outcome detail
 
     bool ok() const { return code == RoomCode::OK; }
 };
@@ -525,7 +526,9 @@ public:
                            int initialSeat = 1);
     RoomResult joinTable(const std::string &roomId, int64_t playerId, int seat,
                          const std::string &passcode);
-    RoomResult leaveTable(const std::string &roomId, int64_t playerId);
+    RoomResult leaveTable(const std::string &roomId, int64_t playerId,
+                          bool abortIfPly0 = false);
+    RoomResult standUpAtPly0(const std::string &roomId, int64_t playerId);
     RoomResult purgeRoom(const std::string &roomId);
     bool isTableHost(const std::string &roomId, int64_t playerId) const;
     RoomResult kickSeat(const std::string &roomId, int64_t hostPlayerId,
@@ -651,7 +654,10 @@ private:
     void unseatLocked(Room &r, int seat);
     void refreshRoomSeatRatingsLocked(Room &r);
     /* Voluntary leave of a waiting table; true when the room was closed. */
-    bool leaveWaitingSeatLocked(Room &r, int seat, int64_t now);
+    bool leaveWaitingSeatLocked(Room &r, int seat, int64_t now,
+                                int64_t *outSeq = nullptr);
+    /* Atomic zero-penalty Ply-0 stand-up reopening an unplayed game room. */
+    int64_t standUpPly0Locked(Room &r, int seat, int64_t now);
     void spawnMatchRoomLocked(const MatchGroup &g, int64_t now);
     RoomResult spawnRematchLocked(Room &old, int64_t now);
 

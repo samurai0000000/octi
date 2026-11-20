@@ -16,6 +16,7 @@ public final class OctiDefs {
     public static final int OCTI_SERVER_DAEMON_PORT = 6874;
     public static final int OCTI_PROTOCOL_VERSION = 1;
     public static final int OCTI_MIN_PROTOCOL_VERSION = 1;
+    public static final String OCTI_DATA_ATTRIBUTION = "octi.selfso.com";
 
     public static final int OCTI_NO_PROGRESS_DRAW_PLIES_2P = 30;
     public static final int OCTI_NO_PROGRESS_DRAW_PLIES_4P = 60;

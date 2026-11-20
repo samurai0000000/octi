@@ -5535,6 +5535,110 @@ TEST(DesktopAppIntegrationTest, OctiRulebookDialogOfflineTocHtmlAndShortcuts)
     std::remove(cfgPath.c_str());
 }
 
+TEST(DesktopAppIntegrationTest,
+     OnlinePly0AbortButtonStateAndTableReopenVsPly1ResignRestoration)
+{
+    LiveServerEnv env;
+
+    auto clientA = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginA = clientA->loginWithSso(
+        "google", makeToken("google", "sub-ply0-a", "Ply0Alice"), "Ply0Alice");
+    CHECK_TRUE_TEXT(loginA.ok, loginA.errorMessage.c_str());
+
+    std::string cfgA = env.dir + "/client_ply0_a.json";
+    OctiMainWindow winA(std::move(clientA), cfgA);
+    winA.applyAuthenticatedProfile(loginA.data.profile);
+
+    CreateTableRequest req;
+    req.mode = "2P";
+    req.bases = 3;
+    auto createRes = winA.createAndEnterOnlineTable(req);
+    CHECK_TRUE_TEXT(createRes.ok, createRes.errorMessage.c_str());
+    std::string roomId = createRes.data.roomId;
+
+    /* 1. While waiting for opponent, _resignBtn is labeled "Resign" and disabled */
+    CHECK_TRUE(winA.resignButton() != nullptr);
+    STRCMP_EQUAL("Resign", winA.resignButton()->text().toUtf8().constData());
+    CHECK_FALSE(winA.resignButton()->isEnabled());
+
+    auto clientB = OctiNetworkClient::createForLoopbackTest(env.port());
+    auto loginB = clientB->loginWithSso(
+        "google", makeToken("google", "sub-ply0-b", "Ply0Bob"), "Ply0Bob");
+    CHECK_TRUE_TEXT(loginB.ok, loginB.errorMessage.c_str());
+
+    std::string cfgB = env.dir + "/client_ply0_b.json";
+    OctiMainWindow winB(std::move(clientB), cfgB);
+    winB.applyAuthenticatedProfile(loginB.data.profile);
+    CHECK_TRUE(winB.joinAndEnterOnlineTable(roomId, 2).ok);
+
+    winA.refreshOnlineGameView();
+    winB.refreshOnlineGameView();
+
+    /* 2. At IN_PROGRESS & plyCount == 0, _resignBtn displays "Abort" and is enabled */
+    STRCMP_EQUAL("IN_PROGRESS", winA.onlineRoomPhase().c_str());
+    LONGS_EQUAL(0, winA.currentOnlineGameView().plyCount);
+    STRCMP_EQUAL("Abort", winA.resignButton()->text().toUtf8().constData());
+    CHECK_TRUE(winA.resignButton()->isEnabled());
+    STRCMP_EQUAL("Abort Game", winA.actionResign()->text().toUtf8().constData());
+
+    STRCMP_EQUAL("Abort", winB.resignButton()->text().toUtf8().constData());
+    CHECK_TRUE(winB.resignButton()->isEnabled());
+
+    /* 3. Clicking _resignBtn ("Abort") at Ply 0 aborts cleanly, exits winB to lobby, and reopens table */
+    winB.resignButton()->click();
+    winB.pumpUiEvents();
+    CHECK_FALSE(winB.isInOnlineGame());
+    CHECK_TRUE(winB.isLobbyViewVisible());
+
+    winA.refreshOnlineGameView();
+    winA.pumpUiEvents();
+    STRCMP_EQUAL("WAITING_FOR_PLAYERS", winA.onlineRoomPhase().c_str());
+    CHECK_TRUE(winA.isWaitingRoomBannerVisible());
+    STRCMP_EQUAL("Resign", winA.resignButton()->text().toUtf8().constData());
+    CHECK_FALSE(winA.resignButton()->isEnabled());
+
+    /* Zero archived games recorded from Ply-0 abort */
+    ArchiveFilter archFilter;
+    std::vector<GameRecord> archived;
+    int64_t totalArchived = -1;
+    CHECK_TRUE(env.store.listArchivedGames(archFilter, archived, &totalArchived));
+    LONGS_EQUAL(0, totalArchived);
+
+    /* 4. Bob rejoins Seat 2 of the same reopened table -> back to IN_PROGRESS at Ply 0 ("Abort") */
+    auto rejoinRes = winB.joinAndEnterOnlineTable(roomId, 2);
+    CHECK_TRUE_TEXT(rejoinRes.ok, rejoinRes.errorMessage.c_str());
+    winA.refreshOnlineGameView();
+    winB.refreshOnlineGameView();
+    STRCMP_EQUAL("IN_PROGRESS", winA.onlineRoomPhase().c_str());
+    STRCMP_EQUAL("Abort", winA.resignButton()->text().toUtf8().constData());
+    STRCMP_EQUAL("Abort", winB.resignButton()->text().toUtf8().constData());
+
+    /* 5. Alice plays Move 1 (33+a) -> _resignBtn immediately restores to "Resign" on both windows */
+    winA.setConfirmAllMoves(false);
+    CHECK_TRUE(winA.boardCanvas()->simulateDragProngToPod(3, 3, 0, DIR_N, false));
+    winA.refreshOnlineGameView();
+    winB.refreshOnlineGameView();
+    LONGS_EQUAL(1, winA.currentOnlineGameView().plyCount);
+    LONGS_EQUAL(1, winB.currentOnlineGameView().plyCount);
+    STRCMP_EQUAL("Resign", winA.resignButton()->text().toUtf8().constData());
+    STRCMP_EQUAL("Resign Game", winA.actionResign()->text().toUtf8().constData());
+    STRCMP_EQUAL("Resign", winB.resignButton()->text().toUtf8().constData());
+
+    /* 6. abortPly0OnlineGame() is rejected with 409 INVALID_STATE once plyCount > 0 */
+    auto abortAtPly1 = winB.abortPly0OnlineGame();
+    CHECK_FALSE(abortAtPly1.ok);
+    LONGS_EQUAL(409, abortAtPly1.httpStatus);
+    STRCMP_EQUAL("INVALID_STATE", abortAtPly1.errorCode.c_str());
+    CHECK_TRUE(winB.isInOnlineGame());
+    STRCMP_EQUAL("IN_PROGRESS", winB.onlineRoomPhase().c_str());
+
+    /* 7. Clicking _resignBtn ("Resign") at Ply 1 resigns the match normally */
+    winB.resignButton()->click();
+    winB.pumpUiEvents();
+    winA.refreshOnlineGameView();
+    STRCMP_EQUAL("FINISHED", winA.onlineRoomPhase().c_str());
+}
+
 extern "C" const char *__lsan_default_suppressions()
 {
     return "leak:libqoffscreen.so\n";

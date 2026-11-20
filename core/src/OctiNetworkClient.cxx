@@ -313,7 +313,16 @@ TableSummaryInfo parseTableSummary(const Json &j)
             }
         }
     }
-    t.observerCount = j.value("observer_count", 0);
+    if (j.contains("observer_handles") && j["observer_handles"].is_array()) {
+        for (std::size_t i = 0; i < j["observer_handles"].size(); ++i) {
+            t.observerHandles.push_back(
+                j["observer_handles"][i].is_string()
+                    ? j["observer_handles"][i].get<std::string>()
+                    : std::string());
+        }
+    }
+    t.observerCount = j.value(
+        "observer_count", static_cast<int>(t.observerHandles.size()));
     return t;
 }
 
@@ -396,13 +405,23 @@ GameViewData parseGameView(const Json &j)
     }
     if (j.contains("observers") && j["observers"].is_array()) {
         for (std::size_t i = 0; i < j["observers"].size(); ++i) {
-            if (j["observers"][i].is_string()) {
-                v.observers.push_back(j["observers"][i].get<std::string>());
-            }
+            v.observers.push_back(
+                j["observers"][i].is_string()
+                    ? j["observers"][i].get<std::string>()
+                    : std::string());
         }
     }
-    v.observerCount =
-        j.value("observer_count", static_cast<int>(v.observers.size()));
+    if (j.contains("observer_handles") && j["observer_handles"].is_array()) {
+        for (std::size_t i = 0; i < j["observer_handles"].size(); ++i) {
+            v.observerHandles.push_back(
+                j["observer_handles"][i].is_string()
+                    ? j["observer_handles"][i].get<std::string>()
+                    : std::string());
+        }
+    }
+    v.observerCount = j.value(
+        "observer_count",
+        static_cast<int>(std::max(v.observers.size(), v.observerHandles.size())));
     v.fen = j.value("fen", "");
     v.turnSeat = j.value("turn_seat", 0);
     v.plyCount = j.value("ply_count", 0);
@@ -1521,10 +1540,29 @@ struct OctiNetworkClient::Impl {
             return;
         }
         if (raw.json.is_object()) {
-            out.errorCode = raw.json.value("error", "HTTP_ERROR");
-            std::string msg = raw.json.value("message", "");
-            if (msg.empty()) {
-                msg = raw.json.value("error", "");
+            if (raw.json.contains("error") && raw.json["error"].is_string()) {
+                out.errorCode = raw.json["error"].get<std::string>();
+            } else if (raw.json.contains("error") &&
+                       raw.json["error"].is_object() &&
+                       raw.json["error"].contains("code") &&
+                       raw.json["error"]["code"].is_string()) {
+                out.errorCode = raw.json["error"]["code"].get<std::string>();
+            } else {
+                out.errorCode = "HTTP_ERROR";
+            }
+            std::string msg;
+            if (raw.json.contains("message") &&
+                raw.json["message"].is_string()) {
+                msg = raw.json["message"].get<std::string>();
+            } else if (raw.json.contains("error") &&
+                       raw.json["error"].is_object() &&
+                       raw.json["error"].contains("message") &&
+                       raw.json["error"]["message"].is_string()) {
+                msg = raw.json["error"]["message"].get<std::string>();
+            }
+            if (msg.empty() && raw.json.contains("error") &&
+                raw.json["error"].is_string()) {
+                msg = raw.json["error"].get<std::string>();
             }
             if (msg.empty()) {
                 msg = raw.body;
@@ -2716,11 +2754,13 @@ ApiResult<JoinTableResponse> OctiNetworkClient::joinTable(
     return res;
 }
 
-ApiResult<bool> OctiNetworkClient::leaveTable(const std::string &roomId)
+ApiResult<bool> OctiNetworkClient::leaveTable(const std::string &roomId,
+                                              bool abortIfPly0)
 {
     ApiResult<bool> res;
+    Json body = abortIfPly0 ? Json{{"abort_if_ply0", true}} : Json::object();
     Impl::RawResponse raw = _impl->doPost(
-        "/api/v1/tables/" + urlEncode(roomId) + "/leave", Json::object());
+        "/api/v1/tables/" + urlEncode(roomId) + "/leave", body);
     if (!raw.transportOk || raw.status != 200) {
         Impl::populateError(raw, res);
         return res;
@@ -2982,6 +3022,12 @@ ApiResult<bool> OctiNetworkClient::resignGame(const std::string &roomId)
     return res;
 }
 
+ApiResult<GameActionData> OctiNetworkClient::abortGame(
+    const std::string &roomId)
+{
+    return submitGameAction(roomId, "abort");
+}
+
 ApiResult<GameActionData> OctiNetworkClient::submitGameAction(
     const std::string &roomId,
     const std::string &action)
@@ -3000,6 +3046,8 @@ ApiResult<GameActionData> OctiNetworkClient::submitGameAction(
     res.data.action = raw.json.value("action", action);
     res.data.roomId = raw.json.value("room_id", roomId);
     res.data.gameOver = raw.json.value("game_over", false);
+    res.data.stoodUpPly0 = raw.json.value("stood_up_ply0", false);
+    res.data.detail = raw.json.value("detail", "");
     res.data.seq = raw.json.value("seq", static_cast<std::int64_t>(0));
     return res;
 }

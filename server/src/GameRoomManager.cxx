@@ -2059,14 +2059,18 @@ void GameRoomManager::unseatLocked(Room &r, int seat)
     refreshPresenceLocked(pid);
 }
 
-bool GameRoomManager::leaveWaitingSeatLocked(Room &r, int seat, int64_t now)
+bool GameRoomManager::leaveWaitingSeatLocked(Room &r, int seat, int64_t now,
+                                             int64_t *outSeq)
 {
     int64_t pid = r.seatPlayer[seat];
     RoomEvent e;
     e.type = RoomEventType::SEAT_LEFT;
     e.playerId = pid;
     e.seat = seat;
-    emitLocked(r, e, now);
+    int64_t seq = emitLocked(r, e, now);
+    if (outSeq != nullptr) {
+        *outSeq = seq;
+    }
     unseatLocked(r, seat);
     r.lastActivityMs = now;
     if (r.hostId == pid) {
@@ -2089,6 +2093,112 @@ bool GameRoomManager::leaveWaitingSeatLocked(Room &r, int seat, int64_t now)
     }
     announceTableLocked(r, false);
     return false;
+}
+
+int64_t GameRoomManager::standUpPly0Locked(Room &r, int seat, int64_t now)
+{
+    const int64_t pid = r.seatPlayer[seat];
+    const std::string leaverHandle = r.seatHandle[seat];
+
+    for (size_t i = 0; i < r.proposals.size(); ++i) {
+        RoomEvent pe;
+        pe.type = RoomEventType::PROPOSAL_EXPIRED;
+        pe.playerId = r.proposals[i].proposerId;
+        pe.detail = toString(r.proposals[i].type);
+        pe.text = "aborted at ply 0";
+        emitLocked(r, pe, now);
+    }
+    r.proposals.clear();
+
+    r.phase = RoomPhase::WAITING_FOR_PLAYERS;
+    r.paused = false;
+    r.plies.clear();
+    r.turnStartedMs = 0;
+    r.turnCarryMs = 0;
+    r.startedAtSec = 0;
+    r.endedAtMs = 0;
+    r.endedAtSec = 0;
+    r.lastActivityMs = now;
+    r.lastMoveMs = now;
+    r.result.clear();
+    r.termination.clear();
+    r.winnerSeat = 0;
+    r.board.reset(new OctiBoard(r.config.mode, r.config.useSuperProngs,
+                                r.config.useEdgelessBoard, r.config.bases));
+
+    bool matchAssignmentChanged = false;
+    for (int s = 1; s <= r.seatCount; ++s) {
+        r.clockMs[s] =
+            r.config.timeControl.enabled ? r.config.timeControl.initialMs : 0;
+        if (s == seat || r.seatPlayer[s] == 0) {
+            r.seatDisconnectedAt[s] = 0;
+            continue;
+        }
+        const int64_t otherPid = r.seatPlayer[s];
+        std::map<int64_t, std::string>::const_iterator sr =
+            _seatRoom.find(otherPid);
+        if (!r.seatConnected[s] &&
+            (sr == _seatRoom.end() || sr->second != r.id)) {
+            std::map<int64_t, std::string>::iterator ma =
+                _matchAssignments.find(otherPid);
+            if (ma != _matchAssignments.end() && ma->second == r.id) {
+                _matchAssignments.erase(ma);
+                matchAssignmentChanged = true;
+            }
+            unseatLocked(r, s);
+        } else {
+            r.seatConnected[s] = true;
+            r.seatDisconnectedAt[s] = 0;
+        }
+    }
+
+    RoomEvent e;
+    e.type = RoomEventType::SEAT_LEFT;
+    e.playerId = pid;
+    e.handle = leaverHandle;
+    e.seat = seat;
+    e.detail = "ply0_standup";
+    const int64_t seq = emitLocked(r, e, now);
+
+    unseatLocked(r, seat);
+    std::map<int64_t, std::string>::iterator ma = _matchAssignments.find(pid);
+    if (ma != _matchAssignments.end() && ma->second == r.id) {
+        _matchAssignments.erase(ma);
+        matchAssignmentChanged = true;
+    }
+
+    int next = 0;
+    for (int s = 1; s <= r.seatCount; ++s) {
+        if (r.seatPlayer[s] != 0) {
+            next = s;
+            break;
+        }
+    }
+    if (r.hostId == pid ||
+        (seatOfLocked(r, r.hostId) == 0 && r.observers.count(r.hostId) == 0)) {
+        if (next == 0) {
+            deleteRoomLocked(r.id);
+            saveLobbyMetaLocked();
+            return seq;
+        }
+        r.hostId = r.seatPlayer[next];
+        RoomEvent h;
+        h.type = RoomEventType::HOST_CHANGED;
+        h.playerId = r.hostId;
+        emitLocked(r, h, now);
+    }
+
+    for (int s = 1; s <= r.seatCount; ++s) {
+        if (r.seatPlayer[s] != 0) {
+            refreshPresenceLocked(r.seatPlayer[s]);
+        }
+    }
+    announceTableLocked(r, false);
+    saveRoomLocked(r);
+    if (matchAssignmentChanged) {
+        saveLobbyMetaLocked();
+    }
+    return seq;
 }
 
 void GameRoomManager::startGameLocked(Room &r, int64_t now)
@@ -2266,7 +2376,8 @@ RoomResult GameRoomManager::joinTable(const std::string &roomId,
 }
 
 RoomResult GameRoomManager::leaveTable(const std::string &roomId,
-                                       int64_t playerId)
+                                       int64_t playerId,
+                                       bool abortIfPly0)
 {
     std::lock_guard<std::mutex> lock(_mutex);
     Room *r = findRoomLocked(roomId);
@@ -2294,27 +2405,62 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
                 }
             }
             if (next == 0) {
-                deleteRoomLocked(r->id);
-                return success();
+                const std::string rid = r->id;
+                deleteRoomLocked(rid);
+                RoomResult res = success();
+                res.roomId = rid;
+                res.detail = "waiting_left";
+                return res;
             }
             r->hostId = r->seatPlayer[next];
             RoomEvent h;
             h.type = RoomEventType::HOST_CHANGED;
             h.playerId = r->hostId;
-            emitLocked(*r, h, now);
+            RoomResult res = success();
+            res.roomId = r->id;
+            res.seq = emitLocked(*r, h, now);
+            res.detail = "waiting_left";
             announceTableLocked(*r, false);
             saveRoomLocked(*r);
-            return success();
+            return res;
         }
         return fail(RoomCode::FORBIDDEN_NOT_SEATED, "not seated at this table");
     }
     if (r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
         _players[playerId].lastActiveMs = now;
-        leaveWaitingSeatLocked(*r, seat, now);
-        if (findRoomLocked(roomId) != nullptr) {
+        const std::string rid = r->id;
+        int64_t seq = 0;
+        leaveWaitingSeatLocked(*r, seat, now, &seq);
+        if (findRoomLocked(rid) != nullptr) {
             saveRoomLocked(*r);
         }
-        return success();
+        RoomResult res = success();
+        res.roomId = rid;
+        res.seat = seat;
+        res.seq = seq;
+        res.detail = "waiting_left";
+        return res;
+    }
+    if (abortIfPly0) {
+        if (r->phase == RoomPhase::FINISHED) {
+            return fail(RoomCode::INVALID_STATE, "game is already finished");
+        }
+        if (!r->plies.empty() ||
+            (r->board != nullptr &&
+             r->board->getGame() != nullptr &&
+             r->board->getGame()->getNumMoves() > 0)) {
+            return fail(RoomCode::INVALID_STATE,
+                        "cannot stand up or abort without resigning after moves have been played");
+        }
+        touchOnlineLocked(playerId);
+        _players[playerId].lastActiveMs = now;
+        const std::string rid = r->id;
+        RoomResult res = success();
+        res.roomId = rid;
+        res.seat = seat;
+        res.seq = standUpPly0Locked(*r, seat, now);
+        res.detail = "ply0_standup";
+        return res;
     }
     _players[playerId].lastActiveMs = now;
     r->seatConnected[seat] = false;
@@ -2330,10 +2476,73 @@ RoomResult GameRoomManager::leaveTable(const std::string &roomId,
     e.seat = seat;
     e.detail = (r->phase == RoomPhase::IN_PROGRESS) ? "in_progress" : "finished";
     RoomResult res = success();
+    res.roomId = r->id;
+    res.seat = seat;
     res.seq = emitLocked(*r, e, now);
+    res.detail = (r->phase == RoomPhase::IN_PROGRESS)
+                     ? "in_progress_disconnected"
+                     : "finished";
     announceTableLocked(*r, false);
     saveRoomLocked(*r);
     refreshPresenceLocked(playerId);
+    return res;
+}
+
+RoomResult GameRoomManager::standUpAtPly0(const std::string &roomId,
+                                          int64_t playerId)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    Room *r = findRoomLocked(roomId);
+    if (r == nullptr) {
+        return fail(RoomCode::NOT_FOUND, "no such room");
+    }
+    if ((playerId <= 0 && !isRobotActorId(playerId)) ||
+        !ensurePlayerLocked(playerId)) {
+        return fail(RoomCode::UNKNOWN_PLAYER, "unknown player");
+    }
+    int64_t now = nowMs();
+    advanceRoomLocked(*r, now);
+    if (r->banned.count(playerId) != 0) {
+        return fail(RoomCode::FORBIDDEN_BANNED, "banned from this room");
+    }
+    int seat = seatOfLocked(*r, playerId);
+    if (seat == 0) {
+        return fail(RoomCode::FORBIDDEN_NOT_SEATED, "not seated at this table");
+    }
+    if (r->phase == RoomPhase::FINISHED) {
+        return fail(RoomCode::INVALID_STATE, "game is already finished");
+    }
+    if (r->phase == RoomPhase::WAITING_FOR_PLAYERS) {
+        touchOnlineLocked(playerId);
+        _players[playerId].lastActiveMs = now;
+        const std::string rid = r->id;
+        int64_t seq = 0;
+        leaveWaitingSeatLocked(*r, seat, now, &seq);
+        if (findRoomLocked(rid) != nullptr) {
+            saveRoomLocked(*r);
+        }
+        RoomResult res = success();
+        res.roomId = rid;
+        res.seat = seat;
+        res.seq = seq;
+        res.detail = "waiting_left";
+        return res;
+    }
+    if (!r->plies.empty() ||
+        (r->board != nullptr &&
+         r->board->getGame() != nullptr &&
+         r->board->getGame()->getNumMoves() > 0)) {
+        return fail(RoomCode::INVALID_STATE,
+                    "cannot stand up or abort without resigning after moves have been played");
+    }
+    touchOnlineLocked(playerId);
+    _players[playerId].lastActiveMs = now;
+    const std::string rid = r->id;
+    RoomResult res = success();
+    res.roomId = rid;
+    res.seat = seat;
+    res.seq = standUpPly0Locked(*r, seat, now);
+    res.detail = "ply0_standup";
     return res;
 }
 
@@ -3866,7 +4075,7 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
         meta.termination = "RESIGNATION";
     }
     meta.license = "CC-BY-4.0";
-    meta.attribution = "Octi game data, Charles Chiou (selfso.com)";
+    meta.attribution = OCTI_DATA_ATTRIBUTION;
 
     for (int s = 1; s <= r.seatCount; ++s) {
         OctiPlayerMetadata pmd;
@@ -3885,7 +4094,7 @@ std::string GameRoomManager::buildTranscriptLocked(const Room &r) const
                 j["client"].erase("extended");
             }
             j["license"] = "CC-BY-4.0";
-            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            j["attribution"] = OCTI_DATA_ATTRIBUTION;
             return j.dump();
         }
     } catch (...) {

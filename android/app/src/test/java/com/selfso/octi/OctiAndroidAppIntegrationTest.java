@@ -1745,6 +1745,7 @@ public class OctiAndroidAppIntegrationTest {
 
                 String anonTranscript = vm.buildCurrentGameTranscriptJson(false);
                 Map<String, Object> anonDoc = OctiMiniJson.parseObject(anonTranscript);
+                assertEquals("octi.selfso.com", OctiMiniJson.getString(anonDoc, "attribution", ""));
                 List<Object> anonPlayers = OctiMiniJson.getArray(anonDoc, "players");
                 assertNotNull(anonPlayers);
                 assertEquals(2, anonPlayers.size());

@@ -2668,7 +2668,7 @@ TEST(GameRoomManagerTest, TranscriptCarriesRulesetAndPlayerMetadata)
     CHECK_EQUAL("B", jrec.value("winner", ""));
     CHECK_EQUAL("RESIGNATION", jrec.value("termination", ""));
     CHECK_EQUAL("CC-BY-4.0", jrec.value("license", ""));
-    CHECK_EQUAL("Octi game data, Charles Chiou (selfso.com)", jrec.value("attribution", ""));
+    CHECK_EQUAL("octi.selfso.com", jrec.value("attribution", ""));
     CHECK_EQUAL(room, jrec.value("gameId", ""));
     CHECK_TRUE(jrec.contains("players") && jrec["players"].is_array());
     CHECK_EQUAL(2, static_cast<int>(jrec["players"].size()));
@@ -2727,7 +2727,7 @@ TEST(GameRoomManagerTest, RoomIdsSkipIdsAlreadyArchived)
     rec.p2Handle = handle[1];
     rec.result = "DRAW";
     rec.termination = "AGREED_DRAW";
-    rec.octiTranscript = "{\"attribution\":\"Octi game data, Charles Chiou (selfso.com)\",\"bases\":3,\"edgeless\":false,\"format\":\"octi.transcript.v3\",\"gameId\":\"g-20270115-0001\",\"license\":\"CC-BY-4.0\",\"mode\":\"2P\",\"plies\":[],\"source\":\"ONLINE\",\"startPlayer\":\"A\",\"status\":\"GAME_OVER\",\"superProngs\":false,\"termination\":\"AGREED_DRAW\",\"timeControl\":\"untimed\",\"winner\":\"NONE\"}";
+    rec.octiTranscript = "{\"attribution\":\"octi.selfso.com\",\"bases\":3,\"edgeless\":false,\"format\":\"octi.transcript.v3\",\"gameId\":\"g-20270115-0001\",\"license\":\"CC-BY-4.0\",\"mode\":\"2P\",\"plies\":[],\"source\":\"ONLINE\",\"startPlayer\":\"A\",\"status\":\"GAME_OVER\",\"superProngs\":false,\"termination\":\"AGREED_DRAW\",\"timeControl\":\"untimed\",\"winner\":\"NONE\"}";
     rec.finalFen = "2:3:0:0:P:A:-:0:4,0,25,0:4,0,25,0:A33,A53,A73,B37,B57,B77";
     rec.startedAt = kWall0;
     rec.endedAt = kWall0;
@@ -4826,6 +4826,281 @@ TEST(GameRoomManagerTest, Envelope4AnonymousEvictionWalDebounceAndLogEscaping)
             CHECK_TRUE(errLine.find("\xE2\x80\xA8") == std::string::npos);
         }
     }
+}
+
+TEST(GameRoomManagerTest, Ply0StandUpAcross2POfk4PRatedRobotAndCheckpointRestore)
+{
+    for (int i = 0; i < 6; ++i) {
+        EXPECT_OK(mgr->enterLobby(p[static_cast<size_t>(i)]));
+    }
+
+    CreateRobotResult cr1 =
+        store->createRobot(p[0], "ply0-bot-alpha", "Ply0 test bot 1");
+    CHECK_EQUAL(static_cast<int>(RobotStatus::OK), static_cast<int>(cr1.status));
+    const int64_t bot1Id = cr1.robot.robotId;
+    const int64_t bot1Actor = makeRobotActorId(bot1Id);
+    EXPECT_OK(mgr->enterLobby(bot1Actor));
+
+    CreateRobotResult cr2 =
+        store->createRobot(p[0], "ply0-bot-beta", "Ply0 replacement bot");
+    CHECK_EQUAL(static_cast<int>(RobotStatus::OK), static_cast<int>(cr2.status));
+    const int64_t bot2Id = cr2.robot.robotId;
+    const int64_t bot2Actor = makeRobotActorId(bot2Id);
+    EXPECT_OK(mgr->enterLobby(bot2Actor));
+
+    /* 1. Rated 2P_1B & Rated 2P_3B & Casual 2P Human vs Robot */
+    GameTableConfig cCasual = cfg(GAME_MODE_2);
+    cCasual.useSuperProngs = true;
+    cCasual.rated = false;
+    cCasual.allowRobots = true;
+    RoomResult tCas = mgr->createTable(p[0], cCasual);
+    EXPECT_OK(tCas);
+    EXPECT_OK(mgr->joinTable(tCas.roomId, bot1Actor, 2, ""));
+    EXPECT_OK(mgr->standUpAtPly0(tCas.roomId, bot1Actor));
+    EXPECT_OK(mgr->leaveTable(tCas.roomId, p[0]));
+
+    GameTableConfig c2p = timedCfg(180000, 2000, GAME_MODE_2);
+    c2p.bases = GAME_BASES_1;
+    c2p.rated = true;
+    c2p.allowRobots = true;
+    RoomResult t2p = mgr->createTable(p[0], c2p);
+    EXPECT_OK(t2p);
+    const std::string room2p = t2p.roomId;
+    RoomResult jBot1 = mgr->joinTable(room2p, bot1Actor, 2, "");
+    EXPECT_OK(jBot1);
+    CHECK_TRUE(jBot1.gameStarted);
+    STRCMP_EQUAL("PLAYING", toString(mgr->presenceOf(p[0])));
+    STRCMP_EQUAL("PLAYING", toString(mgr->presenceOf(bot1Actor)));
+
+    /* Offer a draw at Ply 0 and advance clock 5 seconds before stand-up */
+    EXPECT_OK(mgr->submitProposal(room2p, p[0], ProposalType::DRAW_OFFER));
+    now += 5000;
+    CHECK_EQUAL(175000, view(room2p, p[0]).seats[0].clockMs);
+    CHECK_EQUAL(1u, view(room2p, p[0]).proposals.size());
+
+    /* Robot stands up at Ply 0 via standUpAtPly0() */
+    RoomResult suBot1 = mgr->standUpAtPly0(room2p, bot1Actor);
+    EXPECT_OK(suBot1);
+    STRCMP_EQUAL("ply0_standup", suBot1.detail.c_str());
+    CHECK_TRUE(suBot1.seq > 0);
+    CHECK_FALSE(suBot1.gameOver);
+
+    RoomView vAfterBot = view(room2p, p[0]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::WAITING_FOR_PLAYERS),
+                static_cast<int>(vAfterBot.phase));
+    LONGS_EQUAL(p[0], vAfterBot.hostPlayerId);
+    LONGS_EQUAL(p[0], vAfterBot.seats[0].playerId);
+    CHECK_TRUE(vAfterBot.seats[0].connected);
+    LONGS_EQUAL(0, vAfterBot.seats[1].playerId);
+    CHECK_EQUAL(180000, vAfterBot.seats[0].clockMs);
+    CHECK_EQUAL(180000, vAfterBot.seats[1].clockMs);
+    CHECK_EQUAL(0, vAfterBot.plyCount);
+    CHECK_EQUAL(0, vAfterBot.turnSeat);
+    CHECK_EQUAL(0u, vAfterBot.proposals.size());
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[0])));
+    STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(bot1Actor)));
+
+    /* Verify SEAT_LEFT(detail="ply0_standup") & PROPOSAL_EXPIRED("aborted at ply 0") */
+    std::vector<RoomEvent> evs2p = events(room2p, p[0]);
+    bool sawPly0Standup = false;
+    bool sawPropExpired = false;
+    for (size_t i = 0; i < evs2p.size(); ++i) {
+        if (evs2p[i].type == RoomEventType::SEAT_LEFT &&
+            evs2p[i].playerId == bot1Actor &&
+            evs2p[i].seat == 2 &&
+            evs2p[i].detail == "ply0_standup") {
+            sawPly0Standup = true;
+        }
+        if (evs2p[i].type == RoomEventType::PROPOSAL_EXPIRED &&
+            evs2p[i].text == "aborted at ply 0") {
+            sawPropExpired = true;
+        }
+        CHECK_TRUE(evs2p[i].type != RoomEventType::GAME_OVER);
+    }
+    CHECK_TRUE(sawPly0Standup);
+    CHECK_TRUE(sawPropExpired);
+
+    /* Zero archive row, zero ELO delta, zero robot W/L/D/gamesPlayed */
+    GameRecord rec;
+    CHECK_FALSE(store->getArchivedGame(room2p, rec));
+    PlayerProfile prof0;
+    CHECK_TRUE(store->getProfileById(p[0], prof0));
+    CHECK_EQUAL(1200, prof0.arenaElo2p1b);
+    CHECK_EQUAL(1200, prof0.elo2p1b);
+    CHECK_EQUAL(0, prof0.gamesPlayed);
+    RobotRecord rob1;
+    CHECK_TRUE(store->getRobotById(bot1Id, rob1));
+    CHECK_EQUAL(1200, rob1.elo2p1b);
+    CHECK_EQUAL(0, rob1.gamesPlayed);
+    CHECK_EQUAL(0, rob1.wins);
+    CHECK_EQUAL(0, rob1.losses);
+    CHECK_EQUAL(0, rob1.draws);
+
+    /* Checkpoint and restore into a brand-new GameRoomManager while reopened */
+    CHECK_TRUE(mgr->checkpointToStore());
+    delete mgr;
+    mgr = new GameRoomManager(*store);
+    mgr->setClock([this]() -> int64_t { return now; });
+    mgr->setWallClock([this]() -> int64_t { return wall; });
+
+    RoomView vRestored = view(room2p, p[0]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::WAITING_FOR_PLAYERS),
+                static_cast<int>(vRestored.phase));
+    LONGS_EQUAL(p[0], vRestored.hostPlayerId);
+    LONGS_EQUAL(p[0], vRestored.seats[0].playerId);
+    LONGS_EQUAL(0, vRestored.seats[1].playerId);
+
+    /* Replacement bot immediately joins the SAME room2p and plays to completion */
+    RoomResult jBot2 = mgr->joinTable(room2p, bot2Actor, 0, "");
+    EXPECT_OK(jBot2);
+    CHECK_EQUAL(2, jBot2.seat);
+    CHECK_TRUE(jBot2.gameStarted);
+    std::vector<int> mover2p = moverSeats(GAME_MODE_2, true, kTwoPlayerWin);
+    for (size_t i = 0; i < kTwoPlayerWin.size(); ++i) {
+        int64_t actor = (mover2p[i] == 1) ? p[0] : bot2Actor;
+        EXPECT_OK(mgr->submitMove(room2p, actor, kTwoPlayerWin[i]));
+    }
+    CHECK_TRUE(store->getArchivedGame(room2p, rec));
+    CHECK_EQUAL(bot2Id, rec.p2RobotId);
+    CHECK_TRUE(store->getRobotById(bot1Id, rob1));
+    CHECK_EQUAL(0, rob1.gamesPlayed);
+
+    /* 2. OFK: Host (Seat 1) stands up at Ply 0 via leaveTable(room, p, true) -> host transfers */
+    std::string roomOfk = startOfk();
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS),
+                static_cast<int>(view(roomOfk, p[0]).phase));
+    RoomResult suOfk = mgr->leaveTable(roomOfk, p[0], true);
+    EXPECT_OK(suOfk);
+    STRCMP_EQUAL("ply0_standup", suOfk.detail.c_str());
+
+    RoomView vOfk = view(roomOfk, p[1]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::WAITING_FOR_PLAYERS),
+                static_cast<int>(vOfk.phase));
+    LONGS_EQUAL(p[1], vOfk.hostPlayerId);
+    LONGS_EQUAL(0, vOfk.seats[0].playerId);
+    LONGS_EQUAL(p[1], vOfk.seats[1].playerId);
+    STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(p[0])));
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[1])));
+    CHECK_EQUAL(1u, countType(events(roomOfk, p[1]), RoomEventType::HOST_CHANGED));
+    CHECK_FALSE(store->getArchivedGame(roomOfk, rec));
+
+    /* Replacement human p[2] joins Seat 1 of roomOfk and finishes OFK game */
+    RoomResult jOfkRep = mgr->joinTable(roomOfk, p[2], 0, "");
+    EXPECT_OK(jOfkRep);
+    CHECK_EQUAL(1, jOfkRep.seat);
+    CHECK_TRUE(jOfkRep.gameStarted);
+    std::vector<int> moverOfk = moverSeats(GAME_MODE_OFK, true, kOfkWin);
+    for (size_t i = 0; i < kOfkWin.size(); ++i) {
+        int64_t actor = (moverOfk[i] == 1) ? p[2] : p[1];
+        EXPECT_OK(mgr->submitMove(roomOfk, actor, kOfkWin[i]));
+    }
+    CHECK_TRUE(store->getArchivedGame(roomOfk, rec));
+
+    /* 3. 4P: Seat 3 stands up at Ply 0 -> Seats 1, 2, 4 remain seated at WAITING_FOR_PLAYERS */
+    std::string room4p = start4P();
+    RoomResult su4p = mgr->standUpAtPly0(room4p, p[2]);
+    EXPECT_OK(su4p);
+    STRCMP_EQUAL("ply0_standup", su4p.detail.c_str());
+
+    RoomView v4p = view(room4p, p[0]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::WAITING_FOR_PLAYERS),
+                static_cast<int>(v4p.phase));
+    LONGS_EQUAL(p[0], v4p.seats[0].playerId);
+    LONGS_EQUAL(p[1], v4p.seats[1].playerId);
+    LONGS_EQUAL(0, v4p.seats[2].playerId);
+    LONGS_EQUAL(p[3], v4p.seats[3].playerId);
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[0])));
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[1])));
+    STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(p[2])));
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[3])));
+
+    /* Replacement p[4] fills Seat 3 and plays complete 4P game */
+    RoomResult j4pRep = mgr->joinTable(room4p, p[4], 0, "");
+    EXPECT_OK(j4pRep);
+    CHECK_EQUAL(3, j4pRep.seat);
+    CHECK_TRUE(j4pRep.gameStarted);
+    const int64_t seatMap4p[5] = {0, p[0], p[1], p[4], p[3]};
+    std::vector<int> mover4p = moverSeats(GAME_MODE_4, false, kFourPlayerWin);
+    for (size_t i = 0; i < kFourPlayerWin.size(); ++i) {
+        EXPECT_OK(mgr->submitMove(room4p, seatMap4p[mover4p[i]], kFourPlayerWin[i]));
+    }
+    CHECK_TRUE(store->getArchivedGame(room4p, rec));
+}
+
+TEST(GameRoomManagerTest, Ply0StandUpCleansOrphanedDetachedSeatsAndRejectsPlyGreaterThanZeroAndTimeout)
+{
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_OK(mgr->enterLobby(p[static_cast<size_t>(i)]));
+    }
+
+    /* 1. Orphaned detached-seat cleanup: Seat 1 (host) legacy-detaches and moves to roomB, then Seat 2 stands up */
+    std::string roomA = start2P();
+    RoomResult legacyDetach = mgr->leaveTable(roomA, p[0], false);
+    EXPECT_OK(legacyDetach);
+    STRCMP_EQUAL("in_progress_disconnected", legacyDetach.detail.c_str());
+
+    RoomResult createB = mgr->createTable(p[0], cfg());
+    EXPECT_OK(createB);
+    const std::string roomB = createB.roomId;
+
+    RoomResult suSeat2 = mgr->standUpAtPly0(roomA, p[1]);
+    EXPECT_OK(suSeat2);
+    STRCMP_EQUAL("ply0_standup", suSeat2.detail.c_str());
+
+    /* roomA had no active seats left after unseating detached Seat 1 + Seat 2 -> deleted cleanly! */
+    RoomView gone;
+    EXPECT_CODE(NOT_FOUND, mgr->getRoomView(roomA, p[1], gone));
+    /* p[0] remains undisturbed in roomB */
+    RoomView vB = view(roomB, p[0]);
+    LONGS_EQUAL(p[0], vB.seats[0].playerId);
+    STRCMP_EQUAL("AT_TABLE", toString(mgr->presenceOf(p[0])));
+    STRCMP_EQUAL("IN_LOBBY", toString(mgr->presenceOf(p[1])));
+    EXPECT_OK(mgr->leaveTable(roomB, p[0]));
+
+    /* 2.Strict Ply > 0 rejection: after Move 1 ("33+a"), both standUpAtPly0 and leaveTable(..., true) fail INVALID_STATE */
+    std::string roomActive = start2P();
+    EXPECT_OK(mgr->submitMove(roomActive, p[0], "33+a"));
+
+    EXPECT_CODE(INVALID_STATE, mgr->standUpAtPly0(roomActive, p[0]));
+    EXPECT_CODE(INVALID_STATE, mgr->standUpAtPly0(roomActive, p[1]));
+    EXPECT_CODE(INVALID_STATE, mgr->leaveTable(roomActive, p[0], true));
+    EXPECT_CODE(INVALID_STATE, mgr->leaveTable(roomActive, p[1], true));
+
+    RoomView vActive = view(roomActive, p[0]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::IN_PROGRESS),
+                static_cast<int>(vActive.phase));
+    CHECK_TRUE(vActive.seats[0].connected);
+    CHECK_TRUE(vActive.seats[1].connected);
+    CHECK_EQUAL(1, vActive.plyCount);
+    STRCMP_EQUAL("33+a", vActive.moves[0].c_str());
+    EXPECT_OK(mgr->resign(roomActive, p[1]));
+
+    /* Already finished game also rejects standUpAtPly0 and leaveTable(..., true) */
+    EXPECT_CODE(INVALID_STATE, mgr->standUpAtPly0(roomActive, p[0]));
+    EXPECT_CODE(INVALID_STATE, mgr->leaveTable(roomActive, p[0], true));
+
+    /* 3. Post-timeout rejection at Ply 0: expired clock flags TIMEOUT before abort check */
+    GameTableConfig cTimed = timedCfg(30000, 0, GAME_MODE_2);
+    cTimed.rated = true;
+    RoomResult createTimed = mgr->createTable(p[2], cTimed);
+    EXPECT_OK(createTimed);
+    const std::string roomTimed = createTimed.roomId;
+    EXPECT_OK(mgr->joinTable(roomTimed, p[3], 0, ""));
+
+    now += 30001;
+    RoomResult lateAbort = mgr->standUpAtPly0(roomTimed, p[2]);
+    CHECK_EQUAL(static_cast<int>(RoomCode::INVALID_STATE),
+                static_cast<int>(lateAbort.code));
+    STRCMP_EQUAL("game is already finished", lateAbort.message.c_str());
+
+    RoomView vTimed = view(roomTimed, p[3]);
+    CHECK_EQUAL(static_cast<int>(RoomPhase::FINISHED),
+                static_cast<int>(vTimed.phase));
+    STRCMP_EQUAL("TIMEOUT", vTimed.termination.c_str());
+    CHECK_EQUAL(2, vTimed.winnerSeat);
+    GameRecord timedRec;
+    CHECK_TRUE(store->getArchivedGame(roomTimed, timedRec));
+    STRCMP_EQUAL("TIMEOUT", timedRec.termination.c_str());
 }
 
 int main(int argc, char **argv)

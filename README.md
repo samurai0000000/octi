@@ -59,7 +59,7 @@ All game transcripts, replay logs, and dataset exports published by the OCTI ser
 
 **Required Attribution:**
 ```text
-Octi game data, Charles Chiou (selfso.com)
+octi.selfso.com
 ```
 
 See [`DATA_LICENSE.md`](DATA_LICENSE.md) for full details on attribution and license terms when using archived game data for AI model training, game analysis, research, or redistribution.

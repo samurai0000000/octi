@@ -2694,7 +2694,7 @@ fun OctiSplashOverlay(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Public Game Archive: CC-BY 4.0 (Octi game data, Charles Chiou, selfso.com)",
+                    text = "Public Game Archive: CC-BY 4.0 (octi.selfso.com)",
                     style = MaterialTheme.typography.bodySmall,
                     color = OctiTheme.colors.textSecondary,
                     textAlign = TextAlign.Center
@@ -2946,7 +2946,7 @@ fun OctiTelemetryConsentDialog(
                 )
 
                 Text(
-                    text = "Public Game Archive License:\nCreative Commons Attribution 4.0 International (CC-BY 4.0)\nOcti game data, Charles Chiou (selfso.com)",
+                    text = "Public Game Archive License:\nCreative Commons Attribution 4.0 International (CC-BY 4.0)\nocti.selfso.com",
                     style = MaterialTheme.typography.bodySmall,
                     color = OctiTheme.colors.textSecondary
                 )
@@ -3094,7 +3094,7 @@ fun OctiTelemetrySettingsDialog(
                 }
 
                 Text(
-                    text = "Public Dataset License:\nCreative Commons Attribution 4.0 (CC-BY 4.0)\nOcti game data, Charles Chiou (selfso.com)",
+                    text = "Public Dataset License:\nCreative Commons Attribution 4.0 (CC-BY 4.0)\nocti.selfso.com",
                     style = MaterialTheme.typography.labelSmall,
                     color = OctiTheme.colors.textSecondary
                 )

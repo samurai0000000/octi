@@ -1469,7 +1469,7 @@ std::string compactTranscriptForInsert(const std::string &raw)
                 j["client"].erase("extended");
             }
             j["license"] = "CC-BY-4.0";
-            j["attribution"] = "Octi game data, Charles Chiou (selfso.com)";
+            j["attribution"] = OCTI_DATA_ATTRIBUTION;
             return j.dump();
         }
     } catch (...) {
