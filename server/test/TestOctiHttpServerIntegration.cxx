@@ -6020,6 +6020,9 @@ TEST(OctiHttpServerIntegrationTest, WebUiNewNavAndRobotsTabServed)
     CHECK_TRUE(rIndex.body.find("id=\"journal-issue-2-card\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("href=\"/journal/2026-11-20/the-architecture-of-octi.html\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("src=\"/journal/2026-11-20/img/cover_architecture_of_octi.jpg\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("id=\"journal-issue-3-card\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("href=\"/journal/2026-11-20/stacks-bases-and-the-octi-system.html\"") != std::string::npos);
+    CHECK_TRUE(rIndex.body.find("src=\"/journal/2026-11-20/img/cover_octi_system.jpg\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("id=\"journal-issue-1-card\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("href=\"/journal/2026-11-18/g-20261118-2165.html\"") != std::string::npos);
     CHECK_TRUE(rIndex.body.find("src=\"/journal/2026-11-18/img/cover_g20261118_2165.jpg\"") != std::string::npos);

@@ -3311,26 +3311,53 @@ tr.active-ply {
 
   <div class="journal-card" id="journal-issue-2-card" style="margin-bottom:18px;border:1.5px solid #c8a253;">
     <div class="journal-feature-grid" id="journal-issue-2-grid">
-      <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="journal-cover-wrap" id="journal-issue-2-cover-link" title="Read Issue #2 Full Feature">
+      <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="journal-cover-wrap" id="journal-issue-2-cover-link" title="Read Issue #2 (Part 1): Discovering OCTI">
         <img id="journal-issue-2-cover" src="/journal/2026-11-20/img/cover_architecture_of_octi.jpg" loading="lazy" alt="A young OCTI player plugging wooden prongs into octagonal pods on an authentic cloth OCTI board — The OCTI Journal Issue #2 Cover">
       </a>
       <div id="journal-issue-2-copy">
         <div class="journal-meta-strip" id="journal-issue-2-meta">
-          <span class="journal-meta-pill gold">ISSUE #2 &bull; NOV 20, 2026</span>
-          <span class="journal-meta-pill">HANDS-ON STRATEGY GUIDE</span>
-          <span class="journal-meta-pill">3-BASE &bull; EDGELESS BOARD &bull; SUPERPRONGS</span>
+          <span class="journal-meta-pill gold">ISSUE #2 &bull; PART 1 OF 2</span>
+          <span class="journal-meta-pill">BEGINNER&rsquo;S GUIDE</span>
+          <span class="journal-meta-pill">1-BASE &bull; OCTI FOR KIDS</span>
         </div>
-        <h2 id="journal-issue-2-headline"><a href="/journal/2026-11-20/the-architecture-of-octi.html" style="color:var(--fg);text-decoration:none;">The Architecture of OCTI: Customizing Your Squad, Prong Directions, and Winning All Three Bases</a></h2>
+        <h2 id="journal-issue-2-headline"><a href="/journal/2026-11-20/the-architecture-of-octi.html" style="color:var(--fg);text-decoration:none;">Discovering OCTI (Part 1): Simple Moves, Surprising Jumps, and Building a Team</a></h2>
         <p id="journal-issue-2-brief-1">
-          In games like chess, your pieces start the match with all their moves already locked in. In OCTI, your pieces&mdash;called <strong>pods</strong>&mdash;start on your home bases as completely blank wooden octagons waiting to be upgraded from your stash of 25 wooden prongs. Written as a friendly, visual tabletop guide for players of all ages, Issue #2 walks through the four ways to spend your turn (<em>Add a Prong</em>, <em>Step or Hop</em>, <em>Jump &amp; Seize</em>, and <em>Deploy a Reserve Pod</em>), why two nimble 2-prong buddy pods beat one overloaded &ldquo;walking jackpot,&rdquo; and how a quick 1-square step puts your pod on the right track for a 2-square jump.
+          New to OCTI? Start right here. Skipping stacking and advanced options for now, Part 1 focuses on the single twist that makes OCTI unforgettable: plugging <strong>one wooden prong</strong> into a pod can unleash a multi-jump chain across the board&mdash;and because you can <strong>jump over pieces of either color</strong>, your own pods become stepping stones for a cooperating team.
         </p>
         <p id="journal-issue-2-brief-2">
-          Through six illustrated board positions and four interactive <strong>&ldquo;Pause &amp; Read the Board&rdquo;</strong> puzzles, the guide introduces the three favorite 3-prong pod builds (<em>The Sprinter</em>, <em>The Side-Stepper</em>, and <em>The Boomerang</em> with one backward prong), shows why stacking pods on a safe home base creates a one-turn surprise launch while leaving a stack out in the open invites a whole-stack capture, and explains how to turn one captured enemy base into a forward staging base for liberating captured pods, split two stacked pods onto the last two enemy bases on the exact same turn, and master Edgeless Board wraparound edges and SuperProng bonus prelude moves.
+          Includes a 5-step animated jump-chain walkthrough, a friendly relay puzzle, the 8-direction compass guide, and a crisp 6&times;7 OCTI for Kids puzzle illustrating why having to do <em>something</em> on every turn decides tight games.
         </p>
         <div class="row" style="gap:10px;margin:8px 0 0 0;flex-wrap:wrap;">
-          <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="btn btn-primary" id="journal-issue-2-read-link" style="background:#c8a253;border-color:#e5c158;color:#0b0f17;font-weight:700;padding:9px 16px;">Read Full Strategy Guide &rarr;</a>
-          <a href="/journal/2026-11-20/the-architecture-of-octi.html#five-maxims" class="btn" id="journal-issue-2-maxims-link" style="padding:9px 16px;">Cheat-Sheet &amp; 5 Rules of Thumb</a>
+          <a href="/journal/2026-11-20/the-architecture-of-octi.html" class="btn btn-primary" id="journal-issue-2-read-link" style="background:#c8a253;border-color:#e5c158;color:#0b0f17;font-weight:700;padding:9px 16px;">Read Part 1: Discovering OCTI &rarr;</a>
+          <a href="/journal/2026-11-20/stacks-bases-and-the-octi-system.html" class="btn" id="journal-issue-2-maxims-link" style="padding:9px 16px;">Continue to Part 2 &rarr;</a>
           <a href="/journal/" class="btn" id="journal-issue-2-index-link" style="padding:9px 14px;">All Journal Issues</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="journal-card" id="journal-issue-3-card" style="margin-bottom:18px;border:1.5px solid #c8a253;">
+    <div class="journal-feature-grid" id="journal-issue-3-grid">
+      <a href="/journal/2026-11-20/stacks-bases-and-the-octi-system.html" class="journal-cover-wrap" id="journal-issue-3-cover-link" title="Read Issue #3 (Part 2): The OCTI System">
+        <img id="journal-issue-3-cover" src="/journal/2026-11-20/img/cover_octi_system.jpg" loading="lazy" alt="Original 1999 OCTI THE GAME box cover developed by Don Green — The OCTI Journal Issue #3 Cover">
+      </a>
+      <div id="journal-issue-3-copy">
+        <div class="journal-meta-strip" id="journal-issue-3-meta">
+          <span class="journal-meta-pill gold">ISSUE #3 &bull; PART 2 OF 2</span>
+          <span class="journal-meta-pill">STACKS &amp; GAME SYSTEM</span>
+          <span class="journal-meta-pill">OFK &bull; 1B &bull; 3B &bull; EDGELESS &bull; SP</span>
+        </div>
+        <h2 id="journal-issue-3-headline"><a href="/journal/2026-11-20/stacks-bases-and-the-octi-system.html" style="color:var(--fg);text-decoration:none;">The OCTI System (Part 2): Stacking Pods, Three-Base Battles, and Choosing Your Variant</a></h2>
+        <p id="journal-issue-3-brief-1">
+          Building smoothly on Part 1, Issue #3 walks through a 4-step animated stacking sequence anchored on the key rule that <strong>stacked pods ignore each other when moving or jumping out of their shared square</strong>, alongside the whole-stack capture puzzle and 3-Base pod liberation.
+        </p>
+        <p id="journal-issue-3-brief-2">
+          Closes by framing OCTI as a complete <strong>game system</strong>&mdash;comparing OCTI for Kids (fast and easy), 9&times;9 1-Base (stacks and reserves), 9&times;9 3-Base (liberation and long-term tailoring), and Edgeless &amp; SuperProngs.
+        </p>
+        <div class="row" style="gap:10px;margin:8px 0 0 0;flex-wrap:wrap;">
+          <a href="/journal/2026-11-20/stacks-bases-and-the-octi-system.html" class="btn btn-primary" id="journal-issue-3-read-link" style="background:#c8a253;border-color:#e5c158;color:#0b0f17;font-weight:700;padding:9px 16px;">Read Part 2: The OCTI System &rarr;</a>
+          <a href="/journal/2026-11-20/stacks-bases-and-the-octi-system.html#act-system" class="btn" id="journal-issue-3-system-link" style="padding:9px 16px;">Compare Variants</a>
+          <a href="/journal/" class="btn" id="journal-issue-3-index-link" style="padding:9px 14px;">All Journal Issues</a>
         </div>
       </div>
     </div>
